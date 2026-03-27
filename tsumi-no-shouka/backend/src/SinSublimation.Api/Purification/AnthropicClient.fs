@@ -34,6 +34,7 @@ module AnthropicClient =
                     "properties": {
                         "theme": {"type": "string", "description": "テーマ名（日本語）"},
                         "lang": {"type": "string", "description": "使用言語名"},
+                        "sinCategory": {"type": "string", "description": "主要な罪の種類"},
                         "lines": {
                             "type": "array",
                             "items": {
@@ -48,7 +49,7 @@ module AnthropicClient =
                         "fs": {"type": "string", "description": "F#版コード（改行区切り）"},
                         "why": {"type": "string", "description": "F#が優れる理由（1文）"}
                     },
-                    "required": ["theme", "lang", "lines", "fs", "why"]
+                    "required": ["theme", "lang", "sinCategory", "lines", "fs", "why"]
                 }"""
             ).RootElement |}
 

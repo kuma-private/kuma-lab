@@ -11,6 +11,7 @@ export interface GenerateResponse {
 	lines: CodeLine[];
 	fs: string;
 	why: string;
+	sinCategory?: string;
 }
 
 export interface CeremonyState {

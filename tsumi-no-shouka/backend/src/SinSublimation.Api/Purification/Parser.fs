@@ -21,7 +21,9 @@ type GenerateResponse =
       [<JsonPropertyName("fs")>]
       Fs: string
       [<JsonPropertyName("why")>]
-      Why: string }
+      Why: string
+      [<JsonPropertyName("sinCategory")>]
+      SinCategory: string }
 
 module Parser =
 
@@ -43,7 +45,9 @@ module Parser =
           [<JsonPropertyName("fs")>]
           fs: string
           [<JsonPropertyName("why")>]
-          why: string }
+          why: string
+          [<JsonPropertyName("sinCategory")>]
+          sinCategory: string }
 
     let private parseCodeLine (raw: RawCodeLine) : CodeLine =
         let sin =
@@ -80,6 +84,7 @@ module Parser =
                       Lang = raw.lang
                       Lines = raw.lines |> Array.map parseCodeLine |> Array.toList
                       Fs = raw.fs
-                      Why = raw.why }
+                      Why = raw.why
+                      SinCategory = raw.sinCategory |> Option.ofObj |> Option.defaultValue "" }
         with ex ->
             Error $"JSON parse error: {ex.Message}"

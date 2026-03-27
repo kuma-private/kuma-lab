@@ -1,7 +1,11 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { ceremony } from '$lib/state/machine.svelte';
   import DivineRays from './DivineRays.svelte';
+  import CelebrationParticles from './CelebrationParticles.svelte';
   import { divineDescend } from '$lib/animations/transitions';
+  import { fade, fly } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
 
   let response = $derived(ceremony.response);
   let sinLines = $derived(response?.lines ?? []);
@@ -23,7 +27,39 @@
     Math.max(0, Math.min(100, 100 - sinCount * 12))
   );
 
+  let revealStep = $state(0);
+  let displayedReduction = $state(0);
+  let displayedSinCount = $state(0);
   let copySuccess = $state(false);
+
+  let reductionInterval: ReturnType<typeof setInterval>;
+  let sinCountInterval: ReturnType<typeof setInterval>;
+  let timeouts: ReturnType<typeof setTimeout>[] = [];
+
+  function countUpReduction() {
+    const target = reductionPercent;
+    if (target <= 0) { displayedReduction = 0; return; }
+    const stepDuration = Math.max(10, 1000 / target);
+    reductionInterval = setInterval(() => {
+      displayedReduction++;
+      if (displayedReduction >= target) {
+        displayedReduction = target;
+        clearInterval(reductionInterval);
+      }
+    }, stepDuration);
+  }
+
+  function countUpSins() {
+    const target = sinCount;
+    if (target <= 0) { displayedSinCount = 0; return; }
+    sinCountInterval = setInterval(() => {
+      displayedSinCount++;
+      if (displayedSinCount >= target) {
+        displayedSinCount = target;
+        clearInterval(sinCountInterval);
+      }
+    }, 80);
+  }
 
   function shareOnX() {
     const text = `罪の昇華 ⚜ Sin Sublimation\n\n${theme}\n${language} → F# で ${reductionPercent}% 削減\n\n${insight}\n\nhttps://tsumi-no-shouka.dev`;
@@ -48,105 +84,137 @@
       setTimeout(() => { copySuccess = false; }, 2000);
     }
   }
+
+  onMount(() => {
+    timeouts.push(setTimeout(() => { revealStep = 1; }, 300));    // Title
+    timeouts.push(setTimeout(() => { revealStep = 2; }, 1500));   // F# code
+    timeouts.push(setTimeout(() => {
+      revealStep = 3;  // Metrics
+      countUpReduction();
+      countUpSins();
+    }, 2800));
+    timeouts.push(setTimeout(() => { revealStep = 4; }, 4200));   // Insight
+    timeouts.push(setTimeout(() => { revealStep = 5; }, 5200));   // Original code
+    timeouts.push(setTimeout(() => { revealStep = 6; }, 6200));   // Action buttons
+  });
+
+  onDestroy(() => {
+    timeouts.forEach(clearTimeout);
+    clearInterval(reductionInterval);
+    clearInterval(sinCountInterval);
+  });
 </script>
 
 <div class="done-phase" in:divineDescend={{ duration: 1000 }}>
-  <DivineRays />
+  <DivineRays intensity="triumphant" />
+  <CelebrationParticles />
 
   <div class="content">
-    <h1 class="title titleGlow">⚜ 浄化完了 ⚜</h1>
+    {#if revealStep >= 1}
+      <div in:fade={{ duration: 800, easing: cubicOut }}>
+        <h1 class="title titleGlow">⚜ 浄化完了 ⚜</h1>
+      </div>
+    {/if}
 
     <!-- F# Code Display -->
-    <div class="fsharp-panel victoryPulse">
-      <div class="panel-header">
-        <span class="panel-label">✦ 神聖なるF#コード</span>
-        <span class="language-tag">F#</span>
+    {#if revealStep >= 2}
+      <div class="fsharp-panel victoryPulse" in:fly={{ y: 30, duration: 800, easing: cubicOut }}>
+        <div class="panel-header">
+          <span class="panel-label">✦ 神聖なるF#コード</span>
+          <span class="language-tag">F#</span>
+        </div>
+        <div class="panel-code">
+          {#each fsharpLines as line, i}
+            <div class="code-line" style="animation-delay: {i * 40}ms">
+              <span class="line-number">{i + 1}</span>
+              <span class="line-content">{line}</span>
+            </div>
+          {/each}
+        </div>
       </div>
-      <div class="panel-code">
-        {#each fsharpLines as line, i}
-          <div class="code-line" style="animation-delay: {i * 40}ms">
-            <span class="line-number">{i + 1}</span>
-            <span class="line-content">{line}</span>
-          </div>
-        {/each}
-      </div>
-    </div>
+    {/if}
 
     <!-- Metrics -->
-    <div class="metrics-section">
-      <div class="metric-row">
-        <div class="metric reduction-metric">
-          <span class="metric-label">元コード</span>
-          <span class="metric-value">{originalLineCount}行</span>
-          <span class="metric-arrow">→</span>
-          <span class="metric-label">削減率</span>
-          <span class="metric-value highlight">{reductionPercent}%</span>
-          <span class="metric-arrow">→</span>
-          <span class="metric-label">F#</span>
-          <span class="metric-value fsharp-value">{fsharpLineCount}行</span>
-        </div>
-      </div>
-
-      <div class="metric-row">
-        <div class="metric purity-metric">
-          <span class="metric-label">魂の純度</span>
-          <div class="purity-bar">
-            <div class="purity-fill" style="width: {purityScore}%"></div>
+    {#if revealStep >= 3}
+      <div class="metrics-section" in:fly={{ y: 20, duration: 600, easing: cubicOut }}>
+        <div class="metric-row">
+          <div class="metric reduction-metric">
+            <span class="metric-label">元コード</span>
+            <span class="metric-value">{originalLineCount}行</span>
+            <span class="metric-arrow">→</span>
+            <span class="metric-label">削減率</span>
+            <span class="metric-value highlight">{displayedReduction}%</span>
+            <span class="metric-arrow">→</span>
+            <span class="metric-label">F#</span>
+            <span class="metric-value fsharp-value">{fsharpLineCount}行</span>
           </div>
-          <span class="metric-value purity-value">{purityScore}%</span>
         </div>
-      </div>
 
-      <div class="metric-row">
-        <div class="metric sin-count-metric">
-          <span class="metric-label">検出された罪</span>
-          <span class="metric-value sin-value">{sinCount}個</span>
+        <div class="metric-row">
+          <div class="metric purity-metric">
+            <span class="metric-label">魂の純度</span>
+            <div class="purity-bar">
+              <div class="purity-fill" style="width: {purityScore}%"></div>
+            </div>
+            <span class="metric-value purity-value">{purityScore}%</span>
+          </div>
+        </div>
+
+        <div class="metric-row">
+          <div class="metric sin-count-metric">
+            <span class="metric-label">検出された罪</span>
+            <span class="metric-value sin-value">{displayedSinCount}個</span>
+          </div>
         </div>
       </div>
-    </div>
+    {/if}
 
     <!-- Insight -->
-    {#if insight}
-      <div class="insight-panel">
+    {#if revealStep >= 4 && insight}
+      <div class="insight-panel" in:fade={{ duration: 800, easing: cubicOut }}>
         <p class="insight-label">✧ 神託 ✧</p>
         <p class="insight-text">{insight}</p>
       </div>
     {/if}
 
     <!-- Original code (成仏 display) -->
-    <div class="original-section">
-      <div class="original-header">
-        <span class="original-label">† 成仏したコード ({language})</span>
+    {#if revealStep >= 5}
+      <div class="original-section" in:fade={{ duration: 600, easing: cubicOut }}>
+        <div class="original-header">
+          <span class="original-label">† 成仏したコード ({language})</span>
+        </div>
+        <div class="original-code">
+          {#each sinLines as line, i}
+            <div class="code-line original-line">
+              <span class="line-number">{i + 1}</span>
+              <span class="line-content">{line.c}</span>
+              {#if line.s}
+                <span class="original-sin">{line.s}</span>
+              {/if}
+            </div>
+          {/each}
+        </div>
       </div>
-      <div class="original-code">
-        {#each sinLines as line, i}
-          <div class="code-line original-line">
-            <span class="line-number">{i + 1}</span>
-            <span class="line-content">{line.c}</span>
-            {#if line.s}
-              <span class="original-sin">{line.s}</span>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </div>
+    {/if}
 
     <!-- Actions -->
-    <div class="actions">
-      <button class="action-btn share-btn" onclick={shareOnX}>
-        <span class="btn-icon">𝕏</span>
-        <span>共有する</span>
-      </button>
+    {#if revealStep >= 6}
+      <div class="actions" in:fly={{ y: 20, duration: 600, easing: cubicOut }}>
+        <button class="action-btn share-btn" onclick={shareOnX}>
+          <span class="btn-icon">𝕏</span>
+          <span>共有する</span>
+        </button>
 
-      <button class="action-btn copy-btn" onclick={copyToClipboard}>
-        <span class="btn-icon">{copySuccess ? '✓' : '📋'}</span>
-        <span>{copySuccess ? 'コピー完了' : 'コピー'}</span>
-      </button>
+        <button class="action-btn copy-btn" onclick={copyToClipboard}>
+          <span class="btn-icon">{copySuccess ? '✓' : '📋'}</span>
+          <span>{copySuccess ? 'コピー完了' : 'コピー'}</span>
+        </button>
 
-      <button class="action-btn restart-btn portalPulse" onclick={() => ceremony.reset()}>
-        もう一度召喚する
-      </button>
-    </div>
+        <button class="action-btn restart-btn portalPulse" onclick={() => ceremony.reset()}>
+          もう一度召喚する
+        </button>
+      </div>
+    {/if}
   </div>
 </div>
 

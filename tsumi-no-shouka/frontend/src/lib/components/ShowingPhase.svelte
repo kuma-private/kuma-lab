@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { ceremony } from '$lib/state/machine.svelte';
   import { demonAppear } from '$lib/animations/transitions';
   import type { CodeLine } from '$lib/state/types';
@@ -22,6 +23,14 @@
   let lines = $derived(response?.lines ?? []);
   let language = $derived(response?.lang ?? '');
   let theme = $derived(response?.theme ?? '');
+  let sinCount = $derived(lines.filter((l: CodeLine) => l.s !== null).length);
+
+  let revealedLines = $state(0);
+  let revealPhase = $state<'lines' | 'verdict' | 'button'>('lines');
+  let displayedSinCount = $state(0);
+
+  let revealInterval: ReturnType<typeof setInterval>;
+  let countUpInterval: ReturnType<typeof setInterval>;
 
   const langMap: Record<string, string> = {
     'Java': 'java',
@@ -61,6 +70,57 @@
     if (sin.includes('副作用') || sin.includes('side') || sin.includes('Side')) return 'var(--sin-side-effect, #ff8800)';
     return '#ff4400';
   }
+
+  function revealNextLine() {
+    if (revealedLines >= lines.length) {
+      clearInterval(revealInterval);
+      // All lines revealed — pause, then show verdict
+      setTimeout(() => {
+        revealPhase = 'verdict';
+        startCountUp();
+      }, 800);
+      return;
+    }
+
+    revealedLines++;
+
+    // Check if the just-revealed line has a sin badge — pause extra
+    const justRevealed = lines[revealedLines - 1];
+    if (justRevealed?.s) {
+      clearInterval(revealInterval);
+      setTimeout(() => {
+        if (revealPhase === 'lines') {
+          revealInterval = setInterval(revealNextLine, 120);
+        }
+      }, 300);
+    }
+  }
+
+  function startCountUp() {
+    if (sinCount === 0) {
+      displayedSinCount = 0;
+      setTimeout(() => { revealPhase = 'button'; }, 600);
+      return;
+    }
+    displayedSinCount = 0;
+    countUpInterval = setInterval(() => {
+      displayedSinCount++;
+      if (displayedSinCount >= sinCount) {
+        clearInterval(countUpInterval);
+        // After verdict shown, show button
+        setTimeout(() => { revealPhase = 'button'; }, 600);
+      }
+    }, 80);
+  }
+
+  onMount(() => {
+    revealInterval = setInterval(revealNextLine, 120);
+  });
+
+  onDestroy(() => {
+    clearInterval(revealInterval);
+    clearInterval(countUpInterval);
+  });
 </script>
 
 <div class="showing-phase" in:demonAppear={{ duration: 1000 }}>
@@ -73,14 +133,14 @@
 
   <div class="code-panel">
     <div class="code-lines">
-      {#each lines as line, i}
-        <div class="code-line summonFlicker" style="animation-delay: {i * 60}ms">
+      {#each lines.slice(0, revealedLines) as line, i}
+        <div class="code-line">
           <span class="line-number">{i + 1}</span>
           <span class="line-content">{@html highlightCode(line.c, language)}</span>
           {#if line.s}
             <span
               class="sin-badge sinBadgePop"
-              style="--sin-color: {sinColor(line.s)}; animation-delay: {300 + i * 120}ms"
+              style="--sin-color: {sinColor(line.s)}"
             >
               {line.s}
             </span>
@@ -90,9 +150,17 @@
     </div>
   </div>
 
-  <button class="purify-button portalPulse" onclick={() => ceremony.purify()}>
-    ⚜ PURIFY WITH F# ⚜
-  </button>
+  {#if revealPhase === 'verdict' || revealPhase === 'button'}
+    <div class="verdict">
+      「<span class="verdict-count">{displayedSinCount}</span>つの罪を検出」
+    </div>
+  {/if}
+
+  {#if revealPhase === 'button'}
+    <button class="purify-button portalPulse button-enter" onclick={() => ceremony.purify()}>
+      ⚜ 浄化を執行せよ ⚜
+    </button>
+  {/if}
 </div>
 
 <style>
@@ -157,8 +225,12 @@
     border-radius: 3px;
     font-family: var(--font-code, 'JetBrains Mono'), monospace;
     font-size: 0.85rem;
-    opacity: 0;
-    animation: summonFlicker 0.8s ease-out forwards;
+    animation: lineReveal 0.3s ease-out;
+  }
+
+  @keyframes lineReveal {
+    0% { opacity: 0; transform: translateX(-8px); }
+    100% { opacity: 1; transform: translateX(0); }
   }
 
   .line-number {
@@ -198,11 +270,31 @@
     white-space: nowrap;
     flex-shrink: 0;
     margin-left: auto;
-    opacity: 0;
     background: var(--sin-color, #ff4400);
     box-shadow: 0 0 8px color-mix(in srgb, var(--sin-color, #ff4400) 60%, transparent),
                 0 0 16px color-mix(in srgb, var(--sin-color, #ff4400) 30%, transparent);
-    animation: sinBadgePop 0.4s ease-out forwards;
+    animation: sinBadgePop 0.4s ease-out forwards, sinDanger 2s ease-in-out 0.5s infinite;
+  }
+
+  .verdict {
+    font-family: var(--font-title, 'Cinzel Decorative'), serif;
+    font-size: 1.2rem;
+    color: #ff4444;
+    text-shadow: 0 0 15px rgba(255, 68, 68, 0.4);
+    animation: verdictAppear 0.5s ease-out;
+    flex-shrink: 0;
+  }
+
+  .verdict-count {
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: #ff2200;
+  }
+
+  @keyframes verdictAppear {
+    0% { opacity: 0; transform: scale(0.8); }
+    60% { transform: scale(1.05); }
+    100% { opacity: 1; transform: scale(1); }
   }
 
   .purify-button {
@@ -218,6 +310,15 @@
     cursor: pointer;
     letter-spacing: 0.15em;
     transition: all 0.3s;
+  }
+
+  .button-enter {
+    animation: buttonFadeUp 0.6s ease-out;
+  }
+
+  @keyframes buttonFadeUp {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
   }
 
   .purify-button:hover {

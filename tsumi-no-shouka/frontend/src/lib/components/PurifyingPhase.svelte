@@ -16,9 +16,34 @@
   let purpleFlash = $state(false);
   let goldFlash = $state(false);
   let isComplete = $state(false);
+  // Dynamic title based on act
+  let currentTitle = $state('⚗ 罪と対峙中 ⚗');
 
   let sinInterval: ReturnType<typeof setInterval>;
   let fsharpInterval: ReturnType<typeof setInterval>;
+
+  function getActTimings(progress: number): { sinDelay: number; fsharpDelay: number } {
+    if (progress < 0.4) {
+      // Act I: slow, deliberate
+      return { sinDelay: 500, fsharpDelay: 700 };
+    } else if (progress < 0.8) {
+      // Act II: accelerating
+      return { sinDelay: 200, fsharpDelay: 350 };
+    } else {
+      // Act III: furious
+      return { sinDelay: 100, fsharpDelay: 200 };
+    }
+  }
+
+  function updateTitle(progress: number) {
+    if (progress < 0.4) {
+      currentTitle = '⚗ 罪と対峙中 ⚗';
+    } else if (progress < 0.8) {
+      currentTitle = '⚗ 浄化加速 ⚗';
+    } else {
+      currentTitle = '✦ 罪は消滅する ✦';
+    }
+  }
 
   onMount(() => {
     // Initialize all sin lines as visible
@@ -36,44 +61,64 @@
     });
     const removalOrder = [...sinIndices, ...nonSinIndices];
     let removalStep = 0;
+    const totalSteps = removalOrder.length;
 
-    // Remove sin lines one by one
-    sinInterval = setInterval(() => {
-      if (removalStep < removalOrder.length) {
+    function scheduleSinRemoval() {
+      if (removalStep >= totalSteps) {
+        clearInterval(sinInterval);
+        return;
+      }
+
+      const progress = totalSteps > 0 ? removalStep / totalSteps : 0;
+      updateTitle(progress);
+      const { sinDelay } = getActTimings(progress);
+
+      sinInterval = setTimeout(() => {
         const idx = removalOrder[removalStep];
         visibleSinLines[idx] = false;
         visibleSinLines = [...visibleSinLines]; // trigger reactivity
         removalStep++;
-      } else {
-        clearInterval(sinInterval);
-      }
-    }, 300);
+        scheduleSinRemoval();
+      }, sinDelay) as unknown as ReturnType<typeof setInterval>;
+    }
 
-    // Add F# lines one by one (start slightly after sin removal begins)
+    function scheduleFsharpAddition() {
+      if (fsharpVisibleCount >= fsharpLines.length) {
+        clearInterval(fsharpInterval);
+        // Gold flash on completion
+        goldFlash = true;
+        isComplete = true;
+        setTimeout(() => {
+          goldFlash = false;
+          ceremony.purifyComplete();
+        }, 2000);
+        return;
+      }
+
+      const progress = fsharpLines.length > 0 ? fsharpVisibleCount / fsharpLines.length : 0;
+      const { fsharpDelay } = getActTimings(progress);
+
+      fsharpInterval = setTimeout(() => {
+        fsharpVisibleCount++;
+        // Purple flash on each new line
+        purpleFlash = true;
+        setTimeout(() => { purpleFlash = false; }, 150);
+        scheduleFsharpAddition();
+      }, fsharpDelay) as unknown as ReturnType<typeof setInterval>;
+    }
+
+    // Start sin removal immediately
+    scheduleSinRemoval();
+
+    // Start F# addition slightly after
     setTimeout(() => {
-      fsharpInterval = setInterval(() => {
-        if (fsharpVisibleCount < fsharpLines.length) {
-          fsharpVisibleCount++;
-          // Purple flash on each new line
-          purpleFlash = true;
-          setTimeout(() => { purpleFlash = false; }, 150);
-        } else {
-          clearInterval(fsharpInterval);
-          // Gold flash on completion
-          goldFlash = true;
-          isComplete = true;
-          setTimeout(() => {
-            goldFlash = false;
-            ceremony.purifyComplete();
-          }, 1200);
-        }
-      }, 500);
+      scheduleFsharpAddition();
     }, 800);
   });
 
   onDestroy(() => {
-    clearInterval(sinInterval);
-    clearInterval(fsharpInterval);
+    clearTimeout(sinInterval as unknown as number);
+    clearTimeout(fsharpInterval as unknown as number);
   });
 </script>
 
@@ -85,7 +130,7 @@
     <div class="flash flash-gold"></div>
   {/if}
 
-  <h2 class="title">⚗ 浄化進行中 ⚗</h2>
+  <h2 class="title">{currentTitle}</h2>
 
   <div class="columns">
     <!-- Sin code (left) -->
@@ -152,12 +197,12 @@
   }
 
   .flash-purple {
-    background: radial-gradient(circle at center, rgba(155, 100, 255, 0.15), transparent 70%);
+    background: radial-gradient(circle at center, rgba(155, 100, 255, 0.3), transparent 70%);
   }
 
   .flash-gold {
-    background: radial-gradient(circle at center, rgba(201, 184, 122, 0.25), transparent 70%);
-    animation-duration: 0.8s;
+    background: radial-gradient(circle at center, rgba(201, 184, 122, 0.5), transparent 70%);
+    animation-duration: 2s;
   }
 
   @keyframes flashPulse {
@@ -173,6 +218,7 @@
     flex-shrink: 0;
     text-align: center;
     opacity: 0.8;
+    transition: all 0.5s ease-out;
   }
 
   .columns {

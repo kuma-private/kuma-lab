@@ -3,66 +3,199 @@
   import { ceremony } from '$lib/state/machine.svelte';
   import Pentagram from './Pentagram.svelte';
   import CodeRain from './CodeRain.svelte';
+  import GlitchOverlay from './GlitchOverlay.svelte';
 
-  const statusMessages = [
-    '地獄の門を開放中...',
-    'NullPointerを召喚中...',
-    'BoilerPlateを積み上げ中...',
-    '型安全を破壊中...',
-    '副作用を蔓延させ中...',
-    'GOTO文を埋め込み中...'
+  const ritualMessages = [
+    '深淵の門を開放中...',
+    '罪の気配を探知中...',
+    '闇の回廊を通過中...',
   ];
 
+  const accelerationMessages = [
+    'NullPointerExceptionが覚醒した...',
+    'BoilerPlateが無限に増殖している...',
+    '型安全の壁が崩壊していく...',
+    '副作用が制御不能に陥った...',
+    'getter/setterの地獄が口を開けた...',
+    'GOTOの呪縛が蔓延している...',
+  ];
+
+  const crescendoMessages = [
+    '検出: AbstractSingletonProxyFactoryBean',
+    '警告: 冗長性レベル — 致命的',
+    '危険: 可読性が消失',
+    '限界突破 —',
+  ];
+
+  type Stage = 'ritual' | 'acceleration' | 'crescendo' | 'held-breath';
+
+  let stage = $state<Stage>('ritual');
   let messageIndex = $state(0);
+  let elapsedTime = $state(0);
+  let completionShown = $state(false);
+  let heldBreathText = $state('');
+
+  let timerInterval: ReturnType<typeof setInterval>;
   let messageInterval: ReturnType<typeof setInterval>;
   let startTime: number;
-  let completionShown = $state(false);
-  let checkInterval: ReturnType<typeof setInterval>;
+  let apiDone = false;
+  let crescendoReached = false;
+
+  function getCurrentMessages(): string[] {
+    if (stage === 'ritual') return ritualMessages;
+    if (stage === 'acceleration') return accelerationMessages;
+    if (stage === 'crescendo') return crescendoMessages;
+    return [];
+  }
+
+  function getMessageInterval(): number {
+    if (stage === 'ritual') return 2000;
+    if (stage === 'acceleration') {
+      // Shrink from 1500 to 800 over the 3-6s window
+      const progress = Math.min(1, (elapsedTime - 3000) / 3000);
+      return 1500 - progress * 700;
+    }
+    if (stage === 'crescendo') {
+      // Shrink from 400 to 200 over the 6-8s window
+      const progress = Math.min(1, (elapsedTime - 6000) / 2000);
+      return 400 - progress * 200;
+    }
+    return 1000;
+  }
+
+  function getPentagramSpeed(): number {
+    if (stage === 'ritual') return 8;
+    if (stage === 'acceleration') return 4;
+    if (stage === 'crescendo') return 1.5;
+    if (stage === 'held-breath') return 12; // slow back down dramatically
+    return 8;
+  }
+
+  function enterHeldBreath() {
+    if (completionShown) return;
+    completionShown = true;
+    stage = 'held-breath';
+    heldBreathText = '';
+    clearInterval(messageInterval);
+    clearInterval(timerInterval);
+
+    // 800ms pause (silence), then reveal
+    setTimeout(() => {
+      heldBreathText = '...降臨';
+      // After 600ms showing the text, transition
+      setTimeout(() => {
+        ceremony.summonComplete();
+      }, 600);
+    }, 800);
+  }
+
+  function scheduleNextMessage() {
+    clearInterval(messageInterval);
+    if (stage === 'held-breath' || completionShown) return;
+
+    const interval = getMessageInterval();
+    messageInterval = setInterval(() => {
+      const msgs = getCurrentMessages();
+      if (msgs.length > 0) {
+        messageIndex = (messageIndex + 1) % msgs.length;
+      }
+      // Re-schedule with potentially new interval
+      scheduleNextMessage();
+    }, interval);
+  }
 
   onMount(() => {
     startTime = Date.now();
 
-    messageInterval = setInterval(() => {
-      messageIndex = (messageIndex + 1) % statusMessages.length;
-    }, 2000);
+    timerInterval = setInterval(() => {
+      elapsedTime = Date.now() - startTime;
 
-    checkInterval = setInterval(() => {
-      if (!ceremony.isLoading && Date.now() - startTime >= 3000 && !completionShown) {
-        completionShown = true;
-        clearInterval(checkInterval);
-        clearInterval(messageInterval);
-
-        setTimeout(() => {
-          ceremony.summonComplete();
-        }, 500);
+      // Check API completion
+      if (!ceremony.isLoading) {
+        apiDone = true;
       }
-    }, 100);
+
+      // Stage transitions based on elapsed time
+      if (elapsedTime < 3000) {
+        if (stage !== 'ritual') {
+          stage = 'ritual';
+          messageIndex = 0;
+          scheduleNextMessage();
+        }
+      } else if (elapsedTime < 6000) {
+        if (stage === 'ritual') {
+          stage = 'acceleration';
+          messageIndex = 0;
+          scheduleNextMessage();
+        }
+      } else if (elapsedTime >= 6000) {
+        if (stage === 'acceleration') {
+          stage = 'crescendo';
+          crescendoReached = true;
+          messageIndex = 0;
+          scheduleNextMessage();
+        }
+      }
+
+      // Enter held-breath when API done AND crescendo reached
+      if (apiDone && crescendoReached && stage !== 'held-breath') {
+        enterHeldBreath();
+      }
+
+      // Safety: if API done before crescendo, let it reach crescendo first
+      // but if we've been waiting too long (10s+), force held-breath
+      if (apiDone && elapsedTime > 10000 && !completionShown) {
+        crescendoReached = true;
+        enterHeldBreath();
+      }
+    }, 50);
+
+    // Start initial message cycling
+    scheduleNextMessage();
   });
 
   onDestroy(() => {
     clearInterval(messageInterval);
-    clearInterval(checkInterval);
+    clearInterval(timerInterval);
   });
+
+  let currentMessage = $derived(
+    stage === 'held-breath'
+      ? heldBreathText
+      : getCurrentMessages()[messageIndex % getCurrentMessages().length] ?? ''
+  );
+
+  let pentagramSpeed = $derived(getPentagramSpeed());
 </script>
 
 <div class="summoning-phase">
   <CodeRain />
+  <GlitchOverlay />
 
   <div class="content">
     <h1 class="title titleGlowRed">⛧ 悪魔召喚中 ⛧</h1>
 
-    <div class="pentagram-wrapper">
-      <Pentagram size={240} />
+    <div class="pentagram-wrapper" class:held-breath={stage === 'held-breath'}>
+      <Pentagram size={240} speed={pentagramSpeed} />
     </div>
 
-    {#if completionShown}
-      <p class="status completion-flash">⚡ 召喚完了 — 悪魔が降臨する...</p>
+    {#if stage === 'held-breath' && heldBreathText}
+      <p class="status completion-flash">{heldBreathText}</p>
+    {:else if stage === 'held-breath'}
+      <p class="status">&nbsp;</p>
     {:else}
-      <p class="status" key={messageIndex}>{statusMessages[messageIndex]}</p>
+      <p class="status" class:stage-crescendo={stage === 'crescendo'} class:stage-acceleration={stage === 'acceleration'}>
+        {currentMessage}
+      </p>
     {/if}
 
     <div class="loading-bar">
-      <div class="loading-bar-fill"></div>
+      <div
+        class="loading-bar-fill"
+        class:accelerating={stage === 'acceleration'}
+        class:crescendo={stage === 'crescendo'}
+        class:paused={stage === 'held-breath'}
+      ></div>
     </div>
   </div>
 </div>
@@ -99,6 +232,11 @@
 
   .pentagram-wrapper {
     position: relative;
+    transition: opacity 0.3s;
+  }
+
+  .pentagram-wrapper.held-breath {
+    opacity: 0.4;
   }
 
   .pentagram-wrapper::after {
@@ -118,20 +256,42 @@
     margin: 0;
     min-height: 1.5em;
     animation: summonFlicker 0.5s ease-out;
+    transition: color 0.3s, font-size 0.3s;
+  }
+
+  .stage-acceleration {
+    color: #ff6644;
+    font-size: 0.95rem;
+  }
+
+  .stage-crescendo {
+    color: #ff2200;
+    font-size: 0.9rem;
+    text-shadow: 0 0 10px rgba(255, 34, 0, 0.4);
+    animation: summonFlicker 0.2s ease-out;
   }
 
   .completion-flash {
     color: #ffcc00;
     text-shadow: 0 0 20px rgba(255, 200, 0, 0.6);
     font-weight: 700;
+    font-size: 1.2rem;
+    animation: completionPulse 0.6s ease-out;
+  }
+
+  @keyframes completionPulse {
+    0% { opacity: 0; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 1; transform: scale(1); }
   }
 
   .loading-bar {
     width: 300px;
-    height: 2px;
+    height: 3px;
     background: rgba(200, 0, 0, 0.2);
-    border-radius: 1px;
+    border-radius: 1.5px;
     overflow: hidden;
+    box-shadow: 0 0 8px rgba(255, 34, 0, 0.4), 0 0 16px rgba(255, 34, 0, 0.2);
   }
 
   .loading-bar-fill {
@@ -140,6 +300,20 @@
     background: linear-gradient(90deg, #ff2200, #cc0000, #ff2200);
     animation: loadingSlide 2s ease-in-out infinite;
     transform-origin: left;
+  }
+
+  .loading-bar-fill.accelerating {
+    animation-duration: 1s;
+  }
+
+  .loading-bar-fill.crescendo {
+    animation-duration: 0.4s;
+    background: linear-gradient(90deg, #ff2200, #ff6600, #ff2200);
+  }
+
+  .loading-bar-fill.paused {
+    animation-play-state: paused;
+    opacity: 0.3;
   }
 
   @keyframes loadingSlide {

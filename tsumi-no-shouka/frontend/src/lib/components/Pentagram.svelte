@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { size = 200 }: { size?: number } = $props();
+  let { size = 200, speed = 8 }: { size?: number; speed?: number } = $props();
 
   const cx = 50;
   const cy = 50;
@@ -19,7 +19,7 @@
 </script>
 
 <div class="pentagram-container" style="width:{size}px;height:{size}px">
-  <svg viewBox="0 0 100 100" class="pentagram">
+  <svg viewBox="0 0 100 100" class="pentagram" style="animation-duration: {speed}s">
     <defs>
       <filter id="pentaGlow">
         <feGaussianBlur stdDeviation="2" result="blur" />
