@@ -28,3 +28,10 @@ node_modules/
 # .NET
 **/bin/
 **/obj/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example

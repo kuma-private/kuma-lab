@@ -1,0 +1,6 @@
+project_id                 = "kuma-lab"
+region                     = "asia-northeast1"
+anthropic_api_key          = "sk-ant-xxx"
+google_oauth_client_id     = "xxx.apps.googleusercontent.com"
+google_oauth_client_secret = "xxx"
+jwt_signing_key            = "generate-with-openssl-rand-base64-32"

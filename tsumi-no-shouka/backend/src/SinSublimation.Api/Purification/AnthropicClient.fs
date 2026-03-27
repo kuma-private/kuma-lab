@@ -28,7 +28,7 @@ module AnthropicClient =
                 let messages = Prompt.buildMessages ()
 
                 let requestBody =
-                    {| model = "claude-haiku-4-5-20251001"
+                    {| model = "claude-sonnet-4-6-20260327"
                        max_tokens = 800
                        system = Prompt.systemPrompt
                        messages = messages |}
