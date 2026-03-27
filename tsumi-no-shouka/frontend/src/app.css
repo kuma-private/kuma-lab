@@ -13,7 +13,13 @@
 	--soul-low: #7f77dd;
 	--soul-high: #c9b87a;
 	--font-title: 'Cinzel Decorative', serif;
-	--font-code: 'JetBrains Mono', monospace;
+	--font-code: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+/* Disable ligatures so |> displays as two separate characters */
+code, pre, .line-content, [style*="font-family: var(--font-code)"] {
+	font-variant-ligatures: none;
+	-webkit-font-variant-ligatures: none;
 }
 
 *,

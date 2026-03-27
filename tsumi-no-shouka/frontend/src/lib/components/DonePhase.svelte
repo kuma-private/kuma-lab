@@ -113,18 +113,23 @@
       </div>
     {/if}
 
-    <!-- Original code (faded, 成仏 display) -->
-    <details class="original-section">
-      <summary class="original-toggle">成仏したコードを見る</summary>
+    <!-- Original code (成仏 display) -->
+    <div class="original-section">
+      <div class="original-header">
+        <span class="original-label">† 成仏したコード ({language})</span>
+      </div>
       <div class="original-code">
         {#each sinLines as line, i}
           <div class="code-line original-line">
             <span class="line-number">{i + 1}</span>
             <span class="line-content">{line.c}</span>
+            {#if line.s}
+              <span class="original-sin">{line.s}</span>
+            {/if}
           </div>
         {/each}
       </div>
-    </details>
+    </div>
 
     <!-- Actions -->
     <div class="actions">
@@ -346,43 +351,49 @@
   /* Original code */
   .original-section {
     width: 100%;
+    background: rgba(20, 15, 10, 0.5);
+    border: 1px solid rgba(200, 122, 96, 0.12);
+    border-radius: 8px;
+    overflow: hidden;
+    opacity: 0.6;
   }
 
-  .original-toggle {
+  .original-header {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid rgba(200, 122, 96, 0.08);
+  }
+
+  .original-label {
     font-family: var(--font-code, 'JetBrains Mono'), monospace;
     font-size: 0.75rem;
-    color: rgba(200, 122, 96, 0.3);
-    cursor: pointer;
-    text-align: center;
-    padding: 0.5rem;
-    list-style: none;
+    color: rgba(200, 122, 96, 0.5);
     letter-spacing: 0.1em;
-    transition: color 0.3s;
-  }
-
-  .original-toggle:hover {
-    color: rgba(200, 122, 96, 0.6);
-  }
-
-  .original-toggle::-webkit-details-marker {
-    display: none;
   }
 
   .original-code {
-    margin-top: 0.5rem;
     padding: 1rem;
-    background: rgba(20, 15, 10, 0.3);
-    border: 1px solid rgba(200, 122, 96, 0.08);
-    border-radius: 6px;
-    opacity: 0.35;
+    overflow-x: auto;
+  }
+
+  .original-line {
+    font-size: 0.75rem;
   }
 
   .original-line .line-number {
-    color: var(--text-sin, #c87a60);
+    color: rgba(200, 122, 96, 0.25);
   }
 
   .original-line .line-content {
-    color: var(--text-sin, #c87a60);
+    color: rgba(200, 122, 96, 0.5);
+  }
+
+  .original-sin {
+    font-size: 0.6rem;
+    color: #ff4444;
+    opacity: 0.5;
+    margin-left: auto;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   /* Actions */

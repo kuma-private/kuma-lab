@@ -72,7 +72,7 @@ module AnthropicClient =
 
                 let requestBody =
                     {| model = "claude-sonnet-4-6"
-                       max_tokens = 1500
+                       max_tokens = 4000
                        system = Prompt.systemPrompt
                        tool_choice = {| ``type`` = "any" |}
                        tools = [| toolSchema |]
