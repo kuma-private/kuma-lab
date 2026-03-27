@@ -1,0 +1,198 @@
+:root {
+	--bg: #050508;
+	--bg-elevated: #0a0a12;
+	--text-sin: #c87a60;
+	--sin-null: #ff2200;
+	--sin-getter: #ff6600;
+	--sin-boiler: #cc4400;
+	--sin-side-effect: #ff8800;
+	--text-fsharp: #9b94e0;
+	--text-fsharp-bright: #c0baff;
+	--fsharp-border: rgba(127, 119, 221, 0.6);
+	--gold: #c9b87a;
+	--soul-low: #7f77dd;
+	--soul-high: #c9b87a;
+	--font-title: 'Cinzel Decorative', serif;
+	--font-code: 'JetBrains Mono', monospace;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	padding: 0;
+	background: var(--bg);
+	color: #fff;
+	font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	min-height: 100vh;
+	overflow-x: hidden;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+	width: 6px;
+}
+
+::-webkit-scrollbar-track {
+	background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+	background: #333;
+	border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: #555;
+}
+
+/* Keyframes */
+
+@keyframes demonAppear {
+	0% {
+		filter: blur(8px);
+		transform: scale(0.95);
+		opacity: 0;
+	}
+	100% {
+		filter: blur(0);
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+@keyframes summonFlicker {
+	0%, 100% { opacity: 1; }
+	10% { opacity: 0.3; }
+	20% { opacity: 0.8; }
+	30% { opacity: 0.2; }
+	40% { opacity: 0.9; }
+	50% { opacity: 0.4; }
+	60% { opacity: 1; }
+	70% { opacity: 0.3; }
+	80% { opacity: 0.7; }
+	90% { opacity: 0.5; }
+}
+
+@keyframes fsharpDescend {
+	0% {
+		transform: translateY(-20px);
+		opacity: 0;
+		filter: brightness(2);
+	}
+	50% {
+		filter: brightness(1.5);
+	}
+	100% {
+		transform: translateY(0);
+		opacity: 1;
+		filter: brightness(1);
+	}
+}
+
+@keyframes javaVanish {
+	0% {
+		transform: translateX(0);
+		filter: blur(0);
+		opacity: 1;
+	}
+	100% {
+		transform: translateX(100px);
+		filter: blur(6px);
+		opacity: 0;
+	}
+}
+
+@keyframes borderFlareJava {
+	0%, 100% {
+		box-shadow: 0 0 8px rgba(255, 34, 0, 0.3);
+	}
+	50% {
+		box-shadow: 0 0 20px rgba(255, 34, 0, 0.8), 0 0 40px rgba(255, 34, 0, 0.4);
+	}
+}
+
+@keyframes borderFlareFsharp {
+	0%, 100% {
+		box-shadow: 0 0 8px rgba(127, 119, 221, 0.3);
+	}
+	50% {
+		box-shadow: 0 0 20px rgba(127, 119, 221, 0.8), 0 0 40px rgba(127, 119, 221, 0.4);
+	}
+}
+
+@keyframes pentagram {
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
+}
+
+@keyframes portalPulse {
+	0%, 100% {
+		transform: scale(1);
+		box-shadow: 0 0 20px rgba(255, 34, 0, 0.4);
+	}
+	50% {
+		transform: scale(1.05);
+		box-shadow: 0 0 40px rgba(255, 34, 0, 0.8), 0 0 80px rgba(255, 34, 0, 0.3);
+	}
+}
+
+@keyframes titleGlow {
+	0%, 100% {
+		text-shadow: 0 0 10px rgba(201, 184, 122, 0.3);
+	}
+	50% {
+		text-shadow: 0 0 20px rgba(201, 184, 122, 0.8), 0 0 40px rgba(201, 184, 122, 0.4);
+	}
+}
+
+@keyframes titleGlowRed {
+	0%, 100% {
+		text-shadow: 0 0 10px rgba(255, 34, 0, 0.4);
+	}
+	50% {
+		text-shadow: 0 0 20px rgba(255, 34, 0, 0.9), 0 0 40px rgba(255, 34, 0, 0.5);
+	}
+}
+
+@keyframes victoryPulse {
+	0%, 100% {
+		box-shadow: 0 0 10px rgba(127, 119, 221, 0.3);
+	}
+	50% {
+		box-shadow: 0 0 30px rgba(127, 119, 221, 0.8), 0 0 60px rgba(127, 119, 221, 0.3);
+	}
+}
+
+@keyframes divineRays {
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
+}
+
+@keyframes sinBadgePop {
+	0% {
+		transform: scale(0);
+	}
+	60% {
+		transform: scale(1.2);
+	}
+	80% {
+		transform: scale(0.9);
+	}
+	100% {
+		transform: scale(1);
+	}
+}
+
+@keyframes shareBtn {
+	0%, 100% {
+		box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+	}
+	50% {
+		box-shadow: 0 0 20px rgba(59, 130, 246, 0.7), 0 0 40px rgba(59, 130, 246, 0.3);
+	}
+}

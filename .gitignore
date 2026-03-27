@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+.svelte-kit/
+
+# Build
+frontend/build/
+backend/src/SinSublimation.Api/bin/
+backend/src/SinSublimation.Api/obj/
+backend/tests/SinSublimation.Tests/bin/
+backend/tests/SinSublimation.Tests/obj/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel/
