@@ -28,7 +28,7 @@ module AnthropicClient =
                 let messages = Prompt.buildMessages ()
 
                 let requestBody =
-                    {| model = "claude-sonnet-4-6-20260327"
+                    {| model = "claude-sonnet-4-6"
                        max_tokens = 800
                        system = Prompt.systemPrompt
                        messages = messages |}
@@ -55,6 +55,23 @@ module AnthropicClient =
                     match parsed.Content |> Array.tryFind (fun c -> c.Type = "text") with
                     | Some block -> return Ok block.Text
                     | None -> return Error "No text content in Anthropic response"
+                elif int response.StatusCode = 529 || int response.StatusCode = 503 then
+                    // Overloaded/unavailable - retry once after delay
+                    do! Async.Sleep 2000
+                    let retryRequest =
+                        new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages")
+                    retryRequest.Content <- new StringContent(json, Encoding.UTF8, "application/json")
+                    retryRequest.Headers.Add("x-api-key", apiKey)
+                    retryRequest.Headers.Add("anthropic-version", "2023-06-01")
+                    let! retryResponse = httpClient.SendAsync(retryRequest) |> Async.AwaitTask
+                    let! retryBody = retryResponse.Content.ReadAsStringAsync() |> Async.AwaitTask
+                    if retryResponse.IsSuccessStatusCode then
+                        let parsed = JsonSerializer.Deserialize<AnthropicResponse>(retryBody)
+                        match parsed.Content |> Array.tryFind (fun c -> c.Type = "text") with
+                        | Some block -> return Ok block.Text
+                        | None -> return Error "No text content in Anthropic response"
+                    else
+                        return Error $"Anthropic API error ({int retryResponse.StatusCode}): {retryBody}"
                 else
                     return Error $"Anthropic API error ({int response.StatusCode}): {responseBody}"
             with ex ->

@@ -113,7 +113,7 @@
     font-family: var(--font-code, 'JetBrains Mono'), monospace;
     font-size: 0.85rem;
     opacity: 0;
-    animation-fill-mode: forwards;
+    animation: summonFlicker 0.8s ease-out forwards;
   }
 
   .line-number {
@@ -140,7 +140,7 @@
     white-space: nowrap;
     flex-shrink: 0;
     opacity: 0;
-    animation-fill-mode: forwards;
+    animation: sinBadgePop 0.4s ease-out forwards;
   }
 
   .purify-button {

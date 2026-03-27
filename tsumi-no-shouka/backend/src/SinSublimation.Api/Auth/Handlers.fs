@@ -60,7 +60,8 @@ module AuthHandlers =
                     )
                 )
 
-                ctx.Response.Redirect(config.FrontendUrl)
+                let redirectUrl = if String.IsNullOrEmpty(config.FrontendUrl) then "/" else config.FrontendUrl
+                ctx.Response.Redirect(redirectUrl)
             else
                 ctx.Response.StatusCode <- 401
                 do! ctx.Response.WriteAsync("Authentication failed")

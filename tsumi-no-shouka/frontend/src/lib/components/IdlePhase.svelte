@@ -15,6 +15,13 @@
     </button>
 
     <p class="instruction">魂を召喚せよ</p>
+
+    {#if ceremony.error}
+      <p class="error-message">{ceremony.error}</p>
+      {#if ceremony.error.includes('ログイン')}
+        <a href="/auth/google" class="login-link">Googleでログイン</a>
+      {/if}
+    {/if}
   </div>
 </div>
 
@@ -115,5 +122,31 @@
     text-transform: uppercase;
     opacity: 0.35;
     margin: 0;
+  }
+
+  .error-message {
+    color: #ff4444;
+    font-family: var(--font-code, 'JetBrains Mono'), monospace;
+    font-size: 0.9rem;
+    margin: 0;
+    padding: 0.5rem 1rem;
+    border: 1px solid rgba(255, 68, 68, 0.3);
+    border-radius: 4px;
+    background: rgba(255, 0, 0, 0.05);
+  }
+
+  .login-link {
+    color: var(--gold, #c9b87a);
+    text-decoration: none;
+    font-size: 1rem;
+    padding: 0.6rem 2rem;
+    border: 1px solid rgba(201, 184, 122, 0.4);
+    border-radius: 4px;
+    transition: all 0.3s;
+  }
+
+  .login-link:hover {
+    background: rgba(201, 184, 122, 0.1);
+    border-color: rgba(201, 184, 122, 0.7);
   }
 </style>

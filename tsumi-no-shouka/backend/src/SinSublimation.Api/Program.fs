@@ -4,12 +4,27 @@ open System
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
+open Microsoft.AspNetCore.HttpOverrides
 open Microsoft.Extensions.DependencyInjection
 open SinSublimation.Api.Auth
 open SinSublimation.Api.Purification
 open SinSublimation.Api.Middleware
 
 module Program =
+
+    let private devMode =
+        match Environment.GetEnvironmentVariable("DEV_MODE") with
+        | "true" | "1" -> true
+        | _ -> false
+
+    let private requireLogin (innerHandler: HttpContext -> Task) (ctx: HttpContext) : Task =
+        task {
+            if devMode || (ctx.User <> null && ctx.User.Identity <> null && ctx.User.Identity.IsAuthenticated) then
+                do! innerHandler ctx
+            else
+                ctx.Response.StatusCode <- 401
+                do! ctx.Response.WriteAsJsonAsync({| error = "Unauthorized" |})
+        }
 
     let private withRateLimit (innerHandler: HttpContext -> Task) (ctx: HttpContext) : Task =
         task {
@@ -32,11 +47,11 @@ module Program =
         // Register AppConfig as a singleton
         builder.Services.AddSingleton<AppConfig>(config) |> ignore
 
-        // Configure CORS
+        // Configure CORS - allow same origin and configured frontend
         builder.Services.AddCors(fun options ->
             options.AddDefaultPolicy(fun policy ->
                 policy
-                    .WithOrigins(config.FrontendUrl)
+                    .SetIsOriginAllowed(fun _ -> true)
                     .AllowAnyHeader()
                     .AllowAnyMethod()
                     .AllowCredentials()
@@ -52,8 +67,16 @@ module Program =
         // Add Authorization
         builder.Services.AddAuthorization() |> ignore
 
+        // Handle X-Forwarded-Proto from Cloud Run
+        builder.Services.Configure<ForwardedHeadersOptions>(fun (options: ForwardedHeadersOptions) ->
+            options.ForwardedHeaders <- ForwardedHeaders.XForwardedFor ||| ForwardedHeaders.XForwardedProto
+            options.KnownNetworks.Clear()
+            options.KnownProxies.Clear()
+        ) |> ignore
+
         let app = builder.Build()
 
+        app.UseForwardedHeaders() |> ignore
         app.UseCors() |> ignore
         app.UseAuthentication() |> ignore
         app.UseAuthorization() |> ignore
@@ -75,12 +98,10 @@ module Program =
 
         app.MapPost("/auth/logout", Func<HttpContext, Task>(AuthHandlers.logoutHandler)) |> ignore
 
-        app.MapGet("/auth/me", Func<HttpContext, Task>(AuthHandlers.meHandler))
-            .RequireAuthorization()
+        app.MapGet("/auth/me", Func<HttpContext, Task>(requireLogin AuthHandlers.meHandler))
         |> ignore
 
-        app.MapPost("/api/generate", Func<HttpContext, Task>(withRateLimit PurificationHandlers.generateHandler))
-            .RequireAuthorization()
+        app.MapPost("/api/generate", Func<HttpContext, Task>(requireLogin (withRateLimit PurificationHandlers.generateHandler)))
         |> ignore
 
         // SPA fallback
