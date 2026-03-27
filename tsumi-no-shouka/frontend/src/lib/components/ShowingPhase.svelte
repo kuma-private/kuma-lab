@@ -23,8 +23,44 @@
   let lines = $derived(response?.lines ?? []);
   let language = $derived(response?.lang ?? '');
   let theme = $derived(response?.theme ?? '');
-  let sinCount = $derived(lines.filter((l: CodeLine) => l.s !== null).length);
 
+  // Group consecutive sinful lines into annotation blocks
+  // Each group: { startLine, endLine, summary (combined sin text) }
+  type SinGroup = { start: number; end: number; summary: string };
+
+  let sinGroups = $derived((): SinGroup[] => {
+    const groups: SinGroup[] = [];
+    let current: { start: number; end: number; sins: string[] } | null = null;
+
+    lines.forEach((line: CodeLine, i: number) => {
+      if (line.s) {
+        if (current && i - current.end <= 1) {
+          current.end = i;
+          current.sins.push(line.s);
+        } else {
+          if (current) groups.push({ start: current.start, end: current.end, summary: current.sins.join('／') });
+          current = { start: i, end: i, sins: [line.s] };
+        }
+      }
+    });
+    if (current) groups.push({ start: current.start, end: current.end, summary: current.sins.join('／') });
+    return groups;
+  });
+
+  // For each line, find if it's the "anchor" line for a sin group badge (middle of group)
+  function getGroupForLine(lineIndex: number): SinGroup | null {
+    for (const g of sinGroups()) {
+      const anchor = Math.floor((g.start + g.end) / 2);
+      if (lineIndex === anchor) return g;
+    }
+    return null;
+  }
+
+  function isInSinGroup(lineIndex: number): boolean {
+    return sinGroups().some(g => lineIndex >= g.start && lineIndex <= g.end);
+  }
+
+  let sinCount = $derived(lines.filter((l: CodeLine) => l.s !== null).length);
   let revealedLines = $state(0);
   let revealPhase = $state<'lines' | 'verdict' | 'button'>('lines');
   let displayedSinCount = $state(0);
@@ -33,94 +69,39 @@
   let countUpInterval: ReturnType<typeof setInterval>;
 
   const langMap: Record<string, string> = {
-    'Java': 'java',
-    'java': 'java',
-    'Python': 'python',
-    'python': 'python',
-    'C++': 'cpp',
-    'c++': 'cpp',
-    'JavaScript': 'javascript',
-    'JS': 'javascript',
-    'js': 'javascript',
-    'Ruby': 'ruby',
-    'ruby': 'ruby',
-    'PHP': 'php',
-    'php': 'php',
-    'COBOL': 'plaintext',
-    'cobol': 'plaintext',
+    'Java': 'java', 'java': 'java', 'Python': 'python', 'python': 'python',
+    'C++': 'cpp', 'c++': 'cpp', 'JavaScript': 'javascript', 'JS': 'javascript',
+    'Ruby': 'ruby', 'ruby': 'ruby', 'PHP': 'php', 'php': 'php',
+    'COBOL': 'plaintext', 'cobol': 'plaintext',
   };
 
   function highlightCode(code: string, lang: string): string {
     const hljsLang = langMap[lang] ?? 'plaintext';
-    if (hljsLang === 'plaintext') {
-      return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-    try {
-      return hljs.highlight(code, { language: hljsLang }).value;
-    } catch {
-      return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-  }
-
-  function sinColor(sin: string | null): string {
-    if (!sin) return '#ff4400';
-    if (sin.includes('null') || sin.includes('Null')) return 'var(--sin-null, #ff2200)';
-    if (sin.includes('getter') || sin.includes('Getter') || sin.includes('setter')) return 'var(--sin-getter, #ff6600)';
-    if (sin.includes('ボイラー') || sin.includes('Boiler') || sin.includes('boiler')) return 'var(--sin-boiler, #cc4400)';
-    if (sin.includes('副作用') || sin.includes('side') || sin.includes('Side')) return 'var(--sin-side-effect, #ff8800)';
-    return '#ff4400';
+    if (hljsLang === 'plaintext') return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    try { return hljs.highlight(code, { language: hljsLang }).value; }
+    catch { return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   }
 
   function revealNextLine() {
     if (revealedLines >= lines.length) {
       clearInterval(revealInterval);
-      // All lines revealed — pause, then show verdict
-      setTimeout(() => {
-        revealPhase = 'verdict';
-        startCountUp();
-      }, 800);
+      setTimeout(() => { revealPhase = 'verdict'; startCountUp(); }, 800);
       return;
     }
-
     revealedLines++;
-
-    // Check if the just-revealed line has a sin badge — pause extra
-    const justRevealed = lines[revealedLines - 1];
-    if (justRevealed?.s) {
-      clearInterval(revealInterval);
-      setTimeout(() => {
-        if (revealPhase === 'lines') {
-          revealInterval = setInterval(revealNextLine, 120);
-        }
-      }, 300);
-    }
   }
 
   function startCountUp() {
-    if (sinCount === 0) {
-      displayedSinCount = 0;
-      setTimeout(() => { revealPhase = 'button'; }, 600);
-      return;
-    }
+    if (sinCount === 0) { displayedSinCount = 0; setTimeout(() => { revealPhase = 'button'; }, 600); return; }
     displayedSinCount = 0;
     countUpInterval = setInterval(() => {
       displayedSinCount++;
-      if (displayedSinCount >= sinCount) {
-        clearInterval(countUpInterval);
-        // After verdict shown, show button
-        setTimeout(() => { revealPhase = 'button'; }, 600);
-      }
+      if (displayedSinCount >= sinCount) { clearInterval(countUpInterval); setTimeout(() => { revealPhase = 'button'; }, 600); }
     }, 80);
   }
 
-  onMount(() => {
-    revealInterval = setInterval(revealNextLine, 120);
-  });
-
-  onDestroy(() => {
-    clearInterval(revealInterval);
-    clearInterval(countUpInterval);
-  });
+  onMount(() => { revealInterval = setInterval(revealNextLine, 120); });
+  onDestroy(() => { clearInterval(revealInterval); clearInterval(countUpInterval); });
 </script>
 
 <div class="showing-phase" in:demonAppear={{ duration: 1000 }}>
@@ -134,15 +115,13 @@
   <div class="code-panel">
     <div class="code-lines">
       {#each lines.slice(0, revealedLines) as line, i}
-        <div class="code-line">
+        <div class="code-line" class:sin-line={isInSinGroup(i)}>
           <span class="line-number">{i + 1}</span>
           <span class="line-content">{@html highlightCode(line.c, language)}</span>
-          {#if line.s}
-            <span
-              class="sin-badge sinBadgePop"
-              style="--sin-color: {sinColor(line.s)}"
-            >
-              {line.s}
+          {#if getGroupForLine(i)}
+            {@const group = getGroupForLine(i)}
+            <span class="sin-badge">
+              {group?.summary}
             </span>
           {/if}
         </div>
@@ -165,67 +144,43 @@
 
 <style>
   .showing-phase {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 2rem;
-    gap: 1.5rem;
-    overflow-y: auto;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 2rem; gap: 1.5rem; overflow-y: auto;
   }
 
-  .header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    flex-shrink: 0;
-  }
+  .header { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
 
   .language-badge {
     font-family: var(--font-code, 'JetBrains Mono'), monospace;
-    font-size: 0.8rem;
-    padding: 0.3em 0.8em;
-    border: 1px solid rgba(200, 122, 96, 0.4);
-    border-radius: 4px;
-    color: var(--text-sin, #c87a60);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
+    font-size: 0.8rem; padding: 0.3em 0.8em;
+    border: 1px solid rgba(200, 122, 96, 0.4); border-radius: 4px;
+    color: var(--text-sin, #c87a60); text-transform: uppercase; letter-spacing: 0.1em;
   }
 
-  .theme-text {
-    font-size: 1rem;
-    color: var(--gold, #c9b87a);
-    opacity: 0.7;
-  }
+  .theme-text { font-size: 1rem; color: var(--gold, #c9b87a); opacity: 0.7; }
 
   .code-panel {
-    width: 100%;
-    max-width: 900px;
+    width: 100%; max-width: 1100px;
     background: rgba(20, 15, 10, 0.6);
-    border: 1px solid rgba(200, 122, 96, 0.15);
-    border-radius: 8px;
-    padding: 1.5rem;
-    overflow-x: auto;
-    flex: 1;
-    min-height: 0;
+    border: 1px solid rgba(200, 122, 96, 0.15); border-radius: 8px;
+    padding: 1.5rem; overflow-x: auto; flex-shrink: 0;
   }
 
-  .code-lines {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
+  .code-lines { display: flex; flex-direction: column; gap: 1px; }
 
   .code-line {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 3px;
-    font-family: var(--font-code, 'JetBrains Mono'), monospace;
-    font-size: 0.85rem;
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.2rem 0.5rem; border-radius: 3px;
+    font-family: var(--font-code, 'JetBrains Mono'), monospace; font-size: 0.82rem;
     animation: lineReveal 0.3s ease-out;
+    border-left: 3px solid transparent;
+    min-height: 1.6em;
+  }
+
+  .sin-line {
+    border-left-color: rgba(255, 68, 0, 0.4);
+    background: rgba(255, 34, 0, 0.04);
   }
 
   @keyframes lineReveal {
@@ -234,22 +189,14 @@
   }
 
   .line-number {
-    color: rgba(200, 122, 96, 0.3);
-    min-width: 2.5em;
-    text-align: right;
-    font-size: 0.75rem;
-    user-select: none;
-    flex-shrink: 0;
+    color: rgba(200, 122, 96, 0.3); min-width: 2.5em; text-align: right;
+    font-size: 0.72rem; user-select: none; flex-shrink: 0;
   }
 
   .line-content {
-    color: var(--text-sin, #c87a60);
-    white-space: pre;
-    flex: 1;
-    min-width: 0;
+    color: var(--text-sin, #c87a60); white-space: pre; flex: 1; min-width: 0;
   }
 
-  /* Let highlight.js colors show through */
   .line-content :global(.hljs-keyword) { color: #ff7b72; }
   .line-content :global(.hljs-string) { color: #a5d6ff; }
   .line-content :global(.hljs-number) { color: #79c0ff; }
@@ -262,34 +209,28 @@
   .line-content :global(.hljs-function) { color: #d2a8ff; }
 
   .sin-badge {
-    font-size: 0.7rem;
-    padding: 0.2em 0.7em;
-    border-radius: 3px;
-    color: #fff;
-    font-weight: 700;
-    white-space: nowrap;
-    flex-shrink: 0;
+    font-family: var(--font-code, 'JetBrains Mono'), monospace;
+    font-size: 0.68rem; line-height: 1.5;
+    color: #ffaa88;
+    background: rgba(255, 68, 0, 0.08);
+    border: 1px solid rgba(255, 68, 0, 0.25);
+    border-radius: 4px;
+    padding: 0.25em 0.8em;
     margin-left: auto;
-    background: var(--sin-color, #ff4400);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--sin-color, #ff4400) 60%, transparent),
-                0 0 16px color-mix(in srgb, var(--sin-color, #ff4400) 30%, transparent);
-    animation: sinBadgePop 0.4s ease-out forwards, sinDanger 2s ease-in-out 0.5s infinite;
+    flex-shrink: 0;
+    max-width: 320px;
+    white-space: normal;
+    text-align: right;
+    animation: sinBadgePop 0.4s ease-out, sinDanger 3s ease-in-out 1s infinite;
   }
 
   .verdict {
     font-family: var(--font-title, 'Cinzel Decorative'), serif;
-    font-size: 1.2rem;
-    color: #ff4444;
+    font-size: 1.2rem; color: #ff4444;
     text-shadow: 0 0 15px rgba(255, 68, 68, 0.4);
-    animation: verdictAppear 0.5s ease-out;
-    flex-shrink: 0;
+    animation: verdictAppear 0.5s ease-out; flex-shrink: 0;
   }
-
-  .verdict-count {
-    font-size: 1.6rem;
-    font-weight: 900;
-    color: #ff2200;
-  }
+  .verdict-count { font-size: 1.6rem; font-weight: 900; color: #ff2200; }
 
   @keyframes verdictAppear {
     0% { opacity: 0; transform: scale(0.8); }
@@ -300,27 +241,13 @@
   .purify-button {
     flex-shrink: 0;
     font-family: var(--font-title, 'Cinzel Decorative'), serif;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--text-fsharp-bright, #c0baff);
-    background: none;
-    border: 2px solid rgba(155, 148, 224, 0.4);
-    border-radius: 8px;
-    padding: 0.8rem 2.5rem;
-    cursor: pointer;
-    letter-spacing: 0.15em;
-    transition: all 0.3s;
+    font-size: 1.1rem; font-weight: 700;
+    color: var(--text-fsharp-bright, #c0baff); background: none;
+    border: 2px solid rgba(155, 148, 224, 0.4); border-radius: 8px;
+    padding: 0.8rem 2.5rem; cursor: pointer; letter-spacing: 0.15em; transition: all 0.3s;
   }
-
-  .button-enter {
-    animation: buttonFadeUp 0.6s ease-out;
-  }
-
-  @keyframes buttonFadeUp {
-    0% { opacity: 0; transform: translateY(20px); }
-    100% { opacity: 1; transform: translateY(0); }
-  }
-
+  .button-enter { animation: buttonFadeUp 0.6s ease-out; }
+  @keyframes buttonFadeUp { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
   .purify-button:hover {
     border-color: rgba(155, 148, 224, 0.8);
     box-shadow: 0 0 30px rgba(155, 148, 224, 0.2), inset 0 0 20px rgba(155, 148, 224, 0.05);

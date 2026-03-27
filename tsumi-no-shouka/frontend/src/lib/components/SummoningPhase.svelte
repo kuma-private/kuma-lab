@@ -49,18 +49,16 @@
   }
 
   function getMessageInterval(): number {
-    if (stage === 'ritual') return 2000;
+    if (stage === 'ritual') return 2500;
     if (stage === 'acceleration') {
-      // Shrink from 1500 to 800 over the 3-6s window
-      const progress = Math.min(1, (elapsedTime - 3000) / 3000);
-      return 1500 - progress * 700;
+      const progress = Math.min(1, (elapsedTime - 4000) / 4000);
+      return 2000 - progress * 500;
     }
     if (stage === 'crescendo') {
-      // Shrink from 400 to 200 over the 6-8s window
-      const progress = Math.min(1, (elapsedTime - 6000) / 2000);
-      return 400 - progress * 200;
+      const progress = Math.min(1, (elapsedTime - 8000) / 4000);
+      return 1500 - progress * 500;
     }
-    return 1000;
+    return 1500;
   }
 
   function getPentagramSpeed(): number {
@@ -115,20 +113,20 @@
         apiDone = true;
       }
 
-      // Stage transitions based on elapsed time
-      if (elapsedTime < 3000) {
+      // Stage transitions based on elapsed time (slower progression)
+      if (elapsedTime < 4000) {
         if (stage !== 'ritual') {
           stage = 'ritual';
           messageIndex = 0;
           scheduleNextMessage();
         }
-      } else if (elapsedTime < 6000) {
+      } else if (elapsedTime < 8000) {
         if (stage === 'ritual') {
           stage = 'acceleration';
           messageIndex = 0;
           scheduleNextMessage();
         }
-      } else if (elapsedTime >= 6000) {
+      } else if (elapsedTime >= 8000) {
         if (stage === 'acceleration') {
           stage = 'crescendo';
           crescendoReached = true;
@@ -143,8 +141,8 @@
       }
 
       // Safety: if API done before crescendo, let it reach crescendo first
-      // but if we've been waiting too long (10s+), force held-breath
-      if (apiDone && elapsedTime > 10000 && !completionShown) {
+      // but if we've been waiting too long (15s+), force held-breath
+      if (apiDone && elapsedTime > 15000 && !completionShown) {
         crescendoReached = true;
         enterHeldBreath();
       }

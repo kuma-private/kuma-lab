@@ -6,6 +6,37 @@
   import { divineDescend } from '$lib/animations/transitions';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
+  import hljs from 'highlight.js/lib/core';
+  import java from 'highlight.js/lib/languages/java';
+  import python from 'highlight.js/lib/languages/python';
+  import cpp from 'highlight.js/lib/languages/cpp';
+  import javascript from 'highlight.js/lib/languages/javascript';
+  import ruby from 'highlight.js/lib/languages/ruby';
+  import php from 'highlight.js/lib/languages/php';
+  import fsharp from 'highlight.js/lib/languages/fsharp';
+  import 'highlight.js/styles/github-dark.css';
+
+  hljs.registerLanguage('java', java);
+  hljs.registerLanguage('python', python);
+  hljs.registerLanguage('cpp', cpp);
+  hljs.registerLanguage('javascript', javascript);
+  hljs.registerLanguage('ruby', ruby);
+  hljs.registerLanguage('php', php);
+  hljs.registerLanguage('fsharp', fsharp);
+
+  const langMap: Record<string, string> = {
+    'Java': 'java', 'java': 'java', 'Python': 'python', 'python': 'python',
+    'C++': 'cpp', 'c++': 'cpp', 'JavaScript': 'javascript', 'JS': 'javascript',
+    'Ruby': 'ruby', 'ruby': 'ruby', 'PHP': 'php', 'php': 'php',
+    'COBOL': 'plaintext', 'cobol': 'plaintext', 'F#': 'fsharp', 'fsharp': 'fsharp',
+  };
+
+  function hl(code: string, lang: string): string {
+    const hljsLang = langMap[lang] ?? 'plaintext';
+    if (hljsLang === 'plaintext') return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    try { return hljs.highlight(code, { language: hljsLang }).value; }
+    catch { return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  }
 
   let response = $derived(ceremony.response);
   let sinLines = $derived(response?.lines ?? []);
@@ -23,10 +54,6 @@
       ? Math.round(((originalLineCount - fsharpLineCount) / originalLineCount) * 100)
       : 0
   );
-  let purityScore = $derived(
-    Math.max(0, Math.min(100, 100 - sinCount * 12))
-  );
-
   let revealStep = $state(0);
   let displayedReduction = $state(0);
   let displayedSinCount = $state(0);
@@ -127,7 +154,7 @@
           {#each fsharpLines as line, i}
             <div class="code-line" style="animation-delay: {i * 40}ms">
               <span class="line-number">{i + 1}</span>
-              <span class="line-content">{line}</span>
+              <span class="line-content">{@html hl(line, 'F#')}</span>
             </div>
           {/each}
         </div>
@@ -147,16 +174,6 @@
             <span class="metric-arrow">→</span>
             <span class="metric-label">F#</span>
             <span class="metric-value fsharp-value">{fsharpLineCount}行</span>
-          </div>
-        </div>
-
-        <div class="metric-row">
-          <div class="metric purity-metric">
-            <span class="metric-label">魂の純度</span>
-            <div class="purity-bar">
-              <div class="purity-fill" style="width: {purityScore}%"></div>
-            </div>
-            <span class="metric-value purity-value">{purityScore}%</span>
           </div>
         </div>
 
@@ -185,11 +202,15 @@
         </div>
         <div class="original-code">
           {#each sinLines as line, i}
-            <div class="code-line original-line">
-              <span class="line-number">{i + 1}</span>
-              <span class="line-content">{line.c}</span>
+            <div class="original-line-wrapper">
+              <div class="code-line original-line">
+                <span class="line-number">{i + 1}</span>
+                <span class="line-content">{@html hl(line.c, language)}</span>
+              </div>
               {#if line.s}
-                <span class="original-sin">{line.s}</span>
+                <div class="sin-badge-row">
+                  <span class="sin-badge-done">⚠ {line.s}</span>
+                </div>
               {/if}
             </div>
           {/each}
@@ -312,7 +333,26 @@
     white-space: pre;
     color: var(--text-fsharp-bright, #c0baff);
     flex: 1;
+    min-width: 0;
   }
+
+  .line-content :global(.hljs-keyword) { color: #c586c0; }
+  .line-content :global(.hljs-string) { color: #ce9178; }
+  .line-content :global(.hljs-number) { color: #b5cea8; }
+  .line-content :global(.hljs-comment) { color: #6a9955; font-style: italic; }
+  .line-content :global(.hljs-type),
+  .line-content :global(.hljs-title.class_) { color: #4ec9b0; }
+  .line-content :global(.hljs-built_in) { color: #dcdcaa; }
+  .line-content :global(.hljs-literal) { color: #569cd6; }
+  .line-content :global(.hljs-function) { color: #dcdcaa; }
+
+  .original-line .line-content :global(.hljs-keyword) { color: #ff7b72; }
+  .original-line .line-content :global(.hljs-string) { color: #a5d6ff; }
+  .original-line .line-content :global(.hljs-number) { color: #79c0ff; }
+  .original-line .line-content :global(.hljs-comment) { color: #8b949e; font-style: italic; }
+  .original-line .line-content :global(.hljs-type),
+  .original-line .line-content :global(.hljs-title.class_) { color: #ffa657; }
+  .original-line .line-content :global(.hljs-built_in) { color: #ffa657; }
 
   /* Metrics */
   .metrics-section {
@@ -446,6 +486,16 @@
     font-size: 0.75rem;
   }
 
+  .original-line-wrapper {
+    border-left: 2px solid transparent;
+    padding-left: 0;
+    transition: border-color 0.2s;
+  }
+
+  .original-line-wrapper:has(.sin-badge-done) {
+    border-left-color: rgba(255, 68, 68, 0.3);
+  }
+
   .original-line .line-number {
     color: rgba(200, 122, 96, 0.5);
   }
@@ -454,12 +504,22 @@
     color: rgba(200, 122, 96, 0.85);
   }
 
-  .original-sin {
+  .sin-badge-row {
+    padding-left: 3.5em;
+    margin-top: -2px;
+    margin-bottom: 4px;
+  }
+
+  .sin-badge-done {
+    display: inline-block;
+    font-family: var(--font-code, 'JetBrains Mono'), monospace;
     font-size: 0.65rem;
-    color: #ff6644;
-    margin-left: auto;
-    flex-shrink: 0;
-    white-space: nowrap;
+    color: #ff8866;
+    background: rgba(255, 68, 0, 0.08);
+    border: 1px solid rgba(255, 68, 0, 0.2);
+    border-radius: 3px;
+    padding: 0.15em 0.6em;
+    line-height: 1.4;
   }
 
   /* Actions */
