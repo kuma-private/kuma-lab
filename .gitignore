@@ -23,6 +23,7 @@ Thumbs.db
 node_modules/
 .svelte-kit/
 .vercel/
+**/frontend/build/
 
 # .NET
 **/bin/

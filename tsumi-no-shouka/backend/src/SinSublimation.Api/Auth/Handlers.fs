@@ -4,11 +4,11 @@ open System
 open System.Security.Claims
 open System.Text
 open System.IdentityModel.Tokens.Jwt
+open System.Threading.Tasks
 open Microsoft.AspNetCore.Authentication
 open Microsoft.AspNetCore.Authentication.Google
 open Microsoft.AspNetCore.Http
 open Microsoft.IdentityModel.Tokens
-open Giraffe
 open SinSublimation.Api
 
 module AuthHandlers =
@@ -36,74 +36,67 @@ module AuthHandlers =
 
         JwtSecurityTokenHandler().WriteToken(token)
 
-    let loginHandler: HttpHandler =
-        fun next ctx ->
-            task {
-                let properties = AuthenticationProperties(RedirectUri = "/auth/callback-complete")
-                do! ctx.ChallengeAsync(GoogleDefaults.AuthenticationScheme, properties)
-                return! next ctx
-            }
+    let loginHandler (ctx: HttpContext) : Task =
+        task {
+            let properties = AuthenticationProperties(RedirectUri = "/auth/callback-complete")
+            do! ctx.ChallengeAsync(GoogleDefaults.AuthenticationScheme, properties)
+        }
 
-    let callbackCompleteHandler (config: AppConfig) : HttpHandler =
-        fun next ctx ->
-            task {
-                let user = ctx.User
+    let callbackCompleteHandler (config: AppConfig) (ctx: HttpContext) : Task =
+        task {
+            let user = ctx.User
 
-                if user.Identity <> null && user.Identity.IsAuthenticated then
-                    let jwt = createJwt config user.Claims
+            if user.Identity <> null && user.Identity.IsAuthenticated then
+                let jwt = createJwt config user.Claims
 
-                    ctx.Response.Cookies.Append(
-                        "session",
-                        jwt,
-                        CookieOptions(
-                            HttpOnly = true,
-                            Secure = true,
-                            SameSite = SameSiteMode.Lax,
-                            MaxAge = TimeSpan.FromDays(7.0)
-                        )
+                ctx.Response.Cookies.Append(
+                    "session",
+                    jwt,
+                    CookieOptions(
+                        HttpOnly = true,
+                        Secure = true,
+                        SameSite = SameSiteMode.Lax,
+                        MaxAge = TimeSpan.FromDays(7.0)
                     )
+                )
 
-                    ctx.Response.Redirect(config.FrontendUrl)
-                    return Some ctx
-                else
-                    ctx.Response.StatusCode <- 401
-                    return! text "Authentication failed" next ctx
-            }
+                ctx.Response.Redirect(config.FrontendUrl)
+            else
+                ctx.Response.StatusCode <- 401
+                do! ctx.Response.WriteAsync("Authentication failed")
+        }
 
-    let logoutHandler: HttpHandler =
-        fun next ctx ->
-            task {
-                ctx.Response.Cookies.Delete("session")
-                ctx.Response.StatusCode <- 204
-                return Some ctx
-            }
+    let logoutHandler (ctx: HttpContext) : Task =
+        task {
+            ctx.Response.Cookies.Delete("session")
+            ctx.Response.StatusCode <- 204
+        }
 
-    let meHandler: HttpHandler =
-        fun next ctx ->
-            task {
-                let user = ctx.User
+    let meHandler (ctx: HttpContext) : Task =
+        task {
+            let user = ctx.User
 
-                if user.Identity <> null && user.Identity.IsAuthenticated then
-                    let name =
-                        user.FindFirst(ClaimTypes.Name)
-                        |> Option.ofObj
-                        |> Option.map (fun c -> c.Value)
-                        |> Option.defaultValue ""
+            if user.Identity <> null && user.Identity.IsAuthenticated then
+                let name =
+                    user.FindFirst(ClaimTypes.Name)
+                    |> Option.ofObj
+                    |> Option.map (fun c -> c.Value)
+                    |> Option.defaultValue ""
 
-                    let email =
-                        user.FindFirst(ClaimTypes.Email)
-                        |> Option.ofObj
-                        |> Option.map (fun c -> c.Value)
-                        |> Option.defaultValue ""
+                let email =
+                    user.FindFirst(ClaimTypes.Email)
+                    |> Option.ofObj
+                    |> Option.map (fun c -> c.Value)
+                    |> Option.defaultValue ""
 
-                    let sub =
-                        user.FindFirst(ClaimTypes.NameIdentifier)
-                        |> Option.ofObj
-                        |> Option.map (fun c -> c.Value)
-                        |> Option.defaultValue ""
+                let sub =
+                    user.FindFirst(ClaimTypes.NameIdentifier)
+                    |> Option.ofObj
+                    |> Option.map (fun c -> c.Value)
+                    |> Option.defaultValue ""
 
-                    return! json {| name = name; email = email; sub = sub |} next ctx
-                else
-                    ctx.Response.StatusCode <- 401
-                    return! text "Unauthorized" next ctx
-            }
+                do! ctx.Response.WriteAsJsonAsync({| name = name; email = email; sub = sub |})
+            else
+                ctx.Response.StatusCode <- 401
+                do! ctx.Response.WriteAsync("Unauthorized")
+        }

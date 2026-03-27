@@ -13,12 +13,10 @@
     <Compile Include="Purification/Parser.fs" />
     <Compile Include="Purification/Handlers.fs" />
     <Compile Include="Middleware/RateLimit.fs" />
-    <Compile Include="Routes.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Giraffe" Version="7.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
   </ItemGroup>

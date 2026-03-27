@@ -4,7 +4,6 @@ open System
 open System.Collections.Concurrent
 open System.Security.Claims
 open Microsoft.AspNetCore.Http
-open Giraffe
 
 module RateLimit =
 
@@ -24,7 +23,7 @@ module RateLimit =
                   LastRefill = DateTime.UtcNow }
         )
 
-    let private tryConsume (userId: string) : Result<unit, float> =
+    let tryConsume (userId: string) : Result<unit, float> =
         let bucket = getOrCreateBucket userId
         let now = DateTime.UtcNow
         let elapsed = (now - bucket.LastRefill).TotalSeconds
@@ -39,19 +38,9 @@ module RateLimit =
             let waitSeconds = (1.0 - bucket.Tokens) / refillRate
             Error(Math.Ceiling(waitSeconds))
 
-    let rateLimitMiddleware: HttpHandler =
-        fun next ctx ->
-            task {
-                let user = ctx.User
+    let getUserId (ctx: HttpContext) =
+        let user = ctx.User
 
-                let userId =
-                    match user.FindFirst(ClaimTypes.NameIdentifier) with
-                    | null -> ctx.Connection.RemoteIpAddress.ToString()
-                    | claim -> claim.Value
-
-                match tryConsume userId with
-                | Ok() -> return! next ctx
-                | Error retryAfter ->
-                    ctx.SetStatusCode 429
-                    return! json {| error = "Rate limit exceeded"; retryAfterSeconds = retryAfter |} next ctx
-            }
+        match user.FindFirst(ClaimTypes.NameIdentifier) with
+        | null -> ctx.Connection.RemoteIpAddress.ToString()
+        | claim -> claim.Value
