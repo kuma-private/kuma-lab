@@ -352,10 +352,9 @@
   .original-section {
     width: 100%;
     background: rgba(20, 15, 10, 0.5);
-    border: 1px solid rgba(200, 122, 96, 0.12);
+    border: 1px solid rgba(200, 122, 96, 0.2);
     border-radius: 8px;
     overflow: hidden;
-    opacity: 0.6;
   }
 
   .original-header {
@@ -380,17 +379,16 @@
   }
 
   .original-line .line-number {
-    color: rgba(200, 122, 96, 0.25);
-  }
-
-  .original-line .line-content {
     color: rgba(200, 122, 96, 0.5);
   }
 
+  .original-line .line-content {
+    color: rgba(200, 122, 96, 0.85);
+  }
+
   .original-sin {
-    font-size: 0.6rem;
-    color: #ff4444;
-    opacity: 0.5;
+    font-size: 0.65rem;
+    color: #ff6644;
     margin-left: auto;
     flex-shrink: 0;
     white-space: nowrap;
