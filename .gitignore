@@ -1,15 +1,6 @@
-# Dependencies
-node_modules/
-.svelte-kit/
+# === Shared (kuma-lab root) ===
 
-# Build
-frontend/build/
-backend/src/SinSublimation.Api/bin/
-backend/src/SinSublimation.Api/obj/
-backend/tests/SinSublimation.Tests/bin/
-backend/tests/SinSublimation.Tests/obj/
-
-# Environment
+# Environment (API keys etc.)
 .env
 .env.local
 .env.*.local
@@ -26,5 +17,13 @@ backend/tests/SinSublimation.Tests/obj/
 .DS_Store
 Thumbs.db
 
-# Vercel
+# === Per-project common patterns ===
+
+# Node.js
+node_modules/
+.svelte-kit/
 .vercel/
+
+# .NET
+**/bin/
+**/obj/
