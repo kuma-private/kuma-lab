@@ -56,20 +56,9 @@ module Parser =
         { Code = raw.c |> Option.ofObj |> Option.defaultValue ""
           Sin = sin }
 
-    let private stripMarkdownCodeBlock (text: string) =
-        let t = text.Trim()
-        if t.StartsWith("```") then
-            let afterFirst = t.Substring(t.IndexOf('\n') + 1)
-            if afterFirst.TrimEnd().EndsWith("```") then
-                afterFirst.TrimEnd().[..afterFirst.TrimEnd().Length - 4].Trim()
-            else
-                afterFirst.Trim()
-        else
-            t
-
     let parse (jsonText: string) : Result<GenerateResponse, string> =
         try
-            let trimmed = stripMarkdownCodeBlock jsonText
+            let trimmed = jsonText.Trim()
             let options = JsonSerializerOptions(PropertyNameCaseInsensitive = true)
             let raw = JsonSerializer.Deserialize<RawResponse>(trimmed, options)
 

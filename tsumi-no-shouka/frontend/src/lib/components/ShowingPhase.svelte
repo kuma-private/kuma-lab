@@ -2,11 +2,56 @@
   import { ceremony } from '$lib/state/machine.svelte';
   import { demonAppear } from '$lib/animations/transitions';
   import type { CodeLine } from '$lib/state/types';
+  import hljs from 'highlight.js/lib/core';
+  import java from 'highlight.js/lib/languages/java';
+  import python from 'highlight.js/lib/languages/python';
+  import cpp from 'highlight.js/lib/languages/cpp';
+  import javascript from 'highlight.js/lib/languages/javascript';
+  import ruby from 'highlight.js/lib/languages/ruby';
+  import php from 'highlight.js/lib/languages/php';
+  import 'highlight.js/styles/github-dark.css';
+
+  hljs.registerLanguage('java', java);
+  hljs.registerLanguage('python', python);
+  hljs.registerLanguage('cpp', cpp);
+  hljs.registerLanguage('javascript', javascript);
+  hljs.registerLanguage('ruby', ruby);
+  hljs.registerLanguage('php', php);
 
   let response = $derived(ceremony.response);
   let lines = $derived(response?.lines ?? []);
   let language = $derived(response?.lang ?? '');
   let theme = $derived(response?.theme ?? '');
+
+  const langMap: Record<string, string> = {
+    'Java': 'java',
+    'java': 'java',
+    'Python': 'python',
+    'python': 'python',
+    'C++': 'cpp',
+    'c++': 'cpp',
+    'JavaScript': 'javascript',
+    'JS': 'javascript',
+    'js': 'javascript',
+    'Ruby': 'ruby',
+    'ruby': 'ruby',
+    'PHP': 'php',
+    'php': 'php',
+    'COBOL': 'plaintext',
+    'cobol': 'plaintext',
+  };
+
+  function highlightCode(code: string, lang: string): string {
+    const hljsLang = langMap[lang] ?? 'plaintext';
+    if (hljsLang === 'plaintext') {
+      return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    try {
+      return hljs.highlight(code, { language: hljsLang }).value;
+    } catch {
+      return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+  }
 
   function sinColor(sin: string | null): string {
     if (!sin) return '#ff4400';
@@ -31,11 +76,11 @@
       {#each lines as line, i}
         <div class="code-line summonFlicker" style="animation-delay: {i * 60}ms">
           <span class="line-number">{i + 1}</span>
-          <span class="line-content">{line.c}</span>
+          <span class="line-content">{@html highlightCode(line.c, language)}</span>
           {#if line.s}
             <span
               class="sin-badge sinBadgePop"
-              style="background: {sinColor(line.s)}; animation-delay: {300 + i * 120}ms"
+              style="--sin-color: {sinColor(line.s)}; animation-delay: {300 + i * 120}ms"
             >
               {line.s}
             </span>
@@ -129,17 +174,34 @@
     color: var(--text-sin, #c87a60);
     white-space: pre;
     flex: 1;
+    min-width: 0;
   }
+
+  /* Let highlight.js colors show through */
+  .line-content :global(.hljs-keyword) { color: #ff7b72; }
+  .line-content :global(.hljs-string) { color: #a5d6ff; }
+  .line-content :global(.hljs-number) { color: #79c0ff; }
+  .line-content :global(.hljs-comment) { color: #8b949e; font-style: italic; }
+  .line-content :global(.hljs-type),
+  .line-content :global(.hljs-title.class_) { color: #ffa657; }
+  .line-content :global(.hljs-built_in) { color: #ffa657; }
+  .line-content :global(.hljs-literal) { color: #79c0ff; }
+  .line-content :global(.hljs-params) { color: #c9d1d9; }
+  .line-content :global(.hljs-function) { color: #d2a8ff; }
 
   .sin-badge {
     font-size: 0.7rem;
-    padding: 0.15em 0.6em;
+    padding: 0.2em 0.7em;
     border-radius: 3px;
     color: #fff;
     font-weight: 700;
     white-space: nowrap;
     flex-shrink: 0;
+    margin-left: auto;
     opacity: 0;
+    background: var(--sin-color, #ff4400);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--sin-color, #ff4400) 60%, transparent),
+                0 0 16px color-mix(in srgb, var(--sin-color, #ff4400) 30%, transparent);
     animation: sinBadgePop 0.4s ease-out forwards;
   }
 

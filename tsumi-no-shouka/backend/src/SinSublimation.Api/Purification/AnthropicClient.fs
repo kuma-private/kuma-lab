@@ -13,7 +13,9 @@ module AnthropicClient =
         { [<JsonPropertyName("type")>]
           Type: string
           [<JsonPropertyName("text")>]
-          Text: string }
+          Text: string
+          [<JsonPropertyName("input")>]
+          Input: JsonElement }
 
     [<CLIMutable>]
     type AnthropicResponse =
@@ -22,6 +24,47 @@ module AnthropicClient =
           [<JsonPropertyName("content")>]
           Content: ContentBlock array }
 
+    let private toolSchema =
+        {| name = "generate_sinful_code"
+           description = "Generate sinful verbose code and its F# purification"
+           input_schema =
+            JsonDocument.Parse(
+                """{
+                    "type": "object",
+                    "properties": {
+                        "theme": {"type": "string", "description": "テーマ名（日本語）"},
+                        "lang": {"type": "string", "description": "使用言語名"},
+                        "lines": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "c": {"type": "string", "description": "コード1行"},
+                                    "s": {"type": ["string", "null"], "description": "罪の説明(短く)、なければnull"}
+                                },
+                                "required": ["c", "s"]
+                            }
+                        },
+                        "fs": {"type": "string", "description": "F#版コード（改行区切り）"},
+                        "why": {"type": "string", "description": "F#が優れる理由（1文）"}
+                    },
+                    "required": ["theme", "lang", "lines", "fs", "why"]
+                }"""
+            ).RootElement |}
+
+    let private extractToolUseInput (parsed: AnthropicResponse) : Result<string, string> =
+        match parsed.Content |> Array.tryFind (fun c -> c.Type = "tool_use") with
+        | Some block ->
+            if block.Input.ValueKind <> JsonValueKind.Undefined && block.Input.ValueKind <> JsonValueKind.Null then
+                Ok (block.Input.GetRawText())
+            else
+                Error "tool_use block has no input"
+        | None ->
+            // Fallback: try text block for backward compat
+            match parsed.Content |> Array.tryFind (fun c -> c.Type = "text") with
+            | Some block -> Ok block.Text
+            | None -> Error "No tool_use or text content in Anthropic response"
+
     let callApi (httpClient: HttpClient) (apiKey: string) : Async<Result<string, string>> =
         async {
             try
@@ -29,8 +72,10 @@ module AnthropicClient =
 
                 let requestBody =
                     {| model = "claude-sonnet-4-6"
-                       max_tokens = 800
+                       max_tokens = 1500
                        system = Prompt.systemPrompt
+                       tool_choice = {| ``type`` = "any" |}
+                       tools = [| toolSchema |]
                        messages = messages |}
 
                 let jsonOptions = JsonSerializerOptions(PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower)
@@ -51,10 +96,7 @@ module AnthropicClient =
 
                 if response.IsSuccessStatusCode then
                     let parsed = JsonSerializer.Deserialize<AnthropicResponse>(responseBody)
-
-                    match parsed.Content |> Array.tryFind (fun c -> c.Type = "text") with
-                    | Some block -> return Ok block.Text
-                    | None -> return Error "No text content in Anthropic response"
+                    return extractToolUseInput parsed
                 elif int response.StatusCode = 529 || int response.StatusCode = 503 then
                     // Overloaded/unavailable - retry once after delay
                     do! Async.Sleep 2000
@@ -67,9 +109,7 @@ module AnthropicClient =
                     let! retryBody = retryResponse.Content.ReadAsStringAsync() |> Async.AwaitTask
                     if retryResponse.IsSuccessStatusCode then
                         let parsed = JsonSerializer.Deserialize<AnthropicResponse>(retryBody)
-                        match parsed.Content |> Array.tryFind (fun c -> c.Type = "text") with
-                        | Some block -> return Ok block.Text
-                        | None -> return Error "No text content in Anthropic response"
+                        return extractToolUseInput parsed
                     else
                         return Error $"Anthropic API error ({int retryResponse.StatusCode}): {retryBody}"
                 else
