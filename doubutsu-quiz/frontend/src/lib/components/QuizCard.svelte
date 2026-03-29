@@ -114,12 +114,12 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 16px;
+		gap: 8px;
 	}
 
 	/* Hint text */
 	.hint-area {
-		min-height: 48px;
+		min-height: 36px;
 		display: flex;
 		align-items: center;
 		justify-content: center;

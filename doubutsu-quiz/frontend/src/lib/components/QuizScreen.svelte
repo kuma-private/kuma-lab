@@ -45,7 +45,6 @@
 </script>
 
 <div class="quiz-screen">
-	<!-- Fixed zone: top bar -->
 	<div class="top-bar">
 		<div class="question-num">
 			<span class="q-current">{quiz.currentIndex + 1}</span>
@@ -53,21 +52,19 @@
 			<span class="q-total">{quiz.items.length}</span>
 		</div>
 		<ProgressDots total={quiz.items.length} current={quiz.currentIndex} />
+		<div class="stage-label pop-in">
+			{#if quiz.blurStage === 0}
+				&#x1F50D; なにかな?
+			{:else if quiz.blurStage === 1}
+				&#x1F914; んー...
+			{:else if quiz.blurStage === 2}
+				&#x1F4A1; もうすこし!
+			{:else}
+				&#x1F389; せいかい!
+			{/if}
+		</div>
 	</div>
 
-	<div class="stage-label pop-in">
-		{#if quiz.blurStage === 0}
-			&#x1F50D; なにかな?
-		{:else if quiz.blurStage === 1}
-			&#x1F914; んー...
-		{:else if quiz.blurStage === 2}
-			&#x1F4A1; もうすこし!
-		{:else}
-			&#x1F389; せいかい!
-		{/if}
-	</div>
-
-	<!-- Fixed zone: card area (constant height) -->
 	<div class="card-area" class:shake={shakeCard}>
 		<QuizCard
 			item={quiz.items[quiz.currentIndex]}
@@ -81,7 +78,6 @@
 		<Confetti />
 	{/if}
 
-	<!-- Fixed zone: bottom area (always same height) -->
 	<div class="bottom-area">
 		{#if showNext}
 			<button class="next-btn pop-in" onclick={handleNext}>
@@ -91,6 +87,8 @@
 					&#x1F389; おしまい!
 				{/if}
 			</button>
+		{:else}
+			<div class="bottom-spacer"></div>
 		{/if}
 	</div>
 </div>
@@ -100,12 +98,10 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 8px;
-		padding: 8px 16px;
+		gap: 6px;
+		padding: 8px 16px 16px;
 		width: 100%;
 		max-width: 420px;
-		/* Fixed height to prevent layout shifts */
-		min-height: calc(100dvh - 40px);
 	}
 
 	.top-bar {
@@ -128,10 +124,10 @@
 	}
 
 	.stage-label {
-		font-size: 1.1rem;
+		font-size: 1rem;
 		font-weight: 700;
 		color: var(--text);
-		padding: 6px 20px;
+		padding: 4px 18px;
 		background: var(--surface);
 		border-radius: 20px;
 		box-shadow: var(--shadow);
@@ -139,21 +135,21 @@
 
 	.card-area {
 		transition: transform 0.1s ease;
-		flex: 1;
-		display: flex;
-		align-items: center;
 	}
 
 	.card-area.shake {
 		animation: wiggle 0.3s ease-in-out;
 	}
 
-	/* Bottom area always reserves space for the button */
 	.bottom-area {
-		height: 70px;
+		min-height: 60px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+	}
+
+	.bottom-spacer {
+		height: 60px;
 	}
 
 	.next-btn {
