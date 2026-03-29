@@ -10,7 +10,9 @@ type QuizItem =
       [<JsonPropertyName("url")>]
       Url: string
       [<JsonPropertyName("sound")>]
-      Sound: string }
+      Sound: string
+      [<JsonPropertyName("description")>]
+      Description: string }
 
 module Parser =
 
@@ -19,7 +21,9 @@ module Parser =
         { [<JsonPropertyName("name")>]
           name: string
           [<JsonPropertyName("sound")>]
-          sound: string }
+          sound: string
+          [<JsonPropertyName("description")>]
+          description: string }
 
     [<CLIMutable>]
     type SoundResponse =

@@ -64,11 +64,12 @@ module QuizHandlers =
                                     let sound =
                                         soundItems
                                         |> List.tryItem i
-                                        |> Option.defaultValue { name = scraped.Name; sound = "!" }
+                                        |> Option.defaultValue { name = scraped.Name; sound = "!"; description = "" }
 
                                     { Name = sound.name
                                       Url = scraped.ImageUrl
-                                      Sound = sound.sound })
+                                      Sound = sound.sound
+                                      Description = sound.description })
 
                             do! ctx.Response.WriteAsJsonAsync({| items = quizItems |})
         }

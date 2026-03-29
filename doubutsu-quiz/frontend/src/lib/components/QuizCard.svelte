@@ -100,6 +100,13 @@
 			<span>{item.sound}</span>
 		</div>
 	{/if}
+
+	<!-- Description -->
+	{#if revealed && item.description}
+		<div class="description pop-in" style="animation-delay: 0.3s">
+			<p>{item.description}</p>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -276,5 +283,22 @@
 		border-left: 8px solid transparent;
 		border-right: 8px solid transparent;
 		border-bottom: 8px solid var(--surface);
+	}
+
+	/* Description */
+	.description {
+		background: var(--surface);
+		padding: 12px 20px;
+		border-radius: 16px;
+		box-shadow: var(--shadow);
+		max-width: min(82vw, 340px);
+	}
+
+	.description p {
+		font-size: 0.8rem;
+		font-weight: 500;
+		color: var(--text-light);
+		line-height: 1.6;
+		text-align: center;
 	}
 </style>
