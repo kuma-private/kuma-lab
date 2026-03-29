@@ -21,7 +21,7 @@
 
 		if (quiz.revealed) {
 			const item = quiz.items[quiz.currentIndex];
-			speak(`${item.name}! ${item.sound}`);
+			speak(`${item.name}! ${item.sound}`);  // fire-and-forget async
 			showConfetti = true;
 
 			setTimeout(() => {

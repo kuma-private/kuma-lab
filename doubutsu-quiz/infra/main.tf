@@ -138,6 +138,11 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
+        name  = "VOICEVOX_URL"
+        value = google_cloud_run_v2_service.voicevox.uri
+      }
+
+      env {
         name = "ANTHROPIC_API_KEY"
         value_source {
           secret_key_ref {
@@ -196,6 +201,57 @@ resource "google_cloud_run_v2_service" "app" {
     google_secret_manager_secret_version.google_oauth_client_secret,
     google_secret_manager_secret_version.jwt_signing_key,
   ]
+}
+
+# --- VOICEVOX Engine (Cloud Run) ---
+
+resource "google_cloud_run_v2_service" "voicevox" {
+  name     = "doubutsu-quiz-voicevox"
+  location = var.region
+
+  template {
+    containers {
+      image = "voicevox/voicevox_engine:cpu-latest"
+
+      ports {
+        container_port = 50021
+      }
+
+      resources {
+        limits = {
+          cpu    = "2"
+          memory = "4Gi"
+        }
+      }
+
+      startup_probe {
+        http_get {
+          path = "/version"
+          port = 50021
+        }
+        initial_delay_seconds = 10
+        period_seconds        = 5
+        failure_threshold     = 10
+      }
+    }
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 1
+    }
+
+    timeout = "300s"
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# VOICEVOX: internal access only (from doubutsu-quiz app)
+resource "google_cloud_run_v2_service_iam_member" "voicevox_invoker" {
+  name     = google_cloud_run_v2_service.voicevox.name
+  location = google_cloud_run_v2_service.voicevox.location
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.app.email}"
 }
 
 # --- Allow unauthenticated access (Cloud Run level) ---

@@ -8,7 +8,8 @@ type AppConfig =
       GoogleClientId: string
       GoogleClientSecret: string
       JwtSigningKey: string
-      FrontendUrl: string }
+      FrontendUrl: string
+      VoicevoxUrl: string }
 
 module Config =
 
@@ -27,4 +28,5 @@ module Config =
           GoogleClientId = env "GOOGLE_CLIENT_ID"
           GoogleClientSecret = env "GOOGLE_CLIENT_SECRET"
           JwtSigningKey = env "JWT_SIGNING_KEY"
-          FrontendUrl = envOr "FRONTEND_URL" "" }
+          FrontendUrl = envOr "FRONTEND_URL" ""
+          VoicevoxUrl = envOr "VOICEVOX_URL" "" }

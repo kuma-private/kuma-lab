@@ -59,6 +59,7 @@ module Program =
         GoogleAuth.configureServices config builder.Services |> ignore
 
         builder.Services.AddHttpClient("Anthropic") |> ignore
+        builder.Services.AddHttpClient("Voicevox") |> ignore
 
         builder.Services.AddAuthorization() |> ignore
 
@@ -95,6 +96,9 @@ module Program =
         |> ignore
 
         app.MapPost("/api/quiz/images", Func<HttpContext, Task>(requireLogin (withRateLimit QuizHandlers.generateHandler)))
+        |> ignore
+
+        app.MapPost("/api/voice", Func<HttpContext, Task>(requireLogin QuizHandlers.voiceHandler))
         |> ignore
 
         app.MapFallbackToFile("index.html") |> ignore

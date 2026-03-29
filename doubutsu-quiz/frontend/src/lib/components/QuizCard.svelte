@@ -86,11 +86,6 @@
 			</div>
 		{/if}
 
-		{#if revealed}
-			<div class="name-reveal pop-in">
-				<span class="name-text">{item.name}!</span>
-			</div>
-		{/if}
 	</button>
 
 	<!-- Sound bubble -->
@@ -232,25 +227,6 @@
 
 	.tap-text {
 		font-size: 1rem;
-	}
-
-	/* Name reveal */
-	.name-reveal {
-		position: absolute;
-		bottom: 14px;
-		background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-		padding: 10px 28px;
-		border-radius: 24px;
-		box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-	}
-
-	.name-text {
-		font-size: clamp(0.9rem, 4vw, 1.4rem);
-		font-weight: 900;
-		color: white;
-		text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-		text-align: center;
-		line-height: 1.3;
 	}
 
 	/* Sound bubble */
