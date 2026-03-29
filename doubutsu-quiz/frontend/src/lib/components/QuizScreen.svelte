@@ -14,7 +14,6 @@
 
 		quiz.tap();
 
-		// Quick shake feedback on intermediate taps
 		if (!quiz.revealed) {
 			shakeCard = true;
 			setTimeout(() => { shakeCard = false; }, 300);
@@ -46,6 +45,7 @@
 </script>
 
 <div class="quiz-screen">
+	<!-- Fixed zone: top bar -->
 	<div class="top-bar">
 		<div class="question-num">
 			<span class="q-current">{quiz.currentIndex + 1}</span>
@@ -67,6 +67,7 @@
 		{/if}
 	</div>
 
+	<!-- Fixed zone: card area (constant height) -->
 	<div class="card-area" class:shake={shakeCard}>
 		<QuizCard
 			item={quiz.items[quiz.currentIndex]}
@@ -80,15 +81,18 @@
 		<Confetti />
 	{/if}
 
-	{#if showNext}
-		<button class="next-btn pop-in" onclick={handleNext}>
-			{#if quiz.currentIndex < quiz.items.length - 1}
-				つぎへ &#x1F449;
-			{:else}
-				&#x1F389; おしまい!
-			{/if}
-		</button>
-	{/if}
+	<!-- Fixed zone: bottom area (always same height) -->
+	<div class="bottom-area">
+		{#if showNext}
+			<button class="next-btn pop-in" onclick={handleNext}>
+				{#if quiz.currentIndex < quiz.items.length - 1}
+					つぎへ &#x1F449;
+				{:else}
+					&#x1F389; おしまい!
+				{/if}
+			</button>
+		{/if}
+	</div>
 </div>
 
 <style>
@@ -96,10 +100,12 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 12px;
-		padding: 12px 16px;
+		gap: 8px;
+		padding: 8px 16px;
 		width: 100%;
 		max-width: 420px;
+		/* Fixed height to prevent layout shifts */
+		min-height: calc(100dvh - 40px);
 	}
 
 	.top-bar {
@@ -107,7 +113,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 8px;
+		gap: 4px;
 	}
 
 	.question-num {
@@ -133,16 +139,26 @@
 
 	.card-area {
 		transition: transform 0.1s ease;
+		flex: 1;
+		display: flex;
+		align-items: center;
 	}
 
 	.card-area.shake {
 		animation: wiggle 0.3s ease-in-out;
 	}
 
+	/* Bottom area always reserves space for the button */
+	.bottom-area {
+		height: 70px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
 	.next-btn {
-		margin-top: 8px;
-		padding: 18px 52px;
-		font-size: 1.4rem;
+		padding: 16px 48px;
+		font-size: 1.3rem;
 		font-weight: 900;
 		color: white;
 		background: linear-gradient(135deg, var(--primary), var(--primary-dark));

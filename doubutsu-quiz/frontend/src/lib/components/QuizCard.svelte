@@ -21,19 +21,27 @@
 		imgError = true;
 	}
 
-	// Name hint: reveal characters based on blur stage
+	// Name hint: reveal characters progressively
+	// Stage 0: 1 char open (first char)
+	// Stage 1: ~20% open
+	// Stage 2: ~40% open
+	// Stage 3: all open
 	function getHintText(name: string, stage: BlurStage): string {
-		if (stage === 0) return '●'.repeat(name.length);
 		const chars = [...name];
-		if (stage === 1) {
-			// Reveal first character
-			return chars[0] + '●'.repeat(chars.length - 1);
+		const len = chars.length;
+		if (stage === 3) return name;
+
+		let revealCount: number;
+		if (stage === 0) {
+			revealCount = 1; // Always show first char
+		} else if (stage === 1) {
+			revealCount = Math.max(2, Math.ceil(len * 0.2));
+		} else {
+			revealCount = Math.max(3, Math.ceil(len * 0.4));
 		}
-		if (stage === 2) {
-			// Reveal first 2 characters
-			return chars.slice(0, 2).join('') + '●'.repeat(Math.max(0, chars.length - 2));
-		}
-		return name;
+		revealCount = Math.min(revealCount, len);
+
+		return chars.map((c, i) => i < revealCount ? c : '●').join('');
 	}
 </script>
 
@@ -112,10 +120,13 @@
 
 	.hint-text {
 		display: flex;
-		gap: 2px;
-		font-size: 1.6rem;
+		gap: 1px;
+		font-size: clamp(1rem, 4.5vw, 1.6rem);
 		font-weight: 900;
-		letter-spacing: 3px;
+		letter-spacing: 2px;
+		flex-wrap: wrap;
+		justify-content: center;
+		max-width: min(82vw, 340px);
 	}
 
 	.hint-text.revealed {
@@ -227,10 +238,12 @@
 	}
 
 	.name-text {
-		font-size: 1.6rem;
+		font-size: clamp(0.9rem, 4vw, 1.4rem);
 		font-weight: 900;
 		color: white;
 		text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+		text-align: center;
+		line-height: 1.3;
 	}
 
 	/* Sound bubble */
