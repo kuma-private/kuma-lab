@@ -4,16 +4,6 @@
 
 ## Projects
 
-| Directory | Description | Stack |
-|---|---|---|
-| `tsumi-no-shouka/` | 罪の昇華 — 冗長コードをF#に浄化する演出重視Webアプリ | SvelteKit + F# Giraffe |
-
-## Setup
-
-```bash
-cp .env.example .env
-# .env に ANTHROPIC_API_KEY を設定
-
-# 各プロジェクトの .env.example も参照
-cp tsumi-no-shouka/.env.example tsumi-no-shouka/.env
-```
+| Project | Description | Stack | URL |
+|---|---|---|---|
+| [tsumi-no-shouka](./tsumi-no-shouka/) | 罪の昇華 — 冗長コードをF#に浄化する演出重視Webアプリ | SvelteKit + F# Giraffe | [🔗 Live](https://tsumi-no-shouka-225028130390.asia-northeast1.run.app/) |
