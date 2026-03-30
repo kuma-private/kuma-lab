@@ -1,7 +1,10 @@
 let audioCtx: AudioContext | null = null;
 let audioInitialized = false;
 
-// Must call from user gesture (click/tap) to enable audio on mobile
+// Pre-loaded audio cache: text -> ArrayBuffer
+const audioCache = new Map<string, ArrayBuffer>();
+let preloading = false;
+
 export function initAudio(): void {
 	if (audioInitialized) return;
 	try {
@@ -9,6 +12,56 @@ export function initAudio(): void {
 		audioInitialized = true;
 	} catch {
 		// AudioContext not available
+	}
+}
+
+// Pre-load voice audio for all quiz items during loading phase
+export async function preloadVoices(texts: string[]): Promise<void> {
+	preloading = true;
+	const promises = texts.map(async (text) => {
+		try {
+			const res = await fetch('/api/voice', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({ text })
+			});
+			if (res.ok) {
+				const buf = await res.arrayBuffer();
+				audioCache.set(text, buf);
+			}
+		} catch {
+			// skip failed ones
+		}
+	});
+	await Promise.allSettled(promises);
+	preloading = false;
+}
+
+export function clearCache(): void {
+	audioCache.clear();
+}
+
+async function playFromCache(text: string): Promise<boolean> {
+	if (!audioCtx) return false;
+
+	const buf = audioCache.get(text);
+	if (!buf) return false;
+
+	try {
+		if (audioCtx.state === 'suspended') {
+			await audioCtx.resume();
+		}
+		// Clone buffer since decodeAudioData detaches it
+		const clone = buf.slice(0);
+		const audioBuffer = await audioCtx.decodeAudioData(clone);
+		const source = audioCtx.createBufferSource();
+		source.buffer = audioBuffer;
+		source.connect(audioCtx.destination);
+		source.start();
+		return true;
+	} catch {
+		return false;
 	}
 }
 
@@ -53,8 +106,12 @@ function speakFallback(text: string): void {
 }
 
 export async function speak(text: string): Promise<void> {
-	const success = await playVoicevox(text);
-	if (!success) {
-		speakFallback(text);
-	}
+	// Try pre-loaded cache first, then live VOICEVOX, then Web Speech fallback
+	const cached = await playFromCache(text);
+	if (cached) return;
+
+	const live = await playVoicevox(text);
+	if (live) return;
+
+	speakFallback(text);
 }

@@ -1,5 +1,6 @@
 import type { Genre, QuizPhase, QuizItem, BlurStage } from '../types';
 import { fetchQuizImages } from '../api';
+import { preloadVoices, clearCache } from '../speech';
 
 // Normalize: katakana→hiragana, remove spaces/symbols
 function normalize(s: string): string {
@@ -48,6 +49,11 @@ class QuizState {
 			this._resetQuestion();
 			this.scores = [];
 			this.phase = 'quiz';
+
+			// Pre-load all voice audio in background (fire-and-forget)
+			const voiceTexts = this.items.map(i => `${i.name}! ${i.sound}`);
+			clearCache();
+			preloadVoices(voiceTexts).catch(() => {});
 		} catch (e) {
 			if (e instanceof Error && e.message === 'LOGIN_REQUIRED') {
 				window.location.href = '/auth/google';
