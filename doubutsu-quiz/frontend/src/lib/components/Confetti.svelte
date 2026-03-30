@@ -1,22 +1,23 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 
-	let particles: { id: number; x: number; color: string; delay: number; size: number }[] = $state([]);
+	let particles: { id: number; x: number; color: string; delay: number; size: number; round: boolean }[] = $state([]);
 
-	const colors = ['#FF9F43', '#26A69A', '#FF6B6B', '#A29BFE', '#FECA57', '#48DBFB', '#FF9FF3'];
+	const colors = ['#FF9F43', '#26A69A', '#FF6B6B', '#FECA57', '#48DBFB'];
 
 	onMount(() => {
-		particles = Array.from({ length: 30 }, (_, i) => ({
+		particles = Array.from({ length: 15 }, (_, i) => ({
 			id: i,
 			x: Math.random() * 100,
-			color: colors[Math.floor(Math.random() * colors.length)],
-			delay: Math.random() * 0.8,
-			size: 6 + Math.random() * 10
+			color: colors[i % colors.length],
+			delay: Math.random() * 0.6,
+			size: 6 + Math.random() * 8,
+			round: i % 2 === 0
 		}));
 
 		const timer = setTimeout(() => {
 			particles = [];
-		}, 3000);
+		}, 2500);
 
 		return () => clearTimeout(timer);
 	});
@@ -26,14 +27,7 @@
 	{#each particles as p (p.id)}
 		<div
 			class="particle"
-			style="
-				left: {p.x}%;
-				background: {p.color};
-				width: {p.size}px;
-				height: {p.size}px;
-				animation-delay: {p.delay}s;
-				border-radius: {Math.random() > 0.5 ? '50%' : '3px'};
-			"
+			style="left:{p.x}%;background:{p.color};width:{p.size}px;height:{p.size}px;animation-delay:{p.delay}s;border-radius:{p.round ? '50%' : '3px'}"
 		></div>
 	{/each}
 </div>
@@ -53,6 +47,6 @@
 	.particle {
 		position: absolute;
 		top: -20px;
-		animation: confettiFall 2.5s ease-in forwards;
+		animation: confettiFall 2s ease-in forwards;
 	}
 </style>

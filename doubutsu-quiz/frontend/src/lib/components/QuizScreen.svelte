@@ -22,7 +22,7 @@
 
 		if (correct) {
 			const item = quiz.items[quiz.currentIndex];
-			speak(`${item.name}! ${item.sound}`);
+			speak(`${item.name}! ${item.sound}`).catch(() => {}); // fire-and-forget
 			showConfetti = true;
 			inputText = '';
 			setTimeout(() => { showNext = true; }, 1800);
@@ -45,9 +45,8 @@
 		quiz.useHint();
 
 		if (quiz.revealed) {
-			// Auto-revealed after 3 hints
 			const item = quiz.items[quiz.currentIndex];
-			speak(`${item.name}! ${item.sound}`);
+			speak(`${item.name}! ${item.sound}`).catch(() => {});
 			showConfetti = true;
 			inputText = '';
 			setTimeout(() => { showNext = true; }, 1800);
@@ -83,12 +82,16 @@
 		setTimeout(() => inputEl?.focus(), 100);
 	}
 
+	let prevIndex = $state(-1);
 	$effect(() => {
-		quiz.currentIndex;
-		showConfetti = false;
-		showNext = false;
-		shakeInput = false;
-		inputText = '';
+		const idx = quiz.currentIndex;
+		if (idx !== prevIndex) {
+			prevIndex = idx;
+			showConfetti = false;
+			showNext = false;
+			shakeInput = false;
+			inputText = '';
+		}
 	});
 </script>
 
