@@ -73,7 +73,7 @@ module AuthHandlers =
             ctx.Response.StatusCode <- 204
         }
 
-    let meHandler (ctx: HttpContext) : Task =
+    let meHandler (devMode: bool) (ctx: HttpContext) : Task =
         task {
             let user = ctx.User
 
@@ -97,6 +97,8 @@ module AuthHandlers =
                     |> Option.defaultValue ""
 
                 do! ctx.Response.WriteAsJsonAsync({| name = name; email = email; sub = sub |})
+            elif devMode then
+                do! ctx.Response.WriteAsJsonAsync({| name = "Dev User"; email = "dev@test.com"; sub = "dev-user" |})
             else
                 ctx.Response.StatusCode <- 401
                 do! ctx.Response.WriteAsync("Unauthorized")

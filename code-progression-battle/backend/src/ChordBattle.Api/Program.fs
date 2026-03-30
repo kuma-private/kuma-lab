@@ -91,7 +91,7 @@ module Program =
 
         app.MapPost("/auth/logout", Func<HttpContext, Task>(AuthHandlers.logoutHandler)) |> ignore
 
-        app.MapGet("/auth/me", Func<HttpContext, Task>(requireLogin AuthHandlers.meHandler))
+        app.MapGet("/auth/me", Func<HttpContext, Task>(requireLogin (AuthHandlers.meHandler devMode)))
         |> ignore
 
         // Thread API

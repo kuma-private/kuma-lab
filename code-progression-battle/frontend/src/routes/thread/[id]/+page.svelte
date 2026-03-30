@@ -221,28 +221,32 @@
 					{/if}
 				</div>
 
-				<!-- Turn input (only when it's your turn) -->
-				{#if thread.status === 'active' && store.isMyTurn}
-					<div class="turn-input">
+				<!-- Turn input (always visible when active, disabled if not your turn) -->
+				{#if thread.status === 'active' && store.isPlayer}
+					{@const canAct = store.isMyTurn}
+					<div class="turn-input" class:turn-input--disabled={!canAct}>
+						{#if !canAct}
+							<div class="not-your-turn">Opponent's turn - prepare your next move</div>
+						{/if}
 						<div class="action-tabs">
-							<button class="tab" class:active={selectedAction === 'add'} onclick={() => { selectedAction = 'add'; selectedLineNumber = 0; chordsInput = ''; }}>
+							<button class="tab" class:active={selectedAction === 'add'} onclick={() => { selectedAction = 'add'; selectedLineNumber = 0; chordsInput = ''; }} disabled={!canAct}>
 								ADD
 							</button>
-							<button class="tab" class:active={selectedAction === 'edit'} onclick={() => { selectedAction = 'edit'; }}>
+							<button class="tab" class:active={selectedAction === 'edit'} onclick={() => { selectedAction = 'edit'; }} disabled={!canAct}>
 								EDIT
 							</button>
-							<button class="tab" class:active={selectedAction === 'delete'} onclick={() => { selectedAction = 'delete'; chordsInput = ''; }}>
+							<button class="tab" class:active={selectedAction === 'delete'} onclick={() => { selectedAction = 'delete'; chordsInput = ''; }} disabled={!canAct}>
 								DELETE
 							</button>
 						</div>
 
 						{#if selectedAction === 'add'}
-							<textarea class="chord-input" bind:value={chordsInput} placeholder="| Am7 | Dm7 | G7 | Cmaj7 |" rows="2"></textarea>
+							<textarea class="chord-input" bind:value={chordsInput} placeholder="| Am7 | Dm7 | G7 | Cmaj7 |" rows="2" disabled={!canAct}></textarea>
 						{:else if selectedAction === 'edit'}
 							<div class="line-select-hint">Click a line in the score to edit it</div>
 							{#if selectedLineNumber > 0}
 								<div class="selected-line">Editing line {selectedLineNumber}</div>
-								<textarea class="chord-input" bind:value={chordsInput} rows="2"></textarea>
+								<textarea class="chord-input" bind:value={chordsInput} rows="2" disabled={!canAct}></textarea>
 							{/if}
 						{:else}
 							<div class="line-select-hint">Click a line in the score to delete it</div>
@@ -252,15 +256,17 @@
 						{/if}
 
 						<div class="input-row">
-							<input type="text" bind:value={commentInput} placeholder="Comment..." class="comment-input" />
-							<button class="btn btn-primary" onclick={handleSubmitTurn} disabled={submitting || (selectedAction !== 'delete' && !chordsInput.trim()) || (selectedAction !== 'add' && selectedLineNumber < 1)}>
+							<input type="text" bind:value={commentInput} placeholder="Comment..." class="comment-input" disabled={!canAct} />
+							<button class="btn btn-primary" onclick={handleSubmitTurn} disabled={!canAct || submitting || (selectedAction !== 'delete' && !chordsInput.trim()) || (selectedAction !== 'add' && selectedLineNumber < 1)}>
 								{submitting ? '...' : 'Submit'}
 							</button>
 						</div>
 
-						<button class="btn btn-ghost finish-btn" onclick={() => store.proposeFinish(threadId)}>
-							Propose Finish
-						</button>
+						{#if canAct}
+							<button class="btn btn-ghost finish-btn" onclick={() => store.proposeFinish(threadId)}>
+								Propose Finish
+							</button>
+						{/if}
 					</div>
 				{/if}
 
@@ -552,6 +558,18 @@
 	.comment-input {
 		flex: 1;
 		font-size: 0.85rem;
+	}
+
+	.turn-input--disabled {
+		opacity: 0.5;
+	}
+
+	.not-your-turn {
+		text-align: center;
+		font-size: 0.8rem;
+		color: var(--text-muted);
+		padding: var(--space-xs) 0 var(--space-sm);
+		font-style: italic;
 	}
 
 	.finish-btn {
