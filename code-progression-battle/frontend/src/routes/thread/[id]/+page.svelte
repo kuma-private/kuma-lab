@@ -397,6 +397,14 @@
 	const handlePianoToggle = (open: boolean) => {
 		pianoOpen = open;
 	};
+
+	// Tools panel (Circle of Fifths + Pattern Picker)
+	let toolsOpen = $state(false);
+	let toolsTab = $state<'circle' | 'pattern'>('circle');
+
+	const toggleTools = () => {
+		toolsOpen = !toolsOpen;
+	};
 </script>
 
 <svelte:head>
@@ -648,11 +656,42 @@
 					</div>
 
 					{#if thread.key}
-						<div class="right-section right-section--bottom">
-							<CircleOfFifths currentKey={thread.key} />
-						</div>
-						<div class="right-section right-section--bottom">
-							<PatternPicker key={thread.key} onInsert={handlePatternInsert} />
+						<div class="tools-section">
+							<button class="tools-toggle" onclick={toggleTools}>
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+								</svg>
+								ツール
+								<svg
+									class="tools-chevron"
+									class:tools-chevron--open={toolsOpen}
+									width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+								>
+									<polyline points="4,6 8,10 12,6" />
+								</svg>
+							</button>
+
+							{#if toolsOpen}
+								<div class="tools-tabs">
+									<button
+										class="tools-tab"
+										class:tools-tab--active={toolsTab === 'circle'}
+										onclick={() => { toolsTab = 'circle'; }}
+									>五度圏</button>
+									<button
+										class="tools-tab"
+										class:tools-tab--active={toolsTab === 'pattern'}
+										onclick={() => { toolsTab = 'pattern'; }}
+									>パターン</button>
+								</div>
+								<div class="tools-content">
+									{#if toolsTab === 'circle'}
+										<CircleOfFifths currentKey={thread.key} />
+									{:else}
+										<PatternPicker key={thread.key} onInsert={handlePatternInsert} />
+									{/if}
+								</div>
+							{/if}
 						</div>
 					{/if}
 				{/if}
@@ -697,7 +736,7 @@
 	}
 
 	.page--piano-open {
-		padding-bottom: calc(var(--player-height) + 140px + var(--space-2xl));
+		padding-bottom: calc(var(--player-height) + 120px + var(--space-2xl));
 	}
 
 	/* Header */
@@ -865,7 +904,7 @@
 	.editor-layout {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: var(--space-xl);
+		gap: var(--space-lg);
 		align-items: start;
 	}
 
@@ -935,13 +974,13 @@
 	.panel-left {
 		display: flex;
 		flex-direction: column;
-		max-height: calc(100vh - 240px);
+		max-height: calc(100vh - 220px);
 	}
 
 	.panel-right {
 		position: sticky;
 		top: var(--space-md);
-		max-height: calc(100vh - 240px);
+		max-height: calc(100vh - 220px);
 		overflow-y: auto;
 	}
 
@@ -1352,5 +1391,76 @@
 	.loading p {
 		font-size: 0.85rem;
 		margin: 0;
+	}
+
+	/* Tools section (collapsible) */
+	.tools-section {
+		border-top: 1px solid var(--border-subtle);
+	}
+
+	.tools-toggle {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
+		padding: var(--space-sm) var(--space-lg);
+		border: none;
+		background: var(--bg-surface);
+		color: var(--text-secondary);
+		font-size: 0.78rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.tools-toggle:hover {
+		background: var(--bg-hover);
+		color: var(--text-primary);
+	}
+
+	.tools-chevron {
+		margin-left: auto;
+		transition: transform 0.2s;
+	}
+
+	.tools-chevron--open {
+		transform: rotate(180deg);
+	}
+
+	.tools-tabs {
+		display: flex;
+		gap: 2px;
+		padding: var(--space-xs) var(--space-lg);
+		background: var(--bg-surface);
+		border-top: 1px solid var(--border-subtle);
+	}
+
+	.tools-tab {
+		flex: 1;
+		padding: 4px 10px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.12s;
+		text-align: center;
+	}
+
+	.tools-tab:hover {
+		color: var(--text-primary);
+	}
+
+	.tools-tab--active {
+		background: var(--bg-elevated);
+		color: var(--accent-primary);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+	}
+
+	.tools-content {
+		padding: var(--space-sm) var(--space-md);
 	}
 </style>

@@ -382,20 +382,20 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: var(--space-sm);
-		padding: var(--space-sm) 0;
+		gap: var(--space-xs);
+		padding: var(--space-xs) 0;
 	}
 
 	.cof-qualities {
 		display: flex;
 		flex-wrap: wrap;
 		justify-content: center;
-		gap: 4px;
-		padding: 0 var(--space-sm);
+		gap: 3px;
+		padding: 0 var(--space-xs);
 	}
 
 	.cof-q-btn {
-		padding: 6px 12px;
+		padding: 4px 8px;
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-sm);
 		background: var(--bg-elevated);
@@ -421,7 +421,7 @@
 
 	.cof-svg {
 		width: 100%;
-		max-width: 340px;
+		max-width: 280px;
 		height: auto;
 	}
 

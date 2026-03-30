@@ -1,13 +1,15 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+
 	let { collapsed = true, onToggle }: { collapsed?: boolean; onToggle?: (open: boolean) => void } = $props();
 
 	let isCollapsed = $state(collapsed);
 	let activeKeys = $state<Set<string>>(new Set());
-	let octaveStart = $state(3);
+	let scrollContainer: HTMLDivElement | undefined = $state();
 
-	const OCTAVE_MIN = 2;
-	const OCTAVE_MAX = 6;
-	const OCTAVES_VISIBLE = 2;
+	const OCTAVE_START = 1;
+	const OCTAVE_END = 7; // C1 to B6 + C7
+	const OCTAVE_COUNT = OCTAVE_END - OCTAVE_START; // 6 octaves
 
 	const WHITE_NOTES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 	const BLACK_NOTE_MAP: Record<string, { label: string; offsetIndex: number }> = {
@@ -18,32 +20,42 @@
 		'A#': { label: 'A#', offsetIndex: 6 },
 	};
 
-	// 2 octaves = 14 white keys, full screen width
-	const TOTAL_WHITE_KEYS = 14;
-	const BLACK_KEY_RATIO = 0.6;
+	const WHITE_KEY_WIDTH = 40; // px fixed
+	const BLACK_KEY_WIDTH = WHITE_KEY_WIDTH * 0.6;
+	const TOTAL_WHITE_KEYS = OCTAVE_COUNT * 7 + 1; // +1 for final C7
+	const TOTAL_WIDTH = TOTAL_WHITE_KEYS * WHITE_KEY_WIDTH;
 
-	const buildKeys = (startOctave: number, count: number) => {
-		const whites: { note: string; label: string }[] = [];
-		const blacks: { note: string; label: string; leftPercent: number }[] = [];
-		const whiteWidthPercent = 100 / TOTAL_WHITE_KEYS;
-		const blackWidthPercent = whiteWidthPercent * BLACK_KEY_RATIO;
+	const buildKeys = () => {
+		const whites: { note: string; label: string; left: number }[] = [];
+		const blacks: { note: string; label: string; left: number }[] = [];
 
-		for (let o = 0; o < count; o++) {
-			const oct = startOctave + o;
+		let whiteIndex = 0;
+		for (let o = 0; o < OCTAVE_COUNT; o++) {
+			const oct = OCTAVE_START + o;
 			for (const n of WHITE_NOTES) {
-				whites.push({ note: `${n}${oct}`, label: n === 'C' ? `C${oct}` : n });
+				whites.push({
+					note: `${n}${oct}`,
+					label: n === 'C' ? `C${oct}` : n,
+					left: whiteIndex * WHITE_KEY_WIDTH
+				});
+				whiteIndex++;
 			}
 			for (const [name, info] of Object.entries(BLACK_NOTE_MAP)) {
-				const whiteIndex = o * 7 + info.offsetIndex;
-				const leftPercent = (whiteIndex + 1) * whiteWidthPercent - blackWidthPercent / 2;
-				blacks.push({ note: `${name}${oct}`, label: info.label, leftPercent });
+				const bLeft = (o * 7 + info.offsetIndex) * WHITE_KEY_WIDTH - BLACK_KEY_WIDTH / 2;
+				blacks.push({ note: `${name}${oct}`, label: info.label, left: bLeft });
 			}
 		}
+		// Add final C7
+		whites.push({
+			note: `C${OCTAVE_END}`,
+			label: `C${OCTAVE_END}`,
+			left: whiteIndex * WHITE_KEY_WIDTH
+		});
 
-		return { whites, blacks, whiteWidthPercent, blackWidthPercent };
+		return { whites, blacks };
 	};
 
-	let keys = $derived(buildKeys(octaveStart, OCTAVES_VISIBLE));
+	const keys = buildKeys();
 
 	// Synth module loaded lazily
 	let synthModule: typeof import('$lib/chord-player') | null = null;
@@ -82,20 +94,32 @@
 		handleKeyUp(note);
 	};
 
-	const shiftOctave = (delta: number) => {
-		const next = octaveStart + delta;
-		if (next >= OCTAVE_MIN && next + OCTAVES_VISIBLE - 1 <= OCTAVE_MAX) {
-			octaveStart = next;
-		}
-	};
-
 	const toggleCollapse = () => {
 		isCollapsed = !isCollapsed;
 		onToggle?.(!isCollapsed);
 	};
 
-	const canShiftDown = $derived(octaveStart > OCTAVE_MIN);
-	const canShiftUp = $derived(octaveStart + OCTAVES_VISIBLE <= OCTAVE_MAX);
+	// Scroll to C4 on mount / when opened
+	const scrollToC4 = () => {
+		if (!scrollContainer) return;
+		// C4 is at octave index 3 (C1=0, C2=1, C3=2, C4=3)
+		const c4WhiteIndex = (4 - OCTAVE_START) * 7; // white keys before C4
+		const c4Left = c4WhiteIndex * WHITE_KEY_WIDTH;
+		const containerWidth = scrollContainer.clientWidth;
+		scrollContainer.scrollLeft = c4Left - containerWidth / 2 + WHITE_KEY_WIDTH / 2;
+	};
+
+	onMount(() => {
+		if (!isCollapsed) {
+			requestAnimationFrame(scrollToC4);
+		}
+	});
+
+	$effect(() => {
+		if (!isCollapsed && scrollContainer) {
+			requestAnimationFrame(scrollToC4);
+		}
+	});
 </script>
 
 <div class="piano-dock" class:piano-dock--open={!isCollapsed}>
@@ -115,27 +139,16 @@
 				<polyline points="4,6 8,10 12,6" />
 			</svg>
 		</button>
-		{#if !isCollapsed}
-			<div class="octave-controls">
-				<button class="octave-btn" onclick={() => shiftOctave(-1)} disabled={!canShiftDown} title="低いオクターブ">
-					<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="10,2 4,8 10,14" /></svg>
-				</button>
-				<span class="octave-label">C{octaveStart}–B{octaveStart + OCTAVES_VISIBLE - 1}</span>
-				<button class="octave-btn" onclick={() => shiftOctave(1)} disabled={!canShiftUp} title="高いオクターブ">
-					<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6,2 12,8 6,14" /></svg>
-				</button>
-			</div>
-		{/if}
 	</div>
 
 	{#if !isCollapsed}
-		<div class="piano-full">
-			<div class="piano-keys">
+		<div class="piano-scroll" bind:this={scrollContainer}>
+			<div class="piano-keys" style="width: {TOTAL_WIDTH}px">
 				{#each keys.whites as key}
 					<button
 						class="wk"
 						class:wk--active={activeKeys.has(key.note)}
-						style="width: {keys.whiteWidthPercent}%"
+						style="left: {key.left}px; width: {WHITE_KEY_WIDTH}px"
 						onpointerdown={() => handleKeyDown(key.note)}
 						onpointerup={() => handleKeyUp(key.note)}
 						onpointerleave={() => handlePointerLeave(key.note)}
@@ -148,7 +161,7 @@
 					<button
 						class="bk"
 						class:bk--active={activeKeys.has(key.note)}
-						style="left: {key.leftPercent}%; width: {keys.blackWidthPercent}%"
+						style="left: {key.left}px; width: {BLACK_KEY_WIDTH}px"
 						onpointerdown={() => handleKeyDown(key.note)}
 						onpointerup={() => handleKeyUp(key.note)}
 						onpointerleave={() => handlePointerLeave(key.note)}
@@ -207,63 +220,36 @@
 		transform: rotate(180deg);
 	}
 
-	.octave-controls {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		margin-left: auto;
-	}
-
-	.octave-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 24px;
-		height: 24px;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		background: var(--bg-elevated);
-		color: var(--text-secondary);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.octave-btn:hover:not(:disabled) {
-		background: var(--bg-hover);
-		border-color: var(--accent-primary);
-		color: var(--accent-primary);
-	}
-
-	.octave-btn:disabled {
-		opacity: 0.3;
-		cursor: default;
-	}
-
-	.octave-label {
-		font-family: var(--font-mono);
-		font-size: 0.7rem;
-		color: var(--text-muted);
-		min-width: 56px;
-		text-align: center;
-	}
-
-	.piano-full {
+	.piano-scroll {
 		width: 100vw;
-		padding: 0;
+		overflow-x: auto;
+		overflow-y: hidden;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	/* Hide scrollbar but keep scrolling */
+	.piano-scroll::-webkit-scrollbar {
+		height: 4px;
+	}
+	.piano-scroll::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.piano-scroll::-webkit-scrollbar-thumb {
+		background: rgba(255, 255, 255, 0.15);
+		border-radius: 2px;
 	}
 
 	.piano-keys {
 		position: relative;
-		display: flex;
-		width: 100%;
-		height: 100px;
+		height: 80px;
 		user-select: none;
 		touch-action: none;
 	}
 
 	/* White keys */
 	.wk {
-		flex: none;
+		position: absolute;
+		top: 0;
 		height: 100%;
 		background: #f0f0f0;
 		border: 1px solid #c0c0c0;
@@ -273,9 +259,8 @@
 		display: flex;
 		align-items: flex-end;
 		justify-content: center;
-		padding-bottom: 10px;
+		padding-bottom: 8px;
 		transition: background 0.08s;
-		position: relative;
 		z-index: 1;
 		box-shadow: inset 0 -4px 6px rgba(0, 0, 0, 0.06), 0 2px 3px rgba(0, 0, 0, 0.15);
 	}
@@ -290,7 +275,7 @@
 	}
 
 	.wk-label {
-		font-size: 0.6rem;
+		font-size: 0.55rem;
 		font-family: var(--font-mono);
 		color: #888;
 		font-weight: 600;
@@ -304,7 +289,8 @@
 	/* Black keys */
 	.bk {
 		position: absolute;
-		height: 65px;
+		top: 0;
+		height: 52px;
 		background: #2a2a2a;
 		border: 1px solid #111;
 		border-top: none;
@@ -313,7 +299,7 @@
 		display: flex;
 		align-items: flex-end;
 		justify-content: center;
-		padding-bottom: 6px;
+		padding-bottom: 5px;
 		transition: background 0.08s;
 		z-index: 2;
 		box-shadow: 0 3px 5px rgba(0, 0, 0, 0.4), inset 0 -2px 3px rgba(255, 255, 255, 0.05);
@@ -329,7 +315,7 @@
 	}
 
 	.bk-label {
-		font-size: 0.45rem;
+		font-size: 0.42rem;
 		font-family: var(--font-mono);
 		color: #666;
 		font-weight: 600;
@@ -342,11 +328,11 @@
 
 	@media (max-width: 700px) {
 		.piano-keys {
-			height: 85px;
+			height: 70px;
 		}
 
 		.bk {
-			height: 55px;
+			height: 45px;
 		}
 	}
 </style>
