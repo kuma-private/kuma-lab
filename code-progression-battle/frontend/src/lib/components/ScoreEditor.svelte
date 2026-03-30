@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { extractRoot } from '$lib/chord-parser';
 	import { chordToDegree } from '$lib/chord-suggest';
 
@@ -84,10 +85,38 @@
 		return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 	};
 
-	let highlighted = $derived(colorize(value, activeBarIndex, displayMode, musicalKey));
+	let highlighted = $derived(colorize(internalValue, activeBarIndex, displayMode, musicalKey));
+
+	// Internal value synced with prop, used for textarea binding
+	let internalValue = $state(value);
+
+	// Sync from parent prop → internal
+	$effect(() => {
+		internalValue = value;
+	});
+
+	let textareaEl: HTMLTextAreaElement;
+
+	// Override browser form restoration on mount (browser restores after onMount)
+	onMount(() => {
+		requestAnimationFrame(() => {
+			if (textareaEl) {
+				textareaEl.value = value;
+				internalValue = value;
+			}
+		});
+	});
+
+	// Force DOM sync when internalValue changes programmatically
+	$effect(() => {
+		if (textareaEl && textareaEl.value !== internalValue) {
+			textareaEl.value = internalValue;
+		}
+	});
 
 	const handleInput = (e: Event) => {
 		const target = e.target as HTMLTextAreaElement;
+		internalValue = target.value;
 		onchange?.(target.value);
 	};
 
@@ -184,10 +213,12 @@
 		<div class="se-highlight" aria-hidden="true">{@html highlighted}&nbsp;</div>
 		<!-- Actual textarea -->
 		<textarea
+			bind:this={textareaEl}
 			class="se-textarea"
 			class:se-textarea--degree={displayMode === 'degree'}
-			{value}
+			value={internalValue}
 			oninput={handleInput}
+			autocomplete="off"
 			oncontextmenu={handleContextMenu}
 			ondblclick={handleDblClick}
 			ondragover={handleDragOver}

@@ -386,10 +386,12 @@
 
 	// Pattern insert handler
 	const handlePatternInsert = (chords: string) => {
+		console.log('[PatternInsert] readonly=' + scoreReadonly + ' chords=' + chords + ' current=' + scoreEditorValue.substring(0, 30));
 		if (scoreReadonly) return;
 		scoreEditorValue = scoreEditorValue
 			? scoreEditorValue + '\n' + chords
 			: chords;
+		console.log('[PatternInsert] new lines=' + scoreEditorValue.split('\n').length);
 		diffError = null;
 	};
 
