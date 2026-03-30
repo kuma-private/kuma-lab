@@ -17,11 +17,18 @@
 	let activeBarIndex = $state(-1);
 
 	// Turn action state
-	let selectedAction = $state<'add' | 'edit' | 'delete'>('add');
-	let selectedLineNumber = $state(0);
 	let chordsInput = $state('');
 	let commentInput = $state('');
 	let submitting = $state(false);
+
+	// Inline edit state (right panel)
+	let editingLine = $state<number | null>(null);
+	let editingChords = $state('');
+	let hoveredLine = $state<number | null>(null);
+	let deleteConfirmLine = $state<number | null>(null);
+
+	// History scroll ref
+	let historyEl: HTMLDivElement | undefined = $state();
 
 	onMount(() => {
 		store.checkLogin();
@@ -32,19 +39,22 @@
 		player?.dispose();
 	});
 
-	// Score text from lines
-	let scoreText = $derived.by(() => {
+	// Auto-scroll history to bottom
+	$effect(() => {
 		const thread = store.currentThread;
-		if (!thread) return '';
-		return thread.lines.map(l => l.chords).join('\n');
+		if (thread && historyEl) {
+			requestAnimationFrame(() => {
+				historyEl!.scrollTop = historyEl!.scrollHeight;
+			});
+		}
 	});
 
-	function parseTimeSignature(ts: string) {
+	const parseTimeSignature = (ts: string) => {
 		const [beats, beatValue] = ts.split('/').map(Number);
 		return { beats: beats || 4, beatValue: beatValue || 4 };
-	}
+	};
 
-	function buildPlayer() {
+	const buildPlayer = () => {
 		const thread = store.currentThread;
 		if (!thread || !thread.lines.length) return;
 		player?.dispose();
@@ -65,14 +75,14 @@
 		} catch (e) {
 			console.error('[Player]', e);
 		}
-	}
+	};
 
-	function handlePlay() { buildPlayer(); player?.play(); }
-	function handlePause() { player?.pause(); }
-	function handleStop() { player?.stop(); activeBarIndex = -1; }
-	function handleSeek(time: number) { player?.seekTo(time); }
+	const handlePlay = () => { buildPlayer(); player?.play(); };
+	const handlePause = () => { player?.pause(); };
+	const handleStop = () => { player?.stop(); activeBarIndex = -1; };
+	const handleSeek = (time: number) => { player?.seekTo(time); };
 
-	function handleExport() {
+	const handleExport = () => {
 		const thread = store.currentThread;
 		if (!thread) return;
 		const header = `# ${thread.title}\nKey: ${thread.key} | ${thread.timeSignature} | BPM ${thread.bpm}\n\n`;
@@ -85,59 +95,155 @@
 		a.download = `${thread.title.replace(/\s+/g, '_')}.md`;
 		a.click();
 		URL.revokeObjectURL(url);
-	}
+	};
 
-	async function handleSubmitTurn() {
-		if (submitting) return;
+	// ADD action (left panel)
+	const handleAddTurn = async () => {
+		if (submitting || !chordsInput.trim()) return;
 		submitting = true;
 		try {
-			if (selectedAction === 'add' && !chordsInput.trim()) return;
-			if (selectedAction === 'edit' && (!chordsInput.trim() || selectedLineNumber < 1)) return;
-			if (selectedAction === 'delete' && selectedLineNumber < 1) return;
-
-			await store.submitTurn(threadId, selectedAction, selectedLineNumber, chordsInput.trim(), commentInput.trim());
+			await store.submitTurn(threadId, 'add', 0, chordsInput.trim(), commentInput.trim());
 			chordsInput = '';
 			commentInput = '';
-			selectedLineNumber = 0;
 			player?.dispose();
 			player = null;
 		} finally {
 			submitting = false;
 		}
-	}
+	};
 
-	function selectLineForEdit(lineNum: number, chords: string) {
-		selectedAction = 'edit';
-		selectedLineNumber = lineNum;
-		chordsInput = chords;
-	}
+	// EDIT action (right panel inline)
+	const startEdit = (lineNum: number, chords: string) => {
+		editingLine = lineNum;
+		editingChords = chords;
+		deleteConfirmLine = null;
+	};
 
-	function selectLineForDelete(lineNum: number) {
-		selectedAction = 'delete';
-		selectedLineNumber = lineNum;
-		chordsInput = '';
-	}
+	const cancelEdit = () => {
+		editingLine = null;
+		editingChords = '';
+	};
+
+	const submitEdit = async () => {
+		if (submitting || editingLine === null || !editingChords.trim()) return;
+		submitting = true;
+		try {
+			await store.submitTurn(threadId, 'edit', editingLine, editingChords.trim(), '');
+			editingLine = null;
+			editingChords = '';
+			player?.dispose();
+			player = null;
+		} finally {
+			submitting = false;
+		}
+	};
+
+	// DELETE action (right panel inline)
+	const confirmDelete = (lineNum: number) => {
+		deleteConfirmLine = lineNum;
+		editingLine = null;
+	};
+
+	const cancelDelete = () => {
+		deleteConfirmLine = null;
+	};
+
+	const submitDelete = async (lineNum: number) => {
+		if (submitting) return;
+		submitting = true;
+		try {
+			await store.submitTurn(threadId, 'delete', lineNum, '', '');
+			deleteConfirmLine = null;
+			player?.dispose();
+			player = null;
+		} finally {
+			submitting = false;
+		}
+	};
+
+	// Avatars: generate initials and color from name
+	const avatarColor = (name: string): string => {
+		const colors = [
+			'#a78bfa', '#f472b6', '#34d399', '#60a5fa',
+			'#fbbf24', '#f87171', '#38bdf8', '#a3e635'
+		];
+		let hash = 0;
+		for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+		return colors[Math.abs(hash) % colors.length];
+	};
+
+	const initials = (name: string): string => {
+		return name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+	};
+
+	// Action description for history (BBS-style)
+	const actionLabel = (action: string, lineNum: number): string => {
+		switch (action) {
+			case 'add': return `added line ${lineNum}`;
+			case 'edit': return `edited line ${lineNum}`;
+			case 'delete': return `removed line ${lineNum}`;
+			default: return action;
+		}
+	};
+
+	// Friendly creative prompts that rotate
+	const myTurnPrompts = [
+		'Next chord is yours. What sounds good?',
+		'Your move. Drop some chords!',
+		'The score awaits your touch.',
+		'Time to add your voice.',
+		"It's your turn. Let's hear it!",
+	];
+
+	const pickPrompt = (turnCount: number): string => {
+		return myTurnPrompts[turnCount % myTurnPrompts.length];
+	};
+
+	// Get opponent display name
+	const opponentName = $derived.by(() => {
+		const t = store.currentThread;
+		if (!t) return '';
+		return t.currentTurn === t.createdBy ? t.createdByName : t.opponentName;
+	});
 
 	// Status helpers
 	let statusLabel = $derived.by(() => {
 		const t = store.currentThread;
 		if (!t) return '';
 		switch (t.status) {
-			case 'waiting': return 'Waiting for opponent to join...';
-			case 'active': return store.isMyTurn ? 'Your turn!' : `Waiting for ${t.currentTurn === t.createdBy ? t.createdByName : t.opponentName}...`;
-			case 'finish_proposed': return t.finishProposedBy === store.user?.sub ? 'You proposed to finish. Waiting...' : 'Opponent proposed to finish!';
-			case 'completed': return 'Completed!';
+			case 'waiting': return 'Waiting for someone to join the session...';
+			case 'active': return store.isMyTurn ? pickPrompt(t.turnCount) : `@${opponentName} is thinking...`;
+			case 'finish_proposed': return t.finishProposedBy === store.user?.sub ? 'Finish proposed. Waiting for response...' : `@${opponentName} thinks the score is complete!`;
+			case 'completed': return 'Session complete. Nice work!';
 			default: return t.status;
 		}
 	});
 
-	let statusClass = $derived.by(() => {
+	let isMyTurnGlow = $derived.by(() => {
 		const t = store.currentThread;
-		if (!t) return '';
-		if (t.status === 'completed') return 'status-completed';
-		if (t.status === 'waiting') return 'status-waiting';
-		if (store.isMyTurn || (t.status === 'finish_proposed' && t.finishProposedBy !== store.user?.sub)) return 'status-myturn';
-		return 'status-waiting';
+		if (!t) return false;
+		return t.status === 'active' && store.isMyTurn;
+	});
+
+	let isOpponentFinishProposal = $derived.by(() => {
+		const t = store.currentThread;
+		if (!t) return false;
+		return t.status === 'finish_proposed' && t.finishProposedBy !== store.user?.sub;
+	});
+
+	let statusType = $derived.by(() => {
+		const t = store.currentThread;
+		if (!t) return 'waiting';
+		if (t.status === 'completed') return 'completed';
+		if (t.status === 'waiting') return 'waiting';
+		if (store.isMyTurn || isOpponentFinishProposal) return 'myturn';
+		return 'waiting';
+	});
+
+	let canAct = $derived.by(() => {
+		const t = store.currentThread;
+		if (!t) return false;
+		return t.status === 'active' && store.isMyTurn && store.isPlayer;
 	});
 </script>
 
@@ -164,7 +270,14 @@
 					<span class="badge badge-turn">Turn {thread.turnCount}</span>
 				</div>
 			</div>
-			<button class="btn btn-ghost" onclick={handleExport}>Export</button>
+			<div class="header-actions">
+				{#if canAct}
+					<button class="btn-propose" onclick={() => store.proposeFinish(threadId)} title="Propose to finish">
+						Propose Finish
+					</button>
+				{/if}
+				<button class="btn btn-ghost" onclick={handleExport}>Export</button>
+			</div>
 		{/if}
 	</header>
 
@@ -172,8 +285,15 @@
 		{@const thread = store.currentThread}
 
 		<!-- Status bar -->
-		<div class="status-bar {statusClass}">
-			<span class="status-label">{statusLabel}</span>
+		<div class="status-bar status-{statusType}" class:status-glow={isMyTurnGlow}>
+			<div class="status-left">
+				{#if isMyTurnGlow}
+					<svg class="status-note" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+					</svg>
+				{/if}
+				<span class="status-label">{statusLabel}</span>
+			</div>
 			<span class="status-players">
 				{thread.createdByName} vs {thread.opponentName || '???'}
 			</span>
@@ -186,114 +306,228 @@
 			</div>
 		{/if}
 
+		<!-- Finish proposal response -->
+		{#if isOpponentFinishProposal && store.isPlayer}
+			<div class="finish-response">
+				<span class="finish-text">@{opponentName} thinks the score is ready. Wrap it up?</span>
+				<div class="finish-buttons">
+					<button class="btn btn-primary btn-sm" onclick={() => store.acceptFinish(threadId)}>Accept</button>
+					<button class="btn btn-secondary btn-sm" onclick={() => store.rejectFinish(threadId)}>Reject</button>
+				</div>
+			</div>
+		{/if}
+
 		{#if store.error}
 			<div class="error-banner">{store.error}</div>
 		{/if}
 
 		<div class="editor-layout">
-			<!-- Left: Turn history + action input -->
+			<!-- Left: Chat-style history + ADD input -->
 			<div class="panel panel-left">
 				<div class="panel-header">
-					<h2>History</h2>
-					<span class="count">{thread.history.length} turns</span>
+					<h2>Session Log</h2>
+					<span class="count">{thread.history.length} moves</span>
 				</div>
 
-				<div class="history">
-					{#each thread.history as turn}
-						<div class="turn-entry">
-							<div class="turn-header">
-								<span class="turn-number">#{turn.turnNumber}</span>
-								<span class="turn-user">@{turn.userName}</span>
-								<span class="turn-action turn-action--{turn.action}">{turn.action.toUpperCase()}</span>
-								<span class="turn-target">L{turn.lineNumber}</span>
+				<div class="history-timeline" bind:this={historyEl}>
+					{#each thread.history as turn, i}
+						{@const isMe = turn.userId === store.user?.sub}
+						<div class="post" class:post--mine={isMe}>
+							<div class="post-header">
+								<span class="post-number">#{turn.turnNumber}</span>
+								<div class="post-avatar" style="background: {avatarColor(turn.userName)}">
+									{initials(turn.userName)}
+								</div>
+								<span class="post-name">{turn.userName}</span>
+								<span class="post-action post-action--{turn.action}">
+									{actionLabel(turn.action, turn.lineNumber)}
+								</span>
+								{#if turn.createdAt}
+									<span class="post-time">{new Date(turn.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+								{/if}
 							</div>
-							{#if turn.action !== 'delete'}
-								<div class="turn-chords">{turn.chords}</div>
+							{#if turn.action !== 'delete' && turn.chords}
+								<div class="post-chords">{turn.chords}</div>
+							{/if}
+							{#if turn.action === 'edit' && turn.previousChords}
+								<div class="post-diff">
+									<span class="diff-before">{turn.previousChords}</span>
+									<span class="diff-arrow">-></span>
+									<span class="diff-after">{turn.chords}</span>
+								</div>
+							{/if}
+							{#if turn.action === 'delete'}
+								<div class="post-deleted">line {turn.lineNumber} removed</div>
 							{/if}
 							{#if turn.comment}
-								<div class="turn-comment">{turn.comment}</div>
+								<div class="post-comment">{turn.comment}</div>
 							{/if}
 						</div>
 					{/each}
 
 					{#if thread.history.length === 0}
-						<div class="empty">No turns yet.</div>
+						<div class="empty-history">
+							<div class="empty-icon">
+								<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+									<path d="M9 18V5l12-2v13" />
+									<circle cx="6" cy="18" r="3" />
+									<circle cx="18" cy="16" r="3" />
+								</svg>
+							</div>
+							<p class="empty-title">No moves yet</p>
+							<p class="empty-sub">Add the first chord to start the session!</p>
+						</div>
 					{/if}
 				</div>
 
-				<!-- Turn input (always visible when active, disabled if not your turn) -->
+				<!-- ADD input at bottom -->
 				{#if thread.status === 'active' && store.isPlayer}
-					{@const canAct = store.isMyTurn}
-					<div class="turn-input" class:turn-input--disabled={!canAct}>
+					<div class="add-input" class:add-input--disabled={!canAct}>
 						{#if !canAct}
-							<div class="not-your-turn">Opponent's turn - prepare your next move</div>
+							<div class="waiting-hint">@{opponentName} is composing...</div>
 						{/if}
-						<div class="action-tabs">
-							<button class="tab" class:active={selectedAction === 'add'} onclick={() => { selectedAction = 'add'; selectedLineNumber = 0; chordsInput = ''; }} disabled={!canAct}>
-								ADD
-							</button>
-							<button class="tab" class:active={selectedAction === 'edit'} onclick={() => { selectedAction = 'edit'; }} disabled={!canAct}>
-								EDIT
-							</button>
-							<button class="tab" class:active={selectedAction === 'delete'} onclick={() => { selectedAction = 'delete'; chordsInput = ''; }} disabled={!canAct}>
-								DELETE
+						<div class="add-input-row">
+							<textarea
+								class="chord-input"
+								bind:value={chordsInput}
+								placeholder="| Am7 | Dm7 | G7 | Cmaj7 |"
+								rows="1"
+								disabled={!canAct}
+								onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddTurn(); } }}
+							></textarea>
+							<button
+								class="btn-send"
+								onclick={handleAddTurn}
+								disabled={!canAct || submitting || !chordsInput.trim()}
+								title="Add line"
+							>
+								{#if submitting}
+									<span class="spinner"></span>
+								{:else}
+									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+										<line x1="22" y1="2" x2="11" y2="13" />
+										<polygon points="22 2 15 22 11 13 2 9 22 2" />
+									</svg>
+								{/if}
 							</button>
 						</div>
-
-						{#if selectedAction === 'add'}
-							<textarea class="chord-input" bind:value={chordsInput} placeholder="| Am7 | Dm7 | G7 | Cmaj7 |" rows="2" disabled={!canAct}></textarea>
-						{:else if selectedAction === 'edit'}
-							<div class="line-select-hint">Click a line in the score to edit it</div>
-							{#if selectedLineNumber > 0}
-								<div class="selected-line">Editing line {selectedLineNumber}</div>
-								<textarea class="chord-input" bind:value={chordsInput} rows="2" disabled={!canAct}></textarea>
-							{/if}
-						{:else}
-							<div class="line-select-hint">Click a line in the score to delete it</div>
-							{#if selectedLineNumber > 0}
-								<div class="selected-line">Delete line {selectedLineNumber}?</div>
-							{/if}
-						{/if}
-
-						<div class="input-row">
-							<input type="text" bind:value={commentInput} placeholder="Comment..." class="comment-input" disabled={!canAct} />
-							<button class="btn btn-primary" onclick={handleSubmitTurn} disabled={!canAct || submitting || (selectedAction !== 'delete' && !chordsInput.trim()) || (selectedAction !== 'add' && selectedLineNumber < 1)}>
-								{submitting ? '...' : 'Submit'}
-							</button>
-						</div>
-
-						{#if canAct}
-							<button class="btn btn-ghost finish-btn" onclick={() => store.proposeFinish(threadId)}>
-								Propose Finish
-							</button>
-						{/if}
-					</div>
-				{/if}
-
-				<!-- Finish proposal response -->
-				{#if thread.status === 'finish_proposed' && thread.finishProposedBy !== store.user?.sub && store.isPlayer}
-					<div class="finish-response">
-						<p>Opponent proposed to finish. Accept?</p>
-						<div class="finish-buttons">
-							<button class="btn btn-primary" onclick={() => store.acceptFinish(threadId)}>Accept</button>
-							<button class="btn btn-secondary" onclick={() => store.rejectFinish(threadId)}>Reject</button>
-						</div>
+						<input
+							type="text"
+							bind:value={commentInput}
+							placeholder="Add a comment..."
+							class="comment-input"
+							disabled={!canAct}
+						/>
 					</div>
 				{/if}
 			</div>
 
-			<!-- Right: Score (unified view) -->
+			<!-- Right: Interactive Score -->
 			<div class="panel panel-right">
 				<div class="panel-header">
 					<h2>Score</h2>
 					<span class="count">{thread.lines.length} lines</span>
 				</div>
 
-				<ScoreEditor value={scoreText} readonly={true} />
+				<div class="score-lines">
+					{#if thread.lines.length === 0}
+						<div class="empty-score">
+							<p>No lines yet. Add the first chord progression!</p>
+						</div>
+					{:else}
+						{#each thread.lines as line, i}
+							{@const lineNum = line.lineNumber}
+							<div
+								class="score-line"
+								class:score-line--hover={hoveredLine === lineNum && canAct}
+								class:score-line--editing={editingLine === lineNum}
+								class:score-line--deleting={deleteConfirmLine === lineNum}
+								onmouseenter={() => { if (canAct) hoveredLine = lineNum; }}
+								onmouseleave={() => { hoveredLine = null; }}
+							>
+								<span class="line-number">L{lineNum}</span>
+
+								{#if editingLine === lineNum}
+									<!-- Inline edit mode -->
+									<div class="inline-edit">
+										<textarea
+											class="inline-edit-input"
+											bind:value={editingChords}
+											rows="1"
+											onkeydown={(e) => {
+												if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitEdit(); }
+												if (e.key === 'Escape') cancelEdit();
+											}}
+										></textarea>
+										<div class="inline-edit-actions">
+											<button class="btn-inline btn-inline--save" onclick={submitEdit} disabled={submitting || !editingChords.trim()}>
+												Save
+											</button>
+											<button class="btn-inline btn-inline--cancel" onclick={cancelEdit}>
+												Cancel
+											</button>
+										</div>
+									</div>
+								{:else if deleteConfirmLine === lineNum}
+									<!-- Delete confirmation -->
+									<div class="delete-confirm">
+										<span class="delete-confirm-text">Delete this line?</span>
+										<div class="delete-confirm-actions">
+											<button class="btn-inline btn-inline--danger" onclick={() => submitDelete(lineNum)} disabled={submitting}>
+												Delete
+											</button>
+											<button class="btn-inline btn-inline--cancel" onclick={cancelDelete}>
+												Cancel
+											</button>
+										</div>
+									</div>
+								{:else}
+									<!-- Normal display -->
+									<div class="line-chords-wrapper">
+										<ScoreEditor value={line.chords} readonly={true} />
+									</div>
+
+									<!-- Hover action icons -->
+									{#if canAct && hoveredLine === lineNum}
+										<div class="line-actions">
+											<button
+												class="line-action-btn"
+												onclick={() => startEdit(lineNum, line.chords)}
+												title="Edit this line"
+											>
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+													<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+													<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+												</svg>
+											</button>
+											<button
+												class="line-action-btn line-action-btn--delete"
+												onclick={() => confirmDelete(lineNum)}
+												title="Delete this line"
+											>
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+													<polyline points="3 6 5 6 21 6" />
+													<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+												</svg>
+											</button>
+										</div>
+									{/if}
+								{/if}
+
+								<span class="line-author" title="Added by {line.addedByName}">
+									{initials(line.addedByName)}
+								</span>
+							</div>
+						{/each}
+					{/if}
+				</div>
 			</div>
 		</div>
 	{:else if store.loading}
-		<p class="loading">Loading...</p>
+		<div class="loading">
+			<div class="loading-spinner"></div>
+			<p>Loading thread...</p>
+		</div>
 	{/if}
 </div>
 
@@ -316,6 +550,7 @@
 		padding-bottom: calc(var(--player-height) + var(--space-xl));
 	}
 
+	/* Header */
 	.thread-header {
 		display: flex;
 		align-items: flex-start;
@@ -359,6 +594,29 @@
 		border-color: var(--accent-primary);
 	}
 
+	.header-actions {
+		display: flex;
+		gap: var(--space-sm);
+		align-items: center;
+		flex-shrink: 0;
+	}
+
+	.btn-propose {
+		padding: 4px 12px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 0.75rem;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.btn-propose:hover {
+		border-color: var(--accent-warm);
+		color: var(--accent-warm);
+	}
+
 	/* Status bar */
 	.status-bar {
 		display: flex;
@@ -368,12 +626,42 @@
 		border-radius: var(--radius-md);
 		margin-bottom: var(--space-md);
 		font-size: 0.85rem;
+		transition: all 0.3s ease;
+	}
+
+	.status-left {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 	}
 
 	.status-myturn {
 		background: rgba(167, 139, 250, 0.15);
 		border: 1px solid var(--accent-primary);
 		color: var(--accent-primary);
+	}
+
+	.status-glow {
+		box-shadow: 0 0 20px rgba(167, 139, 250, 0.3), 0 0 40px rgba(167, 139, 250, 0.1);
+		animation: glow-pulse 2s ease-in-out infinite;
+	}
+
+	@keyframes glow-pulse {
+		0%, 100% { box-shadow: 0 0 20px rgba(167, 139, 250, 0.3), 0 0 40px rgba(167, 139, 250, 0.1); }
+		50% { box-shadow: 0 0 30px rgba(167, 139, 250, 0.5), 0 0 60px rgba(167, 139, 250, 0.2); }
+	}
+
+	.pulse-dot {
+		width: 8px;
+		height: 8px;
+		background: var(--accent-primary);
+		border-radius: 50%;
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 1; transform: scale(1); }
+		50% { opacity: 0.5; transform: scale(1.3); }
 	}
 
 	.status-waiting {
@@ -394,6 +682,35 @@
 	.join-section {
 		text-align: center;
 		padding: var(--space-lg);
+	}
+
+	/* Finish response */
+	.finish-response {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
+		border-radius: var(--radius-md);
+		margin-bottom: var(--space-md);
+		background: rgba(251, 191, 36, 0.1);
+		border: 1px solid rgba(251, 191, 36, 0.3);
+	}
+
+	.finish-text {
+		color: var(--accent-warm);
+		font-weight: 500;
+		font-size: 0.85rem;
+	}
+
+	.finish-buttons {
+		display: flex;
+		gap: var(--space-xs);
+	}
+
+	.btn-sm {
+		padding: 4px 12px;
+		font-size: 0.8rem;
 	}
 
 	/* Editor layout */
@@ -437,8 +754,9 @@
 	.count { font-size: 0.75rem; color: var(--text-muted); }
 
 	.panel-left {
+		display: flex;
+		flex-direction: column;
 		max-height: calc(100vh - 240px);
-		overflow-y: auto;
 	}
 
 	.panel-right {
@@ -448,157 +766,479 @@
 		overflow-y: auto;
 	}
 
-	/* History */
-	.history {
-		padding: var(--space-sm);
+	/* BBS-style thread history */
+	.history-timeline {
+		flex: 1;
+		overflow-y: auto;
+		padding: var(--space-xs) 0;
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
 	}
 
-	.turn-entry {
-		padding: 8px 12px;
-		border-radius: var(--radius-md);
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		font-size: 0.8rem;
+	.post {
+		padding: 10px var(--space-md);
+		border-bottom: 1px solid var(--border-subtle);
+		animation: post-in 0.25s ease-out;
+		transition: background 0.15s;
 	}
 
-	.turn-header {
+	.post:hover {
+		background: rgba(167, 139, 250, 0.03);
+	}
+
+	.post--mine {
+		border-left: 3px solid var(--accent-primary);
+	}
+
+	@keyframes post-in {
+		from { opacity: 0; transform: translateY(6px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+
+	.post-header {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		margin-bottom: 4px;
 	}
 
-	.turn-number { color: var(--text-muted); font-weight: 600; }
-	.turn-user { color: var(--text-secondary); }
-	.turn-action {
-		padding: 1px 6px;
-		border-radius: 3px;
-		font-size: 0.7rem;
+	.post-number {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		color: var(--accent-primary);
 		font-weight: 700;
-		text-transform: uppercase;
-	}
-	.turn-action--add { background: rgba(52, 211, 153, 0.2); color: var(--success); }
-	.turn-action--edit { background: rgba(251, 191, 36, 0.2); color: var(--accent-warm); }
-	.turn-action--delete { background: rgba(248, 113, 113, 0.2); color: var(--error); }
-	.turn-target { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.75rem; }
-
-	.turn-chords {
-		font-family: var(--font-mono);
-		font-size: 0.8rem;
-		color: var(--text-primary);
-		padding: 4px 0;
+		min-width: 24px;
 	}
 
-	.turn-comment {
-		color: var(--text-muted);
-		font-style: italic;
-		font-size: 0.75rem;
-	}
-
-	/* Turn input */
-	.turn-input {
-		padding: var(--space-md);
-		border-top: 1px solid var(--border-subtle);
-	}
-
-	.action-tabs {
+	.post-avatar {
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
 		display: flex;
-		gap: 4px;
-		margin-bottom: var(--space-sm);
-	}
-
-	.tab {
-		padding: 6px 16px;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		background: transparent;
-		color: var(--text-secondary);
-		font-size: 0.8rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.tab.active {
-		background: var(--accent-primary);
+		align-items: center;
+		justify-content: center;
+		font-size: 0.55rem;
+		font-weight: 700;
 		color: #fff;
-		border-color: var(--accent-primary);
+		flex-shrink: 0;
 	}
 
-	.chord-input {
-		width: 100%;
-		font-family: var(--font-mono);
-		font-size: 0.9rem;
-		resize: vertical;
-		margin-bottom: var(--space-sm);
-		box-sizing: border-box;
-	}
-
-	.line-select-hint {
-		font-size: 0.8rem;
-		color: var(--text-muted);
-		padding: var(--space-sm) 0;
-	}
-
-	.selected-line {
-		font-size: 0.8rem;
-		color: var(--accent-warm);
+	.post-name {
 		font-weight: 600;
-		margin-bottom: var(--space-xs);
+		color: var(--text-secondary);
+		font-size: 0.78rem;
 	}
 
-	.input-row {
-		display: flex;
-		gap: var(--space-sm);
+	.post-action {
+		font-size: 0.72rem;
+		color: var(--text-muted);
 	}
 
-	.comment-input {
-		flex: 1;
+	.post-action--add { color: var(--success); }
+	.post-action--edit { color: var(--accent-warm); }
+	.post-action--delete { color: var(--error); }
+
+	.post-time {
+		margin-left: auto;
+		font-size: 0.68rem;
+		color: var(--text-muted);
+		opacity: 0.6;
+		font-family: var(--font-mono);
+	}
+
+	.post-chords {
+		font-family: var(--font-mono);
 		font-size: 0.85rem;
+		color: var(--text-primary);
+		padding: 6px 10px;
+		background: rgba(0, 0, 0, 0.12);
+		border-radius: 6px;
+		margin: 4px 0 2px 30px;
+		border-left: 2px solid rgba(167, 139, 250, 0.3);
 	}
 
-	.turn-input--disabled {
+	.post-diff {
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		margin: 4px 0 2px 30px;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		flex-wrap: wrap;
+	}
+
+	.diff-before {
+		color: var(--error);
+		opacity: 0.7;
+		text-decoration: line-through;
+	}
+
+	.diff-arrow {
+		color: var(--text-muted);
+		font-size: 0.7rem;
+	}
+
+	.diff-after {
+		color: var(--success);
+	}
+
+	.post-deleted {
+		color: var(--error);
+		font-size: 0.78rem;
+		font-style: italic;
+		opacity: 0.7;
+		margin-left: 30px;
+	}
+
+	.post-comment {
+		color: var(--text-muted);
+		font-size: 0.78rem;
+		margin: 4px 0 0 30px;
+		padding-left: 8px;
+		border-left: 2px solid var(--border-default);
+	}
+
+	.empty-history {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-2xl) var(--space-md);
+		color: var(--text-muted);
+		gap: 4px;
+	}
+
+	.empty-icon {
+		opacity: 0.25;
+		margin-bottom: var(--space-sm);
+	}
+
+	.empty-title {
+		font-size: 0.9rem;
+		font-weight: 600;
+		margin: 0;
+		color: var(--text-secondary);
+	}
+
+	.empty-sub {
+		font-size: 0.8rem;
+		margin: 0;
+	}
+
+	/* ADD input area */
+	.add-input {
+		border-top: 1px solid var(--border-subtle);
+		padding: var(--space-sm) var(--space-md);
+		background: var(--bg-surface);
+	}
+
+	.add-input--disabled {
 		opacity: 0.5;
 	}
 
-	.not-your-turn {
+	.waiting-hint {
 		text-align: center;
-		font-size: 0.8rem;
+		font-size: 0.75rem;
 		color: var(--text-muted);
-		padding: var(--space-xs) 0 var(--space-sm);
 		font-style: italic;
+		padding-bottom: var(--space-xs);
 	}
 
-	.finish-btn {
+	.add-input-row {
+		display: flex;
+		gap: var(--space-xs);
+		align-items: flex-end;
+	}
+
+	.chord-input {
+		flex: 1;
+		font-family: var(--font-mono);
+		font-size: 0.88rem;
+		resize: none;
+		border-radius: 8px;
+		padding: 8px 12px;
+		border: 1px solid var(--border-default);
+		background: var(--bg-base);
+		color: var(--text-primary);
+		box-sizing: border-box;
+		min-height: 36px;
+	}
+
+	.chord-input:focus {
+		outline: none;
+		border-color: var(--accent-primary);
+		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+	}
+
+	.btn-send {
+		width: 36px;
+		height: 36px;
+		border-radius: 50%;
+		background: var(--accent-primary);
+		color: #fff;
+		border: none;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		transition: all 0.2s;
+	}
+
+	.btn-send:hover:not(:disabled) {
+		background: var(--accent-secondary);
+		transform: scale(1.05);
+	}
+
+	.btn-send:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.spinner {
+		width: 14px;
+		height: 14px;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top-color: #fff;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
+	}
+
+	.comment-input {
 		width: 100%;
-		margin-top: var(--space-sm);
+		font-size: 0.78rem;
+		padding: 4px 12px;
+		margin-top: 4px;
+		border: none;
+		border-radius: 4px;
+		background: transparent;
 		color: var(--text-muted);
-		font-size: 0.8rem;
+		box-sizing: border-box;
 	}
 
-	/* Finish proposal response */
-	.finish-response {
-		padding: var(--space-md);
-		border-top: 1px solid var(--border-subtle);
+	.comment-input:focus {
+		outline: none;
+		background: var(--bg-base);
+	}
+
+	.comment-input::placeholder {
+		color: var(--text-muted);
+		opacity: 0.6;
+	}
+
+	/* Score lines (right panel) */
+	.score-lines {
+		padding: var(--space-xs) 0;
+	}
+
+	.score-line {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 2px var(--space-md);
+		position: relative;
+		transition: background 0.15s;
+		border-bottom: 1px solid transparent;
+	}
+
+	.score-line--hover {
+		background: rgba(167, 139, 250, 0.05);
+		border-bottom-color: var(--border-subtle);
+	}
+
+	.score-line--editing {
+		background: rgba(167, 139, 250, 0.08);
+		border-bottom-color: var(--accent-primary);
+	}
+
+	.score-line--deleting {
+		background: rgba(248, 113, 113, 0.08);
+		border-bottom-color: rgba(248, 113, 113, 0.3);
+	}
+
+	.line-number {
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: var(--text-muted);
+		width: 28px;
+		text-align: right;
+		flex-shrink: 0;
+		opacity: 0.6;
+	}
+
+	.line-chords-wrapper {
+		flex: 1;
+		min-width: 0;
+	}
+
+	/* Make inline ScoreEditor compact */
+	.line-chords-wrapper :global(.score-editor) {
+		width: 100%;
+	}
+
+	.line-chords-wrapper :global(.se-container) {
+		min-height: unset;
+	}
+
+	.line-chords-wrapper :global(.se-highlight),
+	.line-chords-wrapper :global(.se-textarea) {
+		padding: 0;
+		line-height: 2;
+		font-size: 0.9rem;
+	}
+
+	.line-chords-wrapper :global(.se-textarea) {
+		min-height: unset;
+		height: auto;
+	}
+
+	.line-actions {
+		display: flex;
+		gap: 4px;
+		flex-shrink: 0;
+	}
+
+	.line-action-btn {
+		width: 28px;
+		height: 28px;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--border-default);
+		background: var(--bg-surface);
+		color: var(--text-muted);
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.15s;
+	}
+
+	.line-action-btn:hover {
+		border-color: var(--accent-primary);
+		color: var(--accent-primary);
+		background: rgba(167, 139, 250, 0.1);
+	}
+
+	.line-action-btn--delete:hover {
+		border-color: var(--error);
+		color: var(--error);
+		background: rgba(248, 113, 113, 0.1);
+	}
+
+	.line-author {
+		font-size: 0.6rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		opacity: 0.5;
+		flex-shrink: 0;
+		width: 20px;
 		text-align: center;
 	}
 
-	.finish-response p {
-		margin-bottom: var(--space-sm);
-		color: var(--accent-warm);
+	/* Inline edit */
+	.inline-edit {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 4px 0;
+	}
+
+	.inline-edit-input {
+		width: 100%;
+		font-family: var(--font-mono);
+		font-size: 0.88rem;
+		padding: 6px 10px;
+		border: 1px solid var(--accent-primary);
+		border-radius: 6px;
+		background: var(--bg-base);
+		color: var(--text-primary);
+		resize: none;
+		box-sizing: border-box;
+	}
+
+	.inline-edit-input:focus {
+		outline: none;
+		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.2);
+	}
+
+	.inline-edit-actions {
+		display: flex;
+		gap: 6px;
+		justify-content: flex-end;
+	}
+
+	.btn-inline {
+		padding: 3px 12px;
+		border-radius: var(--radius-md);
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+		border: 1px solid transparent;
+		transition: all 0.15s;
+	}
+
+	.btn-inline--save {
+		background: var(--accent-primary);
+		color: #fff;
+	}
+
+	.btn-inline--save:hover {
+		opacity: 0.9;
+	}
+
+	.btn-inline--save:disabled {
+		opacity: 0.4;
+	}
+
+	.btn-inline--cancel {
+		background: transparent;
+		color: var(--text-muted);
+		border-color: var(--border-default);
+	}
+
+	.btn-inline--cancel:hover {
+		background: var(--bg-surface);
+	}
+
+	.btn-inline--danger {
+		background: var(--error);
+		color: #fff;
+	}
+
+	.btn-inline--danger:hover {
+		opacity: 0.9;
+	}
+
+	.btn-inline--danger:disabled {
+		opacity: 0.4;
+	}
+
+	/* Delete confirmation */
+	.delete-confirm {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: 6px 0;
+	}
+
+	.delete-confirm-text {
+		font-size: 0.82rem;
+		color: var(--error);
 		font-weight: 500;
 	}
 
-	.finish-buttons {
+	.delete-confirm-actions {
 		display: flex;
-		gap: var(--space-sm);
-		justify-content: center;
+		gap: 6px;
+		margin-left: auto;
 	}
 
-	.empty, .empty-score {
+	.empty-score {
 		text-align: center;
 		color: var(--text-muted);
 		padding: var(--space-xl);
@@ -615,8 +1255,25 @@
 	}
 
 	.loading {
-		text-align: center;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-sm);
 		color: var(--text-muted);
 		padding: var(--space-2xl);
+	}
+
+	.loading-spinner {
+		width: 24px;
+		height: 24px;
+		border: 2px solid var(--border-default);
+		border-top-color: var(--accent-primary);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	.loading p {
+		font-size: 0.85rem;
+		margin: 0;
 	}
 </style>
