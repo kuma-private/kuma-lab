@@ -9,13 +9,13 @@ COPY frontend/ .
 RUN npm run build
 
 # Stage 2: Build F# API
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS backend
 WORKDIR /src
 COPY backend/ .
 RUN dotnet publish src/DoubutsuQuiz.Api/DoubutsuQuiz.Api.fsproj -c Release -o /app
 
 # Stage 3: Runtime
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM mcr.microsoft.com/dotnet/aspnet:9.0
 WORKDIR /app
 COPY --from=backend /app .
 COPY --from=frontend /frontend/build ./wwwroot
