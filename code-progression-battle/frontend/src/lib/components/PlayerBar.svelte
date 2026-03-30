@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PlayerState } from '$lib/chord-player';
 	import type { OscPreset } from '$lib/chord-player';
+	import PianoKeyboard from './PianoKeyboard.svelte';
 
 	let {
 		state = 'stopped',
@@ -11,6 +12,7 @@
 		volume = -10,
 		loop = false,
 		oscPreset = 'piano' as OscPreset,
+		playingNotes = [] as string[],
 		onplay,
 		onpause,
 		onstop,
@@ -27,6 +29,7 @@
 		volume?: number;
 		loop?: boolean;
 		oscPreset?: OscPreset;
+		playingNotes?: string[];
 		onplay?: () => void;
 		onpause?: () => void;
 		onstop?: () => void;
@@ -94,140 +97,167 @@
 	const barCount = 8;
 </script>
 
-<div class="player-bar">
-	<!-- Left section: controls -->
-	<div class="player-controls">
-		<button class="player-btn" onclick={onstop} title="Stop" disabled={state === 'stopped'}>
-			<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-				<rect x="3" y="3" width="10" height="10" rx="1" />
-			</svg>
-		</button>
+<div class="player-dock">
+	<!-- Left section: Player controls -->
+	<div class="player-controls-section">
+		<div class="player-row-top">
+			<div class="player-controls">
+				<button class="player-btn" onclick={onstop} title="Stop" disabled={state === 'stopped'}>
+					<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+						<rect x="3" y="3" width="10" height="10" rx="1" />
+					</svg>
+				</button>
 
-		<button class="player-btn player-btn--play" onclick={handlePlayPause} title={isPlaying ? 'Pause' : 'Play'}>
-			{#if isPlaying}
-				<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-					<rect x="4" y="3" width="4" height="14" rx="1" />
-					<rect x="12" y="3" width="4" height="14" rx="1" />
+				<button class="player-btn player-btn--play" onclick={handlePlayPause} title={isPlaying ? 'Pause' : 'Play'}>
+					{#if isPlaying}
+						<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+							<rect x="4" y="3" width="4" height="14" rx="1" />
+							<rect x="12" y="3" width="4" height="14" rx="1" />
+						</svg>
+					{:else}
+						<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+							<polygon points="5,3 17,10 5,17" />
+						</svg>
+					{/if}
+				</button>
+
+				<button
+					class="player-btn"
+					class:player-btn--active={loop}
+					onclick={handleLoopToggle}
+					title="ループ"
+				>
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+						<polyline points="17 1 21 5 17 9" />
+						<path d="M3 11V9a4 4 0 0 1 4-4h14" />
+						<polyline points="7 23 3 19 7 15" />
+						<path d="M21 13v2a4 4 0 0 1-4 4H3" />
+					</svg>
+				</button>
+			</div>
+
+			<!-- Visualizer -->
+			<div class="player-visualizer" class:playing={isPlaying}>
+				{#each Array(barCount) as _, i}
+					<div
+						class="viz-bar"
+						style="animation-delay: {i * 0.08}s;"
+					></div>
+				{/each}
+			</div>
+
+			<!-- Current chord display -->
+			<div class="player-chord" class:player-chord--active={currentChord !== null && isPlaying}>
+				{#if currentChord}
+					<span class="chord-name">{currentChord}</span>
+				{:else}
+					<span class="chord-name chord-name--idle">---</span>
+				{/if}
+			</div>
+
+			<!-- Time display -->
+			<div class="player-time">
+				<span>{formatTime(currentTime)}</span>
+				<span class="player-time-sep">/</span>
+				<span>{formatTime(totalDuration)}</span>
+			</div>
+
+			<!-- Volume -->
+			<div class="player-volume">
+				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					{#if volumeIcon === 'mute'}
+						<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+						<line x1="23" y1="9" x2="17" y2="15" />
+						<line x1="17" y1="9" x2="23" y2="15" />
+					{:else if volumeIcon === 'low'}
+						<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+						<path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+					{:else}
+						<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+						<path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+						<path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+					{/if}
 				</svg>
-			{:else}
-				<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-					<polygon points="5,3 17,10 5,17" />
-				</svg>
-			{/if}
-		</button>
+				<input
+					type="range"
+					class="volume-slider"
+					min="-30"
+					max="0"
+					value={volume}
+					oninput={handleVolumeInput}
+					title="音量: {volume}dB"
+				/>
+			</div>
 
-		<button
-			class="player-btn"
-			class:player-btn--active={loop}
-			onclick={handleLoopToggle}
-			title="ループ"
-		>
-			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-				<polyline points="17 1 21 5 17 9" />
-				<path d="M3 11V9a4 4 0 0 1 4-4h14" />
-				<polyline points="7 23 3 19 7 15" />
-				<path d="M21 13v2a4 4 0 0 1-4 4H3" />
-			</svg>
-		</button>
+			<!-- Tone selector -->
+			<div class="player-tone">
+				<select class="tone-select" value={oscPreset} onchange={handleOscChange} title="音色">
+					{#each OSC_OPTIONS as opt}
+						<option value={opt}>{OSC_LABELS[opt]}</option>
+					{/each}
+				</select>
+			</div>
+
+			<!-- BPM badge -->
+			<div class="player-bpm">
+				<span class="badge">BPM {bpm}</span>
+			</div>
+		</div>
+
+		<!-- Progress bar (full width of controls section) -->
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="player-progress" onclick={handleProgressClick}>
+			<div class="player-progress-fill" style="width: {progress}%"></div>
+			<div class="player-progress-handle" style="left: {progress}%"></div>
+		</div>
 	</div>
 
-	<!-- Visualizer -->
-	<div class="player-visualizer" class:playing={isPlaying}>
-		{#each Array(barCount) as _, i}
-			<div
-				class="viz-bar"
-				style="animation-delay: {i * 0.08}s;"
-			></div>
-		{/each}
-	</div>
+	<!-- Divider -->
+	<div class="dock-divider"></div>
 
-	<!-- Current chord display -->
-	<div class="player-chord" class:player-chord--active={currentChord !== null && isPlaying}>
-		{#if currentChord}
-			<span class="chord-name">{currentChord}</span>
-		{:else}
-			<span class="chord-name chord-name--idle">---</span>
-		{/if}
-	</div>
-
-	<!-- Progress bar -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="player-progress" onclick={handleProgressClick}>
-		<div class="player-progress-fill" style="width: {progress}%"></div>
-		<div class="player-progress-handle" style="left: {progress}%"></div>
-	</div>
-
-	<!-- Time display -->
-	<div class="player-time">
-		<span>{formatTime(currentTime)}</span>
-		<span class="player-time-sep">/</span>
-		<span>{formatTime(totalDuration)}</span>
-	</div>
-
-	<!-- Volume -->
-	<div class="player-volume">
-		<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-			{#if volumeIcon === 'mute'}
-				<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
-				<line x1="23" y1="9" x2="17" y2="15" />
-				<line x1="17" y1="9" x2="23" y2="15" />
-			{:else if volumeIcon === 'low'}
-				<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
-				<path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-			{:else}
-				<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
-				<path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-				<path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-			{/if}
-		</svg>
-		<input
-			type="range"
-			class="volume-slider"
-			min="-30"
-			max="0"
-			value={volume}
-			oninput={handleVolumeInput}
-			title="音量: {volume}dB"
-		/>
-	</div>
-
-	<!-- Tone selector -->
-	<div class="player-tone">
-		<select class="tone-select" value={oscPreset} onchange={handleOscChange} title="音色">
-			{#each OSC_OPTIONS as opt}
-				<option value={opt}>{OSC_LABELS[opt]}</option>
-			{/each}
-		</select>
-	</div>
-
-	<!-- BPM badge -->
-	<div class="player-bpm">
-		<span class="badge">BPM {bpm}</span>
+	<!-- Right section: Piano keyboard -->
+	<div class="piano-section">
+		<PianoKeyboard {playingNotes} />
 	</div>
 </div>
 
 <style>
-	.player-bar {
+	.player-dock {
 		position: fixed;
 		bottom: 0;
 		left: 0;
 		right: 0;
-		height: var(--player-height);
+		height: 80px;
 		background: var(--player-bg);
 		backdrop-filter: blur(16px);
 		border-top: 1px solid var(--border-subtle);
 		display: flex;
-		align-items: center;
-		padding: 0 var(--space-lg);
-		gap: var(--space-sm);
+		align-items: stretch;
 		z-index: 50;
+	}
+
+	/* Left section: player controls */
+	.player-controls-section {
+		width: 340px;
+		flex-shrink: 0;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		padding: 4px var(--space-md) 4px var(--space-lg);
+		gap: 4px;
+	}
+
+	.player-row-top {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
 	}
 
 	.player-controls {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		flex-shrink: 0;
 	}
 
@@ -235,8 +265,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 32px;
-		height: 32px;
+		width: 28px;
+		height: 28px;
 		border: none;
 		border-radius: var(--radius-full);
 		background: var(--bg-elevated);
@@ -255,8 +285,8 @@
 	}
 
 	.player-btn--play {
-		width: 36px;
-		height: 36px;
+		width: 32px;
+		height: 32px;
 		background: var(--accent-primary);
 		color: #fff;
 	}
@@ -275,15 +305,15 @@
 		display: flex;
 		align-items: flex-end;
 		gap: 2px;
-		height: 32px;
+		height: 24px;
 		flex-shrink: 0;
-		padding: 0 4px;
+		padding: 0 2px;
 	}
 
 	.viz-bar {
-		width: 3px;
-		height: 4px;
-		border-radius: 1.5px;
+		width: 2px;
+		height: 3px;
+		border-radius: 1px;
 		background: var(--accent-primary);
 		opacity: 0.3;
 		transition: height 0.1s;
@@ -295,8 +325,8 @@
 	}
 
 	@keyframes viz-bounce {
-		0% { height: 4px; }
-		100% { height: 28px; }
+		0% { height: 3px; }
+		100% { height: 20px; }
 	}
 
 	.playing .viz-bar:nth-child(1) { animation-duration: 0.6s; }
@@ -311,14 +341,14 @@
 	/* Current chord */
 	.player-chord {
 		flex-shrink: 0;
-		min-width: 64px;
+		min-width: 48px;
 		text-align: center;
-		padding: 0 var(--space-sm);
+		padding: 0 2px;
 	}
 
 	.chord-name {
 		font-family: var(--font-mono);
-		font-size: 1.2rem;
+		font-size: 1rem;
 		font-weight: 700;
 		color: var(--accent-primary);
 		transition: color 0.15s, transform 0.15s;
@@ -332,15 +362,14 @@
 	.chord-name--idle {
 		color: var(--text-muted);
 		font-weight: 400;
-		font-size: 1rem;
+		font-size: 0.85rem;
 	}
 
 	/* Progress */
 	.player-progress {
-		flex: 1;
-		height: 6px;
+		height: 4px;
 		background: var(--bg-elevated);
-		border-radius: 3px;
+		border-radius: 2px;
 		cursor: pointer;
 		position: relative;
 		min-width: 80px;
@@ -349,15 +378,15 @@
 	.player-progress-fill {
 		height: 100%;
 		background: var(--player-progress);
-		border-radius: 3px;
+		border-radius: 2px;
 		transition: width 0.05s linear;
 	}
 
 	.player-progress-handle {
 		position: absolute;
 		top: 50%;
-		width: 12px;
-		height: 12px;
+		width: 10px;
+		height: 10px;
 		border-radius: 50%;
 		background: var(--text-primary);
 		transform: translate(-50%, -50%);
@@ -372,10 +401,10 @@
 	/* Time */
 	.player-time {
 		font-family: var(--font-mono);
-		font-size: 0.75rem;
+		font-size: 0.68rem;
 		color: var(--text-secondary);
 		flex-shrink: 0;
-		min-width: 72px;
+		min-width: 56px;
 		text-align: center;
 	}
 
@@ -388,7 +417,7 @@
 	.player-volume {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 3px;
 		flex-shrink: 0;
 		color: var(--text-secondary);
 	}
@@ -396,8 +425,8 @@
 	.volume-slider {
 		-webkit-appearance: none;
 		appearance: none;
-		width: 60px;
-		height: 4px;
+		width: 44px;
+		height: 3px;
 		border-radius: 2px;
 		background: var(--bg-elevated);
 		outline: none;
@@ -409,8 +438,8 @@
 	.volume-slider::-webkit-slider-thumb {
 		-webkit-appearance: none;
 		appearance: none;
-		width: 12px;
-		height: 12px;
+		width: 10px;
+		height: 10px;
 		border-radius: 50%;
 		background: var(--text-primary);
 		cursor: pointer;
@@ -418,8 +447,8 @@
 	}
 
 	.volume-slider::-moz-range-thumb {
-		width: 12px;
-		height: 12px;
+		width: 10px;
+		height: 10px;
 		border-radius: 50%;
 		background: var(--text-primary);
 		cursor: pointer;
@@ -434,13 +463,13 @@
 	.tone-select {
 		-webkit-appearance: none;
 		appearance: none;
-		padding: 2px 8px;
+		padding: 1px 6px;
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
 		background: var(--bg-elevated);
 		color: var(--text-secondary);
 		font-family: var(--font-mono);
-		font-size: 0.7rem;
+		font-size: 0.65rem;
 		cursor: pointer;
 		outline: none;
 		transition: all 0.15s;
@@ -461,12 +490,45 @@
 		flex-shrink: 0;
 	}
 
-	/* Responsive: hide some elements on narrow screens */
+	/* Dock divider */
+	.dock-divider {
+		width: 1px;
+		background: var(--border-subtle);
+		margin: 8px 0;
+		flex-shrink: 0;
+	}
+
+	/* Piano section */
+	.piano-section {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		padding: 8px 0;
+	}
+
+	/* Responsive */
 	@media (max-width: 700px) {
+		.player-dock {
+			height: 64px;
+		}
+
+		.player-controls-section {
+			width: auto;
+			min-width: 200px;
+			flex-shrink: 1;
+		}
+
 		.player-visualizer { display: none; }
 		.player-volume { display: none; }
 		.player-tone { display: none; }
-		.player-chord { min-width: 48px; }
-		.chord-name { font-size: 1rem; }
+		.player-bpm { display: none; }
+		.player-chord { min-width: 36px; }
+		.chord-name { font-size: 0.85rem; }
+	}
+
+	@media (max-width: 500px) {
+		.piano-section { display: none; }
+		.dock-divider { display: none; }
 	}
 </style>

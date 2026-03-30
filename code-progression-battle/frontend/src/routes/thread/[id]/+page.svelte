@@ -2,13 +2,12 @@
 	import { page } from '$app/state';
 	import { onMount, onDestroy } from 'svelte';
 	import { createAppStore } from '$lib/stores/app.svelte';
-	import { parseProgression, transpose } from '$lib/chord-parser';
-	import { ChordPlayer, type PlayerState, type OscPreset, setGlobalOscPreset } from '$lib/chord-player';
+	import { parseProgression, transpose, parseChord } from '$lib/chord-parser';
+	import { ChordPlayer, type PlayerState, type OscPreset, setGlobalOscPreset, chordToNotes } from '$lib/chord-player';
 	import ScoreEditor, { type DisplayMode } from '$lib/components/ScoreEditor.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import AiReview from '$lib/components/AiReview.svelte';
 	import PatternPicker from '$lib/components/PatternPicker.svelte';
-	import PianoKeyboard from '$lib/components/PianoKeyboard.svelte';
 	import CircleOfFifths from '$lib/components/CircleOfFifths.svelte';
 
 	const store = createAppStore();
@@ -28,13 +27,24 @@
 	let submitting = $state(false);
 	let diffError = $state<string | null>(null);
 
-	// ScoreEditor state (right panel)
+	// ScoreEditor state
 	let scoreEditorValue = $state('');
 	let scoreInitialized = $state(false);
 	let scoreDisplayMode = $state<DisplayMode>('chord');
 
 	// History scroll ref
 	let historyEl: HTMLDivElement | undefined = $state();
+
+	// Drawer state
+	let drawerOpen = $state(false);
+
+	const toggleDrawer = () => {
+		drawerOpen = !drawerOpen;
+	};
+
+	const closeDrawer = () => {
+		drawerOpen = false;
+	};
 
 	onMount(() => {
 		store.checkLogin();
@@ -110,6 +120,17 @@
 	const handleVolumeChange = (db: number) => { playerVolume = db; player?.setVolume(db); };
 	const handleLoopChange = (loop: boolean) => { playerLoop = loop; player?.setLoop(loop); };
 
+	// Compute notes for the current chord to highlight on the keyboard
+	const currentChordNotes = $derived.by(() => {
+		if (!currentChord || playerState !== 'playing') return [] as string[];
+		try {
+			const parsed = parseChord(currentChord);
+			return chordToNotes(parsed);
+		} catch {
+			return [] as string[];
+		}
+	});
+
 	let oscPreset = $state<OscPreset>('piano');
 	const handleOscPresetChange = (preset: OscPreset) => {
 		oscPreset = preset;
@@ -141,7 +162,6 @@
 		| { action: 'error'; message: string };
 
 	const computeDiff = (oldLines: string[], newLines: string[]): DiffResult => {
-		// Filter out empty trailing lines for comparison
 		const trimTrailing = (lines: string[]): string[] => {
 			const result = [...lines];
 			while (result.length > 0 && result[result.length - 1].trim() === '') {
@@ -157,11 +177,9 @@
 		const newLen = newTrimmed.length;
 
 		if (newLen > oldLen) {
-			// ADD: line count increased
 			if (newLen - oldLen !== 1) {
 				return { action: 'error', message: '1ターンにつき1行のみ追加できます' };
 			}
-			// Check that existing lines are unchanged
 			let insertIdx = -1;
 			let j = 0;
 			for (let i = 0; i < newLen; i++) {
@@ -179,7 +197,6 @@
 			if (insertIdx === -1) insertIdx = newLen - 1;
 			return { action: 'add', lineNumber: insertIdx + 1, chords: newTrimmed[insertIdx].trim() };
 		} else if (newLen < oldLen) {
-			// DELETE: line count decreased
 			if (oldLen - newLen !== 1) {
 				return { action: 'error', message: '1ターンにつき1行のみ削除できます' };
 			}
@@ -200,7 +217,6 @@
 			if (deleteIdx === -1) deleteIdx = oldLen - 1;
 			return { action: 'delete', lineNumber: deleteIdx + 1 };
 		} else {
-			// Same length: check for edit
 			const changedIndices: number[] = [];
 			for (let i = 0; i < oldLen; i++) {
 				if (oldTrimmed[i].trim() !== newTrimmed[i].trim()) {
@@ -391,19 +407,11 @@
 		scoreEditorValue = transpose(scoreEditorValue, -1);
 	};
 
-	// Piano keyboard open state for padding adjustment
-	let pianoOpen = $state(false);
+	// Pattern picker collapsed state
+	let patternOpen = $state(false);
 
-	const handlePianoToggle = (open: boolean) => {
-		pianoOpen = open;
-	};
-
-	// Tools panel (Circle of Fifths + Pattern Picker)
-	let toolsOpen = $state(false);
-	let toolsTab = $state<'circle' | 'pattern'>('circle');
-
-	const toggleTools = () => {
-		toolsOpen = !toolsOpen;
+	const togglePattern = () => {
+		patternOpen = !patternOpen;
 	};
 </script>
 
@@ -411,7 +419,7 @@
 	<title>{store.currentThread?.title || 'Thread'} - Code Progression Battle</title>
 </svelte:head>
 
-<div class="page" class:page--piano-open={pianoOpen}>
+<div class="page">
 	<header class="thread-header">
 		<a href="/" class="back-link">
 			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -431,6 +439,15 @@
 				</div>
 			</div>
 			<div class="header-actions">
+				<button class="btn-log" onclick={toggleDrawer} title="セッションログ">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+					</svg>
+					ログ
+					{#if thread.history.length > 0}
+						<span class="log-badge">{thread.history.length}</span>
+					{/if}
+				</button>
 				{#if canAct}
 					<button class="btn-propose" onclick={() => store.proposeFinish(threadId)} title="Propose to finish">
 						完成を提案
@@ -466,8 +483,8 @@
 			</div>
 		{/if}
 
-		<!-- Finish proposal response -->
-		{#if isOpponentFinishProposal && store.isPlayer}
+		<!-- Finish proposal response (inline when drawer closed, in drawer when open) -->
+		{#if isOpponentFinishProposal && store.isPlayer && !drawerOpen}
 			<div class="finish-response">
 				<span class="finish-text">@{opponentName} がスコアの完成を提案しています。終了しますか?</span>
 				<div class="finish-buttons">
@@ -481,96 +498,12 @@
 			<div class="error-banner">{store.error}</div>
 		{/if}
 
+		<!-- Main editor layout: Score (main) + Tools (sidebar) -->
 		<div class="editor-layout">
-			<!-- Left: Session log + comment input + submit button -->
-			<div class="panel panel-left">
-				<div class="panel-header">
-					<h2>セッションログ</h2>
-					<span class="count">{thread.history.length} ターン</span>
-				</div>
-
-				<div class="history-timeline" bind:this={historyEl}>
-					{#each thread.history as turn, i}
-						{@const isMe = turn.userId === store.user?.sub}
-						<div class="post" class:post--mine={isMe}>
-							<div class="post-header">
-								<span class="post-number">#{turn.turnNumber}</span>
-								<div class="post-avatar" style="background: {avatarColor(turn.userName)}">
-									{initials(turn.userName)}
-								</div>
-								<span class="post-name">{turn.userName}</span>
-								<span class="post-action post-action--{turn.action}">
-									{actionLabel(turn.action, turn.lineNumber)}
-								</span>
-								{#if turn.createdAt}
-									<span class="post-time">{new Date(turn.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-								{/if}
-							</div>
-							{#if turn.action !== 'delete' && turn.chords}
-								<div class="post-chords">{turn.chords}</div>
-							{/if}
-							{#if turn.action === 'edit' && turn.previousChords}
-								<div class="post-diff">
-									<span class="diff-before">{turn.previousChords}</span>
-									<span class="diff-arrow">-></span>
-									<span class="diff-after">{turn.chords}</span>
-								</div>
-							{/if}
-							{#if turn.action === 'delete'}
-								<div class="post-deleted">line {turn.lineNumber} removed</div>
-							{/if}
-							{#if turn.comment}
-								<div class="post-comment">{turn.comment}</div>
-							{/if}
-							{#if turn.aiComment}
-								<div class="ai-comment">
-									<span class="ai-icon">AI</span>
-									<div class="ai-body">
-										<span class="ai-text">{turn.aiComment}</span>
-										{#if turn.aiScores}
-											{@const scores = (() => { try { return JSON.parse(turn.aiScores); } catch { return null; } })()}
-											{#if scores && typeof scores.tension === 'number'}
-												<div class="ai-scores">
-													<span class="ai-score" title="テンション">T:{scores.tension}</span>
-													<span class="ai-score" title="創造性">C:{scores.creativity}</span>
-													<span class="ai-score" title="整合性">H:{scores.coherence}</span>
-													<span class="ai-score" title="サプライズ">S:{scores.surprise}</span>
-												</div>
-											{/if}
-										{/if}
-									</div>
-								</div>
-							{/if}
-						</div>
-					{/each}
-
-					{#if thread.history.length === 0}
-						<div class="empty-history">
-							<div class="empty-icon">
-								<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-									<path d="M9 18V5l12-2v13" />
-									<circle cx="6" cy="18" r="3" />
-									<circle cx="18" cy="16" r="3" />
-								</svg>
-							</div>
-							<p class="empty-title">まだターンがありません</p>
-							<p class="empty-sub">右のスコアを編集してセッションを始めよう!</p>
-						</div>
-					{/if}
-				</div>
-
-				<!-- Waiting hint when not your turn -->
-				{#if thread.status === 'active' && store.isPlayer && !canAct}
-					<div class="submit-area submit-area--disabled">
-						<div class="waiting-hint">@{opponentName} が作曲中...</div>
-					</div>
-				{/if}
-			</div>
-
-			<!-- Right: AI Review + Score + Pattern Picker -->
-			<div class="panel panel-right">
+			<!-- Main: Score editor area -->
+			<div class="panel panel-main">
 				{#if latestAiComment || latestAiScores}
-					<div class="right-section">
+					<div class="ai-section">
 						<AiReview comment={latestAiComment} scores={latestAiScores} />
 					</div>
 				{/if}
@@ -654,48 +587,53 @@
 							保存
 						</button>
 					</div>
-
-					{#if thread.key}
-						<div class="tools-section">
-							<button class="tools-toggle" onclick={toggleTools}>
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-								</svg>
-								ツール
-								<svg
-									class="tools-chevron"
-									class:tools-chevron--open={toolsOpen}
-									width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
-								>
-									<polyline points="4,6 8,10 12,6" />
-								</svg>
-							</button>
-
-							{#if toolsOpen}
-								<div class="tools-tabs">
-									<button
-										class="tools-tab"
-										class:tools-tab--active={toolsTab === 'circle'}
-										onclick={() => { toolsTab = 'circle'; }}
-									>五度圏</button>
-									<button
-										class="tools-tab"
-										class:tools-tab--active={toolsTab === 'pattern'}
-										onclick={() => { toolsTab = 'pattern'; }}
-									>パターン</button>
-								</div>
-								<div class="tools-content">
-									{#if toolsTab === 'circle'}
-										<CircleOfFifths currentKey={thread.key} />
-									{:else}
-										<PatternPicker key={thread.key} onInsert={handlePatternInsert} />
-									{/if}
-								</div>
-							{/if}
-						</div>
-					{/if}
 				{/if}
 
+				<!-- Waiting hint when not your turn -->
+				{#if thread.status === 'active' && store.isPlayer && !canAct}
+					<div class="submit-area submit-area--disabled">
+						<div class="waiting-hint">@{opponentName} が作曲中...</div>
+					</div>
+				{/if}
+			</div>
+
+			<!-- Sidebar: Tools -->
+			<div class="panel panel-tools">
+				{#if thread.key}
+					<div class="tool-section">
+						<div class="tool-header">
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<circle cx="12" cy="12" r="10" />
+								<path d="M12 2 L12 12 L18 18" />
+							</svg>
+							<span>五度圏</span>
+						</div>
+						<CircleOfFifths currentKey={thread.key} />
+					</div>
+
+					<div class="tool-section tool-section--collapsible">
+						<button class="tool-collapse-btn" onclick={togglePattern}>
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M9 18V5l12-2v13" />
+								<circle cx="6" cy="18" r="3" />
+								<circle cx="18" cy="16" r="3" />
+							</svg>
+							<span>パターン</span>
+							<svg
+								class="tool-chevron"
+								class:tool-chevron--open={patternOpen}
+								width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+							>
+								<polyline points="4,6 8,10 12,6" />
+							</svg>
+						</button>
+						{#if patternOpen}
+							<div class="tool-collapse-content">
+								<PatternPicker key={thread.key} onInsert={handlePatternInsert} />
+							</div>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		</div>
 	{:else if store.loading}
@@ -706,7 +644,108 @@
 	{/if}
 </div>
 
-<PianoKeyboard collapsed={true} onToggle={handlePianoToggle} />
+<!-- Session Log Drawer -->
+{#if store.currentThread}
+	{@const thread = store.currentThread}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	{#if drawerOpen}
+		<div class="drawer-overlay" onclick={closeDrawer}></div>
+	{/if}
+	<div class="drawer" class:drawer--open={drawerOpen}>
+		<div class="drawer-header">
+			<h2>セッションログ</h2>
+			<span class="count">{thread.history.length} ターン</span>
+			<button class="drawer-close" onclick={closeDrawer} title="閉じる">
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+					<line x1="3" y1="3" x2="13" y2="13" />
+					<line x1="13" y1="3" x2="3" y2="13" />
+				</svg>
+			</button>
+		</div>
+
+		<!-- Finish proposal inside drawer -->
+		{#if isOpponentFinishProposal && store.isPlayer}
+			<div class="drawer-finish-response">
+				<span class="finish-text">@{opponentName} がスコアの完成を提案しています。終了しますか?</span>
+				<div class="finish-buttons">
+					<button class="btn btn-primary btn-sm" onclick={() => store.acceptFinish(threadId)}>承認</button>
+					<button class="btn btn-secondary btn-sm" onclick={() => store.rejectFinish(threadId)}>却下</button>
+				</div>
+			</div>
+		{/if}
+
+		<div class="history-timeline" bind:this={historyEl}>
+			{#each thread.history as turn, i}
+				{@const isMe = turn.userId === store.user?.sub}
+				<div class="post" class:post--mine={isMe}>
+					<div class="post-header">
+						<span class="post-number">#{turn.turnNumber}</span>
+						<div class="post-avatar" style="background: {avatarColor(turn.userName)}">
+							{initials(turn.userName)}
+						</div>
+						<span class="post-name">{turn.userName}</span>
+						<span class="post-action post-action--{turn.action}">
+							{actionLabel(turn.action, turn.lineNumber)}
+						</span>
+						{#if turn.createdAt}
+							<span class="post-time">{new Date(turn.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+						{/if}
+					</div>
+					{#if turn.action !== 'delete' && turn.chords}
+						<div class="post-chords">{turn.chords}</div>
+					{/if}
+					{#if turn.action === 'edit' && turn.previousChords}
+						<div class="post-diff">
+							<span class="diff-before">{turn.previousChords}</span>
+							<span class="diff-arrow">-></span>
+							<span class="diff-after">{turn.chords}</span>
+						</div>
+					{/if}
+					{#if turn.action === 'delete'}
+						<div class="post-deleted">line {turn.lineNumber} removed</div>
+					{/if}
+					{#if turn.comment}
+						<div class="post-comment">{turn.comment}</div>
+					{/if}
+					{#if turn.aiComment}
+						<div class="ai-comment">
+							<span class="ai-icon">AI</span>
+							<div class="ai-body">
+								<span class="ai-text">{turn.aiComment}</span>
+								{#if turn.aiScores}
+									{@const scores = (() => { try { return JSON.parse(turn.aiScores); } catch { return null; } })()}
+									{#if scores && typeof scores.tension === 'number'}
+										<div class="ai-scores">
+											<span class="ai-score" title="テンション">T:{scores.tension}</span>
+											<span class="ai-score" title="創造性">C:{scores.creativity}</span>
+											<span class="ai-score" title="整合性">H:{scores.coherence}</span>
+											<span class="ai-score" title="サプライズ">S:{scores.surprise}</span>
+										</div>
+									{/if}
+								{/if}
+							</div>
+						</div>
+					{/if}
+				</div>
+			{/each}
+
+			{#if thread.history.length === 0}
+				<div class="empty-history">
+					<div class="empty-icon">
+						<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+							<path d="M9 18V5l12-2v13" />
+							<circle cx="6" cy="18" r="3" />
+							<circle cx="18" cy="16" r="3" />
+						</svg>
+					</div>
+					<p class="empty-title">まだターンがありません</p>
+					<p class="empty-sub">スコアを編集してセッションを始めよう!</p>
+				</div>
+			{/if}
+		</div>
+	</div>
+{/if}
 
 <PlayerBar
 	state={playerState}
@@ -717,6 +756,7 @@
 	volume={playerVolume}
 	loop={playerLoop}
 	{oscPreset}
+	playingNotes={currentChordNotes}
 	onplay={handlePlay}
 	onpause={handlePause}
 	onstop={handleStop}
@@ -731,12 +771,7 @@
 		max-width: 1200px;
 		margin: 0 auto;
 		padding: var(--space-lg) var(--space-xl);
-		padding-bottom: calc(var(--player-height) + var(--space-2xl));
-		transition: padding-bottom 0.2s;
-	}
-
-	.page--piano-open {
-		padding-bottom: calc(var(--player-height) + 120px + var(--space-2xl));
+		padding-bottom: calc(80px + var(--space-2xl));
 	}
 
 	/* Header */
@@ -788,6 +823,44 @@
 		gap: var(--space-sm);
 		align-items: center;
 		flex-shrink: 0;
+	}
+
+	/* Log button */
+	.btn-log {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 12px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		font-size: 0.78rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.15s;
+		position: relative;
+	}
+
+	.btn-log:hover {
+		border-color: var(--accent-primary);
+		color: var(--accent-primary);
+		background: rgba(167, 139, 250, 0.1);
+	}
+
+	.log-badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 18px;
+		height: 18px;
+		padding: 0 5px;
+		border-radius: 9px;
+		background: var(--accent-primary);
+		color: #fff;
+		font-size: 0.65rem;
+		font-weight: 700;
+		line-height: 1;
 	}
 
 	.btn-propose {
@@ -871,7 +944,7 @@
 		padding: var(--space-lg);
 	}
 
-	/* Finish response */
+	/* Finish response (inline) */
 	.finish-response {
 		display: flex;
 		align-items: center;
@@ -900,16 +973,21 @@
 		font-size: 0.8rem;
 	}
 
-	/* Editor layout */
+	/* ── Editor layout: 2-column grid ── */
 	.editor-layout {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: var(--space-lg);
+		grid-template-columns: 1fr 300px;
+		gap: var(--space-md);
 		align-items: start;
 	}
 
 	@media (max-width: 900px) {
-		.editor-layout { grid-template-columns: 1fr; }
+		.editor-layout {
+			grid-template-columns: 1fr;
+		}
+		.panel-tools {
+			order: -1;
+		}
 	}
 
 	.panel {
@@ -917,6 +995,10 @@
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
+	}
+
+	.panel-main {
+		min-height: 300px;
 	}
 
 	.panel-header {
@@ -971,20 +1053,314 @@
 
 	.count { font-size: 0.75rem; color: var(--text-muted); }
 
-	.panel-left {
-		display: flex;
-		flex-direction: column;
-		max-height: calc(100vh - 220px);
+	.ai-section {
+		padding: var(--space-md);
 	}
 
-	.panel-right {
+	.panel-header-right {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+	}
+
+	.transpose-controls {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.transpose-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		font-size: 0.85rem;
+		font-weight: 700;
+		font-family: var(--font-mono);
+		cursor: pointer;
+		transition: all 0.15s;
+		line-height: 1;
+	}
+
+	.transpose-btn:hover {
+		background: var(--bg-hover);
+		border-color: var(--accent-primary);
+		color: var(--accent-primary);
+	}
+
+	.transpose-label {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		color: var(--text-muted);
+		min-width: 48px;
+		text-align: center;
+	}
+
+	/* Score area */
+	.score-area {
+		padding: var(--space-md);
+	}
+
+	.empty-score {
+		text-align: center;
+		color: var(--text-muted);
+		padding: var(--space-xl);
+		font-size: 0.85rem;
+	}
+
+	/* Save area */
+	.save-area {
+		border-top: 1px solid var(--border-subtle);
+		padding: var(--space-md) var(--space-lg);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+
+	.submit-area {
+		padding: var(--space-md) var(--space-lg);
+		background: var(--bg-surface);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+	}
+
+	.submit-area--disabled {
+		opacity: 0.5;
+	}
+
+	.waiting-hint {
+		text-align: center;
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		font-style: italic;
+		padding-bottom: var(--space-xs);
+	}
+
+	.diff-error {
+		font-size: 0.78rem;
+		color: var(--error);
+		padding: 4px 8px;
+		background: rgba(248, 113, 113, 0.1);
+		border-radius: 4px;
+	}
+
+	.comment-textarea {
+		width: 100%;
+		font-size: 0.8rem;
+		padding: var(--space-sm) var(--space-md);
+		border: 1px solid var(--border-default);
+		border-radius: 6px;
+		background: var(--bg-base);
+		color: var(--text-primary);
+		resize: none;
+		box-sizing: border-box;
+	}
+
+	.comment-textarea:focus {
+		outline: none;
+		border-color: var(--accent-primary);
+		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+	}
+
+	.comment-textarea::placeholder {
+		color: var(--text-muted);
+		opacity: 0.6;
+	}
+
+	.btn-submit-turn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-sm);
+		width: 100%;
+		padding: var(--space-sm) var(--space-lg);
+		border-radius: var(--radius-md);
+		background: var(--accent-primary);
+		color: #fff;
+		border: none;
+		font-size: 0.82rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.btn-submit-turn:hover:not(:disabled) {
+		background: var(--accent-secondary);
+		transform: translateY(-1px);
+	}
+
+	.btn-submit-turn:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.spinner {
+		width: 14px;
+		height: 14px;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top-color: #fff;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
+	}
+
+	/* ── Tools sidebar ── */
+	.panel-tools {
 		position: sticky;
 		top: var(--space-md);
 		max-height: calc(100vh - 220px);
 		overflow-y: auto;
 	}
 
-	/* BBS-style thread history */
+	.tool-section {
+		padding: var(--space-sm) var(--space-md);
+		border-bottom: 1px solid var(--border-subtle);
+	}
+
+	.tool-section:last-child {
+		border-bottom: none;
+	}
+
+	.tool-header {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: var(--space-xs) 0;
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: var(--text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.tool-collapse-btn {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
+		padding: var(--space-sm) 0;
+		border: none;
+		background: transparent;
+		color: var(--text-secondary);
+		font-size: 0.78rem;
+		font-weight: 600;
+		cursor: pointer;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		transition: color 0.15s;
+	}
+
+	.tool-collapse-btn:hover {
+		color: var(--text-primary);
+	}
+
+	.tool-chevron {
+		margin-left: auto;
+		transition: transform 0.2s;
+	}
+
+	.tool-chevron--open {
+		transform: rotate(180deg);
+	}
+
+	.tool-collapse-content {
+		padding: var(--space-xs) 0 var(--space-sm);
+	}
+
+	/* ── Drawer (session log) ── */
+	.drawer-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 59;
+		animation: fade-in 0.2s ease;
+	}
+
+	@keyframes fade-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	.drawer {
+		position: fixed;
+		right: 0;
+		top: 0;
+		bottom: 0;
+		width: 400px;
+		max-width: 90vw;
+		background: var(--bg-base);
+		border-left: 1px solid var(--border-subtle);
+		z-index: 60;
+		display: flex;
+		flex-direction: column;
+		transform: translateX(100%);
+		transition: transform 0.3s ease;
+		box-shadow: -8px 0 32px rgba(0, 0, 0, 0.3);
+	}
+
+	.drawer--open {
+		transform: translateX(0);
+	}
+
+	.drawer-header {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-md) var(--space-lg);
+		background: var(--bg-surface);
+		border-bottom: 1px solid var(--border-subtle);
+		flex-shrink: 0;
+	}
+
+	.drawer-header h2 {
+		font-family: var(--font-display);
+		font-size: 0.9rem;
+		font-weight: 500;
+		color: var(--text-secondary);
+		margin: 0;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		flex: 1;
+	}
+
+	.drawer-close {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.drawer-close:hover {
+		background: var(--bg-hover);
+		color: var(--text-primary);
+	}
+
+	.drawer-finish-response {
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(251, 191, 36, 0.1);
+		border-bottom: 1px solid rgba(251, 191, 36, 0.3);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+
+	/* BBS-style thread history (in drawer) */
 	.history-timeline {
 		flex: 1;
 		overflow-y: auto;
@@ -1019,6 +1395,7 @@
 		align-items: center;
 		gap: var(--space-sm);
 		margin-bottom: var(--space-sm);
+		flex-wrap: wrap;
 	}
 
 	.post-number {
@@ -1196,171 +1573,6 @@
 		margin: 0;
 	}
 
-	/* Submit area (left panel bottom) */
-	.submit-area {
-		padding: var(--space-md) var(--space-lg);
-		background: var(--bg-surface);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-md);
-	}
-
-	.save-area {
-		border-top: 1px solid var(--border-subtle);
-		padding: var(--space-md) var(--space-lg);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-sm);
-	}
-
-	.submit-area--disabled {
-		opacity: 0.5;
-	}
-
-	.waiting-hint {
-		text-align: center;
-		font-size: 0.75rem;
-		color: var(--text-muted);
-		font-style: italic;
-		padding-bottom: var(--space-xs);
-	}
-
-	.diff-error {
-		font-size: 0.78rem;
-		color: var(--error);
-		padding: 4px 8px;
-		background: rgba(248, 113, 113, 0.1);
-		border-radius: 4px;
-	}
-
-	.comment-textarea {
-		width: 100%;
-		font-size: 0.8rem;
-		padding: var(--space-sm) var(--space-md);
-		border: 1px solid var(--border-default);
-		border-radius: 6px;
-		background: var(--bg-base);
-		color: var(--text-primary);
-		resize: none;
-		box-sizing: border-box;
-	}
-
-	.comment-textarea:focus {
-		outline: none;
-		border-color: var(--accent-primary);
-		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
-	}
-
-	.comment-textarea::placeholder {
-		color: var(--text-muted);
-		opacity: 0.6;
-	}
-
-	.btn-submit-turn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-sm);
-		width: 100%;
-		padding: var(--space-sm) var(--space-lg);
-		border-radius: var(--radius-md);
-		background: var(--accent-primary);
-		color: #fff;
-		border: none;
-		font-size: 0.82rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.btn-submit-turn:hover:not(:disabled) {
-		background: var(--accent-secondary);
-		transform: translateY(-1px);
-	}
-
-	.btn-submit-turn:disabled {
-		opacity: 0.4;
-		cursor: default;
-	}
-
-	.spinner {
-		width: 14px;
-		height: 14px;
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		border-top-color: #fff;
-		border-radius: 50%;
-		animation: spin 0.6s linear infinite;
-	}
-
-	@keyframes spin {
-		to { transform: rotate(360deg); }
-	}
-
-	.right-section {
-		padding: var(--space-md);
-	}
-
-	.right-section--bottom {
-		border-top: 1px solid var(--border-subtle);
-		padding: var(--space-md) var(--space-lg);
-	}
-
-	.panel-header-right {
-		display: flex;
-		align-items: center;
-		gap: var(--space-md);
-	}
-
-	.transpose-controls {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-	}
-
-	.transpose-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 24px;
-		height: 24px;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		background: var(--bg-elevated);
-		color: var(--text-secondary);
-		font-size: 0.85rem;
-		font-weight: 700;
-		font-family: var(--font-mono);
-		cursor: pointer;
-		transition: all 0.15s;
-		line-height: 1;
-	}
-
-	.transpose-btn:hover {
-		background: var(--bg-hover);
-		border-color: var(--accent-primary);
-		color: var(--accent-primary);
-	}
-
-	.transpose-label {
-		font-family: var(--font-mono);
-		font-size: 0.72rem;
-		color: var(--text-muted);
-		min-width: 48px;
-		text-align: center;
-	}
-
-	/* Score area (right panel) */
-	.score-area {
-		padding: var(--space-md);
-	}
-
-	.empty-score {
-		text-align: center;
-		color: var(--text-muted);
-		padding: var(--space-xl);
-		font-size: 0.85rem;
-	}
-
 	.error-banner {
 		background: rgba(248, 113, 113, 0.1);
 		border: 1px solid rgba(248, 113, 113, 0.3);
@@ -1393,74 +1605,30 @@
 		margin: 0;
 	}
 
-	/* Tools section (collapsible) */
-	.tools-section {
-		border-top: 1px solid var(--border-subtle);
-	}
+	/* ── Responsive: 600px and below ── */
+	@media (max-width: 600px) {
+		.editor-layout {
+			grid-template-columns: 1fr;
+		}
 
-	.tools-toggle {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		width: 100%;
-		padding: var(--space-sm) var(--space-lg);
-		border: none;
-		background: var(--bg-surface);
-		color: var(--text-secondary);
-		font-size: 0.78rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.15s;
-	}
+		.panel-tools {
+			position: static;
+			max-height: none;
+		}
 
-	.tools-toggle:hover {
-		background: var(--bg-hover);
-		color: var(--text-primary);
-	}
+		.drawer {
+			width: 100vw;
+			max-width: 100vw;
+		}
 
-	.tools-chevron {
-		margin-left: auto;
-		transition: transform 0.2s;
-	}
+		.thread-header {
+			flex-wrap: wrap;
+			gap: var(--space-sm);
+		}
 
-	.tools-chevron--open {
-		transform: rotate(180deg);
-	}
-
-	.tools-tabs {
-		display: flex;
-		gap: 2px;
-		padding: var(--space-xs) var(--space-lg);
-		background: var(--bg-surface);
-		border-top: 1px solid var(--border-subtle);
-	}
-
-	.tools-tab {
-		flex: 1;
-		padding: 4px 10px;
-		border: none;
-		border-radius: var(--radius-sm);
-		background: transparent;
-		color: var(--text-muted);
-		font-family: var(--font-mono);
-		font-size: 0.72rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.12s;
-		text-align: center;
-	}
-
-	.tools-tab:hover {
-		color: var(--text-primary);
-	}
-
-	.tools-tab--active {
-		background: var(--bg-elevated);
-		color: var(--accent-primary);
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-	}
-
-	.tools-content {
-		padding: var(--space-sm) var(--space-md);
+		.header-actions {
+			width: 100%;
+			justify-content: flex-end;
+		}
 	}
 </style>

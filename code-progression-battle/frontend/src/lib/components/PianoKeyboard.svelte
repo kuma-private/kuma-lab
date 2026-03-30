@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 
-	let { collapsed = true, onToggle }: { collapsed?: boolean; onToggle?: (open: boolean) => void } = $props();
+	let {
+		playingNotes = [] as string[],
+	}: {
+		playingNotes?: string[];
+	} = $props();
 
-	let isCollapsed = $state(collapsed);
 	let activeKeys = $state<Set<string>>(new Set());
 	let scrollContainer: HTMLDivElement | undefined = $state();
 
@@ -20,7 +23,7 @@
 		'A#': { label: 'A#', offsetIndex: 6 },
 	};
 
-	const WHITE_KEY_WIDTH = 40; // px fixed
+	const WHITE_KEY_WIDTH = 32; // px - slightly narrower for dock layout
 	const BLACK_KEY_WIDTH = WHITE_KEY_WIDTH * 0.6;
 	const TOTAL_WHITE_KEYS = OCTAVE_COUNT * 7 + 1; // +1 for final C7
 	const TOTAL_WIDTH = TOTAL_WHITE_KEYS * WHITE_KEY_WIDTH;
@@ -56,6 +59,10 @@
 	};
 
 	const keys = buildKeys();
+
+	// Combine user-pressed keys and playing notes for highlight
+	const playingSet = $derived(new Set(playingNotes));
+	const isHighlighted = (note: string): boolean => activeKeys.has(note) || playingSet.has(note);
 
 	// Synth module loaded lazily
 	let synthModule: typeof import('$lib/chord-player') | null = null;
@@ -94,137 +101,65 @@
 		handleKeyUp(note);
 	};
 
-	const toggleCollapse = () => {
-		isCollapsed = !isCollapsed;
-		onToggle?.(!isCollapsed);
-	};
-
-	// Scroll to C4 on mount / when opened
+	// Scroll to C4 on mount
 	const scrollToC4 = () => {
 		if (!scrollContainer) return;
-		// C4 is at octave index 3 (C1=0, C2=1, C3=2, C4=3)
-		const c4WhiteIndex = (4 - OCTAVE_START) * 7; // white keys before C4
+		const c4WhiteIndex = (4 - OCTAVE_START) * 7;
 		const c4Left = c4WhiteIndex * WHITE_KEY_WIDTH;
 		const containerWidth = scrollContainer.clientWidth;
 		scrollContainer.scrollLeft = c4Left - containerWidth / 2 + WHITE_KEY_WIDTH / 2;
 	};
 
 	onMount(() => {
-		if (!isCollapsed) {
-			requestAnimationFrame(scrollToC4);
-		}
+		requestAnimationFrame(scrollToC4);
 	});
 
 	$effect(() => {
-		if (!isCollapsed && scrollContainer) {
+		if (scrollContainer) {
 			requestAnimationFrame(scrollToC4);
 		}
 	});
 </script>
 
-<div class="piano-dock" class:piano-dock--open={!isCollapsed}>
-	<div class="piano-toolbar">
-		<button class="piano-toggle-btn" onclick={toggleCollapse}>
-			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M9 18V5l12-2v13" />
-				<circle cx="6" cy="18" r="3" />
-				<circle cx="18" cy="16" r="3" />
-			</svg>
-			<span>鍵盤</span>
-			<svg
-				class="piano-chevron"
-				class:piano-chevron--open={!isCollapsed}
-				width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+<div class="piano-scroll" bind:this={scrollContainer}>
+	<div class="piano-keys" style="width: {TOTAL_WIDTH}px">
+		{#each keys.whites as key}
+			<button
+				class="wk"
+				class:wk--active={activeKeys.has(key.note)}
+				class:wk--playing={playingSet.has(key.note)}
+				style="left: {key.left}px; width: {WHITE_KEY_WIDTH}px"
+				onpointerdown={() => handleKeyDown(key.note)}
+				onpointerup={() => handleKeyUp(key.note)}
+				onpointerleave={() => handlePointerLeave(key.note)}
 			>
-				<polyline points="4,6 8,10 12,6" />
-			</svg>
-		</button>
+				<span class="wk-label">{key.label}</span>
+			</button>
+		{/each}
+
+		{#each keys.blacks as key}
+			<button
+				class="bk"
+				class:bk--active={activeKeys.has(key.note)}
+				class:bk--playing={playingSet.has(key.note)}
+				style="left: {key.left}px; width: {BLACK_KEY_WIDTH}px"
+				onpointerdown={() => handleKeyDown(key.note)}
+				onpointerup={() => handleKeyUp(key.note)}
+				onpointerleave={() => handlePointerLeave(key.note)}
+			>
+				<span class="bk-label">{key.label}</span>
+			</button>
+		{/each}
 	</div>
-
-	{#if !isCollapsed}
-		<div class="piano-scroll" bind:this={scrollContainer}>
-			<div class="piano-keys" style="width: {TOTAL_WIDTH}px">
-				{#each keys.whites as key}
-					<button
-						class="wk"
-						class:wk--active={activeKeys.has(key.note)}
-						style="left: {key.left}px; width: {WHITE_KEY_WIDTH}px"
-						onpointerdown={() => handleKeyDown(key.note)}
-						onpointerup={() => handleKeyUp(key.note)}
-						onpointerleave={() => handlePointerLeave(key.note)}
-					>
-						<span class="wk-label">{key.label}</span>
-					</button>
-				{/each}
-
-				{#each keys.blacks as key}
-					<button
-						class="bk"
-						class:bk--active={activeKeys.has(key.note)}
-						style="left: {key.left}px; width: {BLACK_KEY_WIDTH}px"
-						onpointerdown={() => handleKeyDown(key.note)}
-						onpointerup={() => handleKeyUp(key.note)}
-						onpointerleave={() => handlePointerLeave(key.note)}
-					>
-						<span class="bk-label">{key.label}</span>
-					</button>
-				{/each}
-			</div>
-		</div>
-	{/if}
 </div>
 
 <style>
-	.piano-dock {
-		position: fixed;
-		bottom: var(--player-height);
-		left: 0;
-		right: 0;
-		width: 100vw;
-		z-index: 49;
-		background: rgba(10, 10, 26, 0.95);
-		backdrop-filter: blur(16px);
-		border-top: 1px solid var(--border-subtle);
-	}
-
-	.piano-toolbar {
-		display: flex;
-		align-items: center;
-		padding: 0 var(--space-lg);
-		height: 32px;
-	}
-
-	.piano-toggle-btn {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		border: none;
-		background: transparent;
-		color: var(--text-secondary);
-		font-size: 0.78rem;
-		font-weight: 500;
-		cursor: pointer;
-		padding: 4px 0;
-		transition: color 0.15s;
-	}
-
-	.piano-toggle-btn:hover {
-		color: var(--text-primary);
-	}
-
-	.piano-chevron {
-		transition: transform 0.2s;
-	}
-
-	.piano-chevron--open {
-		transform: rotate(180deg);
-	}
-
 	.piano-scroll {
-		width: 100vw;
+		flex: 1;
 		overflow-x: auto;
 		overflow-y: hidden;
 		-webkit-overflow-scrolling: touch;
+		min-width: 0;
 	}
 
 	/* Hide scrollbar but keep scrolling */
@@ -241,7 +176,7 @@
 
 	.piano-keys {
 		position: relative;
-		height: 80px;
+		height: 64px;
 		user-select: none;
 		touch-action: none;
 	}
@@ -254,15 +189,15 @@
 		background: #f0f0f0;
 		border: 1px solid #c0c0c0;
 		border-top: none;
-		border-radius: 0 0 5px 5px;
+		border-radius: 0 0 4px 4px;
 		cursor: pointer;
 		display: flex;
 		align-items: flex-end;
 		justify-content: center;
-		padding-bottom: 8px;
-		transition: background 0.08s;
+		padding-bottom: 4px;
+		transition: background 0.08s, box-shadow 0.08s;
 		z-index: 1;
-		box-shadow: inset 0 -4px 6px rgba(0, 0, 0, 0.06), 0 2px 3px rgba(0, 0, 0, 0.15);
+		box-shadow: inset 0 -3px 5px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.15);
 	}
 
 	.wk:hover {
@@ -274,15 +209,21 @@
 		box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 	}
 
+	.wk--playing {
+		background: var(--accent-primary) !important;
+		box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 8px rgba(167, 139, 250, 0.5);
+	}
+
 	.wk-label {
-		font-size: 0.55rem;
+		font-size: 0.48rem;
 		font-family: var(--font-mono);
 		color: #888;
 		font-weight: 600;
 		pointer-events: none;
 	}
 
-	.wk--active .wk-label {
+	.wk--active .wk-label,
+	.wk--playing .wk-label {
 		color: #fff;
 	}
 
@@ -290,19 +231,19 @@
 	.bk {
 		position: absolute;
 		top: 0;
-		height: 52px;
+		height: 40px;
 		background: #2a2a2a;
 		border: 1px solid #111;
 		border-top: none;
-		border-radius: 0 0 4px 4px;
+		border-radius: 0 0 3px 3px;
 		cursor: pointer;
 		display: flex;
 		align-items: flex-end;
 		justify-content: center;
-		padding-bottom: 5px;
-		transition: background 0.08s;
+		padding-bottom: 3px;
+		transition: background 0.08s, box-shadow 0.08s;
 		z-index: 2;
-		box-shadow: 0 3px 5px rgba(0, 0, 0, 0.4), inset 0 -2px 3px rgba(255, 255, 255, 0.05);
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), inset 0 -2px 3px rgba(255, 255, 255, 0.05);
 	}
 
 	.bk:hover {
@@ -314,25 +255,31 @@
 		box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 	}
 
+	.bk--playing {
+		background: var(--accent-primary) !important;
+		box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 6px rgba(167, 139, 250, 0.5);
+	}
+
 	.bk-label {
-		font-size: 0.42rem;
+		font-size: 0.38rem;
 		font-family: var(--font-mono);
 		color: #666;
 		font-weight: 600;
 		pointer-events: none;
 	}
 
-	.bk--active .bk-label {
+	.bk--active .bk-label,
+	.bk--playing .bk-label {
 		color: #fff;
 	}
 
 	@media (max-width: 700px) {
 		.piano-keys {
-			height: 70px;
+			height: 56px;
 		}
 
 		.bk {
-			height: 45px;
+			height: 35px;
 		}
 	}
 </style>
