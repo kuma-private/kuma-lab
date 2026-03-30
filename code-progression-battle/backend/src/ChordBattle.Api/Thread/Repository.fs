@@ -224,40 +224,127 @@ module Repository =
                 return thread
             }
 
-        let update (_thread: Thread) : Task<Thread> =
+        let private lineToDict (line: Line) : System.Collections.Generic.Dictionary<string, obj> =
+            System.Collections.Generic.Dictionary<string, obj>(
+                dict
+                    [ "lineNumber", line.LineNumber :> obj
+                      "chords", line.Chords :> obj
+                      "addedBy", line.AddedBy :> obj
+                      "addedByName", line.AddedByName :> obj
+                      "lastEditedBy", line.LastEditedBy :> obj ]
+            )
+
+        let private turnActionToDict (a: TurnAction) : System.Collections.Generic.Dictionary<string, obj> =
+            System.Collections.Generic.Dictionary<string, obj>(
+                dict
+                    [ "turnNumber", a.TurnNumber :> obj
+                      "userId", a.UserId :> obj
+                      "userName", a.UserName :> obj
+                      "action", a.Action :> obj
+                      "lineNumber", a.LineNumber :> obj
+                      "chords", a.Chords :> obj
+                      "previousChords", a.PreviousChords :> obj
+                      "comment", a.Comment :> obj
+                      "createdAt", Timestamp.FromDateTime(a.CreatedAt.ToUniversalTime()) :> obj ]
+            )
+
+        let private updateFields (docRef: DocumentReference) (updates: (string * obj) list) =
             task {
-                // TODO: Firestore update implementation
-                return _thread
+                let dict = System.Collections.Generic.Dictionary<string, obj>()
+                for (k, v) in updates do
+                    dict.[k] <- v
+                let! _ = docRef.UpdateAsync(dict)
+                ()
             }
 
-        let joinThread (_threadId: string) (_opponentId: string) (_opponentName: string) : Task<Thread option> =
+        let update (thread: Thread) : Task<Thread> =
             task {
-                // TODO: Firestore implementation
-                return None
+                let docRef = db.Value.Collection("threads").Document(thread.Id)
+                let lineDicts = thread.Lines |> List.map (fun l -> lineToDict l :> obj)
+                let histDicts = thread.History |> List.map (fun a -> turnActionToDict a :> obj)
+                do! updateFields docRef [
+                    "lines", (System.Collections.Generic.List<obj>(lineDicts) :> obj)
+                    "history", (System.Collections.Generic.List<obj>(histDicts) :> obj)
+                    "status", thread.Status :> obj
+                    "currentTurn", thread.CurrentTurn :> obj
+                    "turnCount", thread.TurnCount :> obj
+                    "finishProposedBy", thread.FinishProposedBy :> obj
+                    "opponentId", thread.OpponentId :> obj
+                    "opponentName", thread.OpponentName :> obj
+                ]
+                return thread
             }
 
-        let executeTurn (_threadId: string) (_action: TurnAction) (_updatedLines: Line list) (_nextTurn: string) : Task<Thread option> =
+        let joinThread (threadId: string) (opponentId: string) (opponentName: string) : Task<Thread option> =
             task {
-                // TODO: Firestore implementation
-                return None
+                let! existing = getById threadId
+                match existing with
+                | None -> return None
+                | Some thread ->
+                    let updated =
+                        { thread with
+                            OpponentId = opponentId
+                            OpponentName = opponentName
+                            Status = "active" }
+                    let! result = update updated
+                    return Some result
             }
 
-        let proposeFinish (_threadId: string) (_userId: string) (_nextTurn: string) : Task<Thread option> =
+        let executeTurn (threadId: string) (action: TurnAction) (updatedLines: Line list) (nextTurn: string) : Task<Thread option> =
             task {
-                // TODO: Firestore implementation
-                return None
+                let! existing = getById threadId
+                match existing with
+                | None -> return None
+                | Some thread ->
+                    let updated =
+                        { thread with
+                            Lines = updatedLines
+                            History = thread.History @ [ action ]
+                            CurrentTurn = nextTurn
+                            TurnCount = thread.TurnCount + 1 }
+                    let! result = update updated
+                    return Some result
             }
 
-        let acceptFinish (_threadId: string) : Task<Thread option> =
+        let proposeFinish (threadId: string) (userId: string) (nextTurn: string) : Task<Thread option> =
             task {
-                // TODO: Firestore implementation
-                return None
+                let! existing = getById threadId
+                match existing with
+                | None -> return None
+                | Some thread ->
+                    let updated =
+                        { thread with
+                            Status = "finish_proposed"
+                            FinishProposedBy = userId
+                            CurrentTurn = nextTurn }
+                    let! result = update updated
+                    return Some result
             }
 
-        let rejectFinish (_threadId: string) (_rejecterTurn: string) : Task<Thread option> =
+        let acceptFinish (threadId: string) : Task<Thread option> =
             task {
-                // TODO: Firestore implementation
-                return None
+                let! existing = getById threadId
+                match existing with
+                | None -> return None
+                | Some thread ->
+                    let updated = { thread with Status = "completed" }
+                    let! result = update updated
+                    return Some result
+            }
+
+        let rejectFinish (threadId: string) (rejecterTurn: string) : Task<Thread option> =
+            task {
+                let! existing = getById threadId
+                match existing with
+                | None -> return None
+                | Some thread ->
+                    let updated =
+                        { thread with
+                            Status = "active"
+                            FinishProposedBy = ""
+                            CurrentTurn = rejecterTurn }
+                    let! result = update updated
+                    return Some result
             }
 
     type IThreadRepository =
