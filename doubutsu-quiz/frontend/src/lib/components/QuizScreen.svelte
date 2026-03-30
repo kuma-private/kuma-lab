@@ -134,8 +134,10 @@
 	<!-- Answer input area -->
 	{#if !quiz.revealed}
 		<div class="input-area" class:shake={shakeInput}>
-			{#if quiz.wrongAnswer}
-				<div class="wrong-msg pop-in">&#x274C; ちがうよ〜</div>
+			{#if quiz.closeAnswer}
+				<div class="close-msg pop-in">{'\u{1F525}'} おしい！</div>
+			{:else if quiz.wrongAnswer}
+				<div class="wrong-msg pop-in">{'\u274C'} ちがうよ〜</div>
 			{/if}
 
 			<div class="input-row">
@@ -254,6 +256,15 @@
 		color: #E57373;
 		padding: 4px 16px;
 		background: #FFEBEE;
+		border-radius: 16px;
+	}
+
+	.close-msg {
+		font-size: 1.1rem;
+		font-weight: 900;
+		color: var(--primary);
+		padding: 6px 20px;
+		background: #FFF3E0;
 		border-radius: 16px;
 	}
 

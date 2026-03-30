@@ -52,9 +52,8 @@
 					>
 						<div class="review-num">{i + 1}</div>
 						<div class="review-score-badge">
-							{#if quiz.scores[i] === 3}&#x2B50;
-							{:else if quiz.scores[i] >= 1}&#x2705;
-							{:else}&#x1F4A1;
+							{#if quiz.scores[i] >= 1}&#x2B50;
+							{:else}&#x1F4A8;
 							{/if}
 						</div>
 						<div class="review-img-wrap">

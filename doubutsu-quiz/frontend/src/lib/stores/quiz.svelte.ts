@@ -23,7 +23,8 @@ class QuizState {
 
 	// Quiz state
 	wrongAnswer: boolean = $state(false);
-		hintsUsed: number = $state(0);
+	closeAnswer: boolean = $state(false);
+	hintsUsed: number = $state(0);
 	scores: number[] = $state([]);
 
 	async checkLogin() {
@@ -76,17 +77,23 @@ class QuizState {
 
 		if (!guess || guess.length < 2) return false;
 
-		// Exact match, or mutual substring (at least 2 chars)
+		// Exact match, or mutual substring
 		if (answer === guess || answer.includes(guess) || guess.includes(answer)) {
 			this.revealed = true;
 			this.blurStage = 3;
 			this.wrongAnswer = false;
-				this.scores.push(Math.max(0, 3 - this.hintsUsed));
+			this.closeAnswer = false;
+			this.scores.push(1);
 			return true;
 		}
 
-		this.wrongAnswer = true;
-		setTimeout(() => { this.wrongAnswer = false; }, 800);
+		// Check if close (shares 50%+ characters)
+		const shared = [...guess].filter(c => answer.includes(c)).length;
+		const isClose = guess.length >= 2 && shared >= Math.ceil(answer.length * 0.4);
+
+		this.closeAnswer = isClose;
+		this.wrongAnswer = !isClose;
+		setTimeout(() => { this.wrongAnswer = false; this.closeAnswer = false; }, 1200);
 		return false;
 	}
 
@@ -118,6 +125,7 @@ class QuizState {
 		this.blurStage = 0;
 		this.revealed = false;
 		this.wrongAnswer = false;
+		this.closeAnswer = false;
 		this.hintsUsed = 0;
 	}
 
@@ -126,7 +134,7 @@ class QuizState {
 	}
 
 	get maxScore(): number {
-		return this.items.length * 3;
+		return this.items.length;
 	}
 
 	reset() {
