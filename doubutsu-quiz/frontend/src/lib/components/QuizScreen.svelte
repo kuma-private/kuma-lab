@@ -33,7 +33,8 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') {
+		// Ignore Enter during IME composition (Japanese input)
+		if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) {
 			e.preventDefault();
 			handleSubmit();
 		}
@@ -142,17 +143,17 @@
 				/>
 				{#if micSupported()}
 					<button class="mic-btn" class:listening onclick={toggleMic}>
-						{listening ? '&#x1F534;' : '&#x1F3A4;'}
+						{listening ? '\u{1F534}' : '\u{1F3A4}'}
 					</button>
 				{/if}
 				<button class="submit-btn" onclick={handleSubmit} disabled={!inputText.trim()}>
-					&#x2705;
+					{'\u2705'}
 				</button>
 			</div>
 
-			{#if quiz.showHintOffer}
-				<button class="hint-btn pop-in" onclick={handleHint}>
-					&#x1F4A1; ヒントをもらう？（のこり {3 - quiz.hintsUsed}）
+			{#if quiz.hintsUsed < 3}
+				<button class="hint-btn" onclick={handleHint}>
+					{'\u{1F4A1}'} ヒントをもらう（のこり {3 - quiz.hintsUsed}）
 				</button>
 			{/if}
 		</div>

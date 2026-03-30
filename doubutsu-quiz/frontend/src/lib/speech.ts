@@ -1,26 +1,25 @@
 let audioCtx: AudioContext | null = null;
 
-function getAudioContext(): AudioContext {
-	if (!audioCtx) {
-		audioCtx = new AudioContext();
-	}
-	return audioCtx;
-}
-
-// Must be called from a user interaction event (tap/click) to enable audio on mobile
+// Only create AudioContext on user interaction
 export function initAudio(): void {
-	const ctx = getAudioContext();
-	if (ctx.state === 'suspended') {
-		ctx.resume();
+	if (!audioCtx) {
+		try {
+			audioCtx = new AudioContext();
+		} catch {
+			// AudioContext not supported
+		}
+	}
+	if (audioCtx && audioCtx.state === 'suspended') {
+		audioCtx.resume().catch(() => {});
 	}
 }
 
 async function playVoicevox(text: string): Promise<boolean> {
+	if (!audioCtx) return false;
+
 	try {
-		const ctx = getAudioContext();
-		// Resume on every play attempt for mobile safety
-		if (ctx.state === 'suspended') {
-			await ctx.resume();
+		if (audioCtx.state === 'suspended') {
+			await audioCtx.resume();
 		}
 
 		const res = await fetch('/api/voice', {
@@ -33,10 +32,10 @@ async function playVoicevox(text: string): Promise<boolean> {
 		if (!res.ok) return false;
 
 		const arrayBuffer = await res.arrayBuffer();
-		const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-		const source = ctx.createBufferSource();
+		const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+		const source = audioCtx.createBufferSource();
 		source.buffer = audioBuffer;
-		source.connect(ctx.destination);
+		source.connect(audioCtx.destination);
 		source.start();
 		return true;
 	} catch {

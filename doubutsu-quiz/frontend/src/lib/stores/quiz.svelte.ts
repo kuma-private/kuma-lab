@@ -22,8 +22,7 @@ class QuizState {
 
 	// Quiz state
 	wrongAnswer: boolean = $state(false);
-	showHintOffer: boolean = $state(false);
-	hintsUsed: number = $state(0);
+		hintsUsed: number = $state(0);
 	scores: number[] = $state([]);
 
 	async checkLogin() {
@@ -71,13 +70,11 @@ class QuizState {
 			this.revealed = true;
 			this.blurStage = 3;
 			this.wrongAnswer = false;
-			this.showHintOffer = false;
-			this.scores.push(Math.max(0, 3 - this.hintsUsed));
+				this.scores.push(Math.max(0, 3 - this.hintsUsed));
 			return true;
 		}
 
 		this.wrongAnswer = true;
-		this.showHintOffer = true;
 		setTimeout(() => { this.wrongAnswer = false; }, 800);
 		return false;
 	}
@@ -86,7 +83,6 @@ class QuizState {
 		if (this.revealed) return;
 
 		this.hintsUsed++;
-		this.showHintOffer = false;
 
 		if (this.hintsUsed >= 3) {
 			// Auto-reveal after 3 hints
@@ -111,7 +107,6 @@ class QuizState {
 		this.blurStage = 0;
 		this.revealed = false;
 		this.wrongAnswer = false;
-		this.showHintOffer = false;
 		this.hintsUsed = 0;
 	}
 
