@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { quiz } from '../stores/quiz.svelte';
+	import { onMount } from 'svelte';
 
 	let entered = $state(false);
 
-	$effect(() => {
+	onMount(() => {
+		quiz.checkLogin();
 		setTimeout(() => { entered = true; }, 100);
 	});
 </script>
@@ -15,21 +17,32 @@
 		<span class="title-deco float" style="animation-delay: 0.5s">&#x2728;</span>
 	</div>
 
-	<div class="buttons">
-		<button class="genre-btn doubutsu" onclick={() => quiz.startQuiz('doubutsu')}>
-			<div class="btn-bg"></div>
-			<span class="genre-icon bounce" style="animation-delay: 0.2s">&#x1F418;</span>
-			<span class="genre-label">どうぶつ</span>
-			<span class="genre-sub">いぬ、ねこ、ぞう...</span>
-		</button>
+	{#if quiz.loggedIn}
+		<div class="buttons">
+			<button class="genre-btn doubutsu" onclick={() => quiz.startQuiz('doubutsu')}>
+				<span class="genre-icon bounce" style="animation-delay: 0.2s">&#x1F418;</span>
+				<span class="genre-label">どうぶつ</span>
+				<span class="genre-sub">いぬ、ねこ、ぞう...</span>
+			</button>
 
-		<button class="genre-btn yasai" onclick={() => quiz.startQuiz('yasai')}>
-			<div class="btn-bg"></div>
-			<span class="genre-icon bounce" style="animation-delay: 0.4s">&#x1F955;</span>
-			<span class="genre-label">やさい</span>
-			<span class="genre-sub">にんじん、トマト...</span>
-		</button>
-	</div>
+			<button class="genre-btn yasai" onclick={() => quiz.startQuiz('yasai')}>
+				<span class="genre-icon bounce" style="animation-delay: 0.4s">&#x1F955;</span>
+				<span class="genre-label">やさい</span>
+				<span class="genre-sub">にんじん、トマト...</span>
+			</button>
+		</div>
+
+		{#if quiz.userName}
+			<p class="welcome">&#x1F44B; {quiz.userName} さん</p>
+		{/if}
+	{:else}
+		<div class="login-area pop-in">
+			<p class="login-msg">あそぶには ログインしてね!</p>
+			<a class="login-btn" href="/auth/google">
+				<span>&#x1F513;</span> ログイン
+			</a>
+		</div>
+	{/if}
 
 	{#if quiz.error}
 		<p class="error pop-in">{quiz.error}</p>
@@ -128,6 +141,44 @@
 		font-weight: 400;
 		color: var(--text-light);
 		opacity: 0.8;
+	}
+
+	.welcome {
+		font-size: 0.85rem;
+		color: var(--text-light);
+	}
+
+	/* Login area */
+	.login-area {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 20px;
+	}
+
+	.login-msg {
+		font-size: 1.1rem;
+		font-weight: 700;
+		color: var(--text-light);
+	}
+
+	.login-btn {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 18px 48px;
+		font-size: 1.3rem;
+		font-weight: 900;
+		color: white;
+		background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+		border-radius: 50px;
+		box-shadow: var(--shadow-lg), var(--shadow-glow);
+		text-decoration: none;
+		transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	.login-btn:active {
+		transform: scale(0.93);
 	}
 
 	.error {

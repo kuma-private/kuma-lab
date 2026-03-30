@@ -33,8 +33,10 @@
 	</div>
 
 	<div class="score pop-in" style="animation-delay: 0.4s">
-		<span class="score-num">{quiz.items.length}</span>
-		<span class="score-label">もん クリア!</span>
+		<span class="score-num">{quiz.totalScore}</span>
+		<span class="score-sep">/</span>
+		<span class="score-max">{quiz.maxScore}</span>
+		<span class="score-label">てん</span>
 	</div>
 
 	<!-- Review cards -->
@@ -49,6 +51,12 @@
 						onclick={() => speakItem(item.name, item.sound)}
 					>
 						<div class="review-num">{i + 1}</div>
+						<div class="review-score-badge">
+							{#if quiz.scores[i] === 3}&#x2B50;
+							{:else if quiz.scores[i] >= 1}&#x2705;
+							{:else}&#x1F4A1;
+							{/if}
+						</div>
 						<div class="review-img-wrap">
 							<img src={item.url} alt={item.name} draggable="false" />
 						</div>
@@ -141,6 +149,17 @@
 		color: var(--primary);
 	}
 
+	.score-sep {
+		font-size: 1.2rem;
+		color: var(--text-light);
+	}
+
+	.score-max {
+		font-size: 1.2rem;
+		font-weight: 700;
+		color: var(--text-light);
+	}
+
 	.score-label {
 		font-size: 0.9rem;
 		font-weight: 700;
@@ -198,6 +217,13 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+	}
+
+	.review-score-badge {
+		position: absolute;
+		top: 6px;
+		right: 8px;
+		font-size: 0.9rem;
 	}
 
 	.review-img-wrap {

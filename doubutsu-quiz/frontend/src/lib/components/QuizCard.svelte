@@ -5,12 +5,10 @@
 		item,
 		blurStage,
 		revealed,
-		ontap
 	}: {
 		item: QuizItem;
 		blurStage: BlurStage;
 		revealed: boolean;
-		ontap: () => void;
 	} = $props();
 
 	const blurValues = [22, 12, 5, 0];
@@ -21,11 +19,6 @@
 		imgError = true;
 	}
 
-	// Name hint: reveal characters progressively
-	// Stage 0: 1 char open (first char)
-	// Stage 1: ~20% open
-	// Stage 2: ~40% open
-	// Stage 3: all open
 	function getHintText(name: string, stage: BlurStage): string {
 		const chars = [...name];
 		const len = chars.length;
@@ -33,7 +26,7 @@
 
 		let revealCount: number;
 		if (stage === 0) {
-			revealCount = 1; // Always show first char
+			revealCount = 1;
 		} else if (stage === 1) {
 			revealCount = Math.max(2, Math.ceil(len * 0.2));
 		} else {
@@ -61,7 +54,7 @@
 	</div>
 
 	<!-- Image card -->
-	<button class="card" onclick={ontap} class:revealed>
+	<div class="card" class:revealed>
 		{#if revealed}
 			<div class="reveal-ring"></div>
 		{/if}
@@ -78,15 +71,7 @@
 				/>
 			{/if}
 		</div>
-
-		{#if !revealed}
-			<div class="tap-hint">
-				<span class="tap-finger">&#x1F449;</span>
-				<span class="tap-text">タップ!</span>
-			</div>
-		{/if}
-
-	</button>
+	</div>
 
 	<!-- Sound bubble -->
 	{#if revealed}
@@ -112,7 +97,6 @@
 		gap: 8px;
 	}
 
-	/* Hint text */
 	.hint-area {
 		min-height: 36px;
 		display: flex;
@@ -150,10 +134,9 @@
 		animation: letterPop 0.4s ease-out backwards;
 	}
 
-	/* Card */
 	.card {
-		width: min(82vw, 340px);
-		height: min(82vw, 340px);
+		width: min(70vw, 280px);
+		height: min(70vw, 280px);
 		border-radius: var(--radius);
 		background: var(--surface);
 		box-shadow: var(--shadow-lg);
@@ -162,12 +145,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 0;
-		transition: transform 0.2s ease, box-shadow 0.3s ease;
-	}
-
-	.card:active {
-		transform: scale(0.96);
+		transition: box-shadow 0.3s ease;
 	}
 
 	.card.revealed {
@@ -190,7 +168,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 24px;
+		padding: 20px;
 	}
 
 	.image-wrapper img {
@@ -202,39 +180,14 @@
 	}
 
 	.fallback-emoji {
-		font-size: 6rem;
+		font-size: 5rem;
 	}
 
-	/* Tap hint */
-	.tap-hint {
-		position: absolute;
-		bottom: 18px;
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		background: rgba(255, 255, 255, 0.95);
-		padding: 10px 20px;
-		border-radius: 24px;
-		font-weight: 700;
-		color: var(--primary);
-		box-shadow: var(--shadow), 0 0 0 2px var(--primary-light);
-	}
-
-	.tap-finger {
-		font-size: 1.4rem;
-		animation: tapPulse 1.2s ease-in-out infinite;
-	}
-
-	.tap-text {
-		font-size: 1rem;
-	}
-
-	/* Sound bubble */
 	.sound-bubble {
 		background: var(--surface);
-		padding: 14px 28px;
+		padding: 12px 24px;
 		border-radius: 24px;
-		font-size: 1.4rem;
+		font-size: 1.2rem;
 		font-weight: 700;
 		color: var(--primary);
 		box-shadow: var(--shadow);
@@ -245,7 +198,7 @@
 	}
 
 	.sound-icon {
-		font-size: 1.2rem;
+		font-size: 1.1rem;
 	}
 
 	.sound-bubble::before {
@@ -261,17 +214,16 @@
 		border-bottom: 8px solid var(--surface);
 	}
 
-	/* Description */
 	.description {
 		background: var(--surface);
-		padding: 12px 20px;
+		padding: 10px 18px;
 		border-radius: 16px;
 		box-shadow: var(--shadow);
 		max-width: min(82vw, 340px);
 	}
 
 	.description p {
-		font-size: 0.8rem;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--text-light);
 		line-height: 1.6;

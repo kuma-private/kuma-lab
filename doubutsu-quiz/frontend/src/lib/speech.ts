@@ -7,8 +7,22 @@ function getAudioContext(): AudioContext {
 	return audioCtx;
 }
 
+// Must be called from a user interaction event (tap/click) to enable audio on mobile
+export function initAudio(): void {
+	const ctx = getAudioContext();
+	if (ctx.state === 'suspended') {
+		ctx.resume();
+	}
+}
+
 async function playVoicevox(text: string): Promise<boolean> {
 	try {
+		const ctx = getAudioContext();
+		// Resume on every play attempt for mobile safety
+		if (ctx.state === 'suspended') {
+			await ctx.resume();
+		}
+
 		const res = await fetch('/api/voice', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -19,7 +33,6 @@ async function playVoicevox(text: string): Promise<boolean> {
 		if (!res.ok) return false;
 
 		const arrayBuffer = await res.arrayBuffer();
-		const ctx = getAudioContext();
 		const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 		const source = ctx.createBufferSource();
 		source.buffer = audioBuffer;
@@ -43,7 +56,6 @@ function speakFallback(text: string): void {
 }
 
 export async function speak(text: string): Promise<void> {
-	// Try VOICEVOX first, fallback to Web Speech API
 	const success = await playVoicevox(text);
 	if (!success) {
 		speakFallback(text);

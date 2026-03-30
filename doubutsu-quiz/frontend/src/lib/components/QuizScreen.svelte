@@ -1,46 +1,93 @@
 <script lang="ts">
 	import { quiz } from '../stores/quiz.svelte';
-	import { speak } from '../speech';
+	import { speak, initAudio } from '../speech';
+	import { isSupported as micSupported, startListening, stop as stopListening } from '../recognition';
 	import ProgressDots from './ProgressDots.svelte';
 	import QuizCard from './QuizCard.svelte';
 	import Confetti from './Confetti.svelte';
 
 	let showConfetti = $state(false);
 	let showNext = $state(false);
-	let shakeCard = $state(false);
+	let shakeInput = $state(false);
+	let inputText = $state('');
+	let listening = $state(false);
+	let inputEl: HTMLInputElement;
 
-	function handleTap() {
+	function handleSubmit() {
 		if (quiz.revealed) return;
 
-		quiz.tap();
+		initAudio(); // ensure audio works on mobile
 
-		if (!quiz.revealed) {
-			shakeCard = true;
-			setTimeout(() => { shakeCard = false; }, 300);
+		const correct = quiz.checkAnswer(inputText);
+
+		if (correct) {
+			const item = quiz.items[quiz.currentIndex];
+			speak(`${item.name}! ${item.sound}`);
+			showConfetti = true;
+			inputText = '';
+			setTimeout(() => { showNext = true; }, 1800);
+		} else {
+			shakeInput = true;
+			setTimeout(() => { shakeInput = false; }, 500);
 		}
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			handleSubmit();
+		}
+	}
+
+	function handleHint() {
+		initAudio();
+		quiz.useHint();
 
 		if (quiz.revealed) {
+			// Auto-revealed after 3 hints
 			const item = quiz.items[quiz.currentIndex];
-			speak(`${item.name}! ${item.sound}`);  // fire-and-forget async
+			speak(`${item.name}! ${item.sound}`);
 			showConfetti = true;
+			inputText = '';
+			setTimeout(() => { showNext = true; }, 1800);
+		}
+	}
 
-			setTimeout(() => {
-				showNext = true;
-			}, 1800);
+	function toggleMic() {
+		initAudio();
+
+		if (listening) {
+			stopListening();
+			listening = false;
+		} else {
+			listening = true;
+			startListening(
+				(text) => {
+					inputText = text;
+					listening = false;
+					// Auto-check on voice result
+					setTimeout(() => handleSubmit(), 200);
+				},
+				() => { listening = false; }
+			);
 		}
 	}
 
 	function handleNext() {
 		showConfetti = false;
 		showNext = false;
+		inputText = '';
 		quiz.nextQuestion();
+		// Focus input for next question
+		setTimeout(() => inputEl?.focus(), 100);
 	}
 
 	$effect(() => {
 		quiz.currentIndex;
 		showConfetti = false;
 		showNext = false;
-		shakeCard = false;
+		shakeInput = false;
+		inputText = '';
 	});
 </script>
 
@@ -52,25 +99,23 @@
 			<span class="q-total">{quiz.items.length}</span>
 		</div>
 		<ProgressDots total={quiz.items.length} current={quiz.currentIndex} />
-		<div class="stage-label pop-in">
-			{#if quiz.blurStage === 0}
-				&#x1F50D; なにかな?
-			{:else if quiz.blurStage === 1}
-				&#x1F914; んー...
-			{:else if quiz.blurStage === 2}
-				&#x1F4A1; もうすこし!
-			{:else}
-				&#x1F389; せいかい!
-			{/if}
-		</div>
 	</div>
 
-	<div class="card-area" class:shake={shakeCard}>
+	{#if !quiz.revealed}
+		<div class="stage-label pop-in">
+			&#x1F50D; これ、なーんだ?
+		</div>
+	{:else}
+		<div class="stage-label pop-in correct">
+			&#x1F389; せいかい!
+		</div>
+	{/if}
+
+	<div class="card-area">
 		<QuizCard
 			item={quiz.items[quiz.currentIndex]}
 			blurStage={quiz.blurStage}
 			revealed={quiz.revealed}
-			ontap={handleTap}
 		/>
 	</div>
 
@@ -78,19 +123,52 @@
 		<Confetti />
 	{/if}
 
-	<div class="bottom-area">
-		{#if showNext}
-			<button class="next-btn pop-in" onclick={handleNext}>
-				{#if quiz.currentIndex < quiz.items.length - 1}
-					つぎへ &#x1F449;
-				{:else}
-					&#x1F389; おしまい!
+	<!-- Answer input area -->
+	{#if !quiz.revealed}
+		<div class="input-area" class:shake={shakeInput}>
+			{#if quiz.wrongAnswer}
+				<div class="wrong-msg pop-in">&#x274C; ちがうよ〜</div>
+			{/if}
+
+			<div class="input-row">
+				<input
+					bind:this={inputEl}
+					bind:value={inputText}
+					onkeydown={handleKeydown}
+					type="text"
+					placeholder="こたえを いれてね"
+					autocomplete="off"
+					class="answer-input"
+				/>
+				{#if micSupported()}
+					<button class="mic-btn" class:listening onclick={toggleMic}>
+						{listening ? '&#x1F534;' : '&#x1F3A4;'}
+					</button>
 				{/if}
-			</button>
-		{:else}
-			<div class="bottom-spacer"></div>
-		{/if}
-	</div>
+				<button class="submit-btn" onclick={handleSubmit} disabled={!inputText.trim()}>
+					&#x2705;
+				</button>
+			</div>
+
+			{#if quiz.showHintOffer}
+				<button class="hint-btn pop-in" onclick={handleHint}>
+					&#x1F4A1; ヒントをもらう？（のこり {3 - quiz.hintsUsed}）
+				</button>
+			{/if}
+		</div>
+	{:else}
+		<div class="bottom-area">
+			{#if showNext}
+				<button class="next-btn pop-in" onclick={handleNext}>
+					{#if quiz.currentIndex < quiz.items.length - 1}
+						つぎへ &#x1F449;
+					{:else}
+						&#x1F389; けっかをみる!
+					{/if}
+				</button>
+			{/if}
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -98,7 +176,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 6px;
+		gap: 8px;
 		padding: 8px 16px 16px;
 		width: 100%;
 		max-width: 420px;
@@ -133,23 +211,133 @@
 		box-shadow: var(--shadow);
 	}
 
+	.stage-label.correct {
+		background: var(--primary);
+		color: white;
+	}
+
 	.card-area {
-		transition: transform 0.1s ease;
+		width: 100%;
+		display: flex;
+		justify-content: center;
 	}
 
-	.card-area.shake {
-		animation: wiggle 0.3s ease-in-out;
+	/* Input area */
+	.input-area {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 10px;
 	}
 
+	.input-area.shake {
+		animation: wiggle 0.4s ease-in-out;
+	}
+
+	.wrong-msg {
+		font-size: 1rem;
+		font-weight: 700;
+		color: #E57373;
+		padding: 4px 16px;
+		background: #FFEBEE;
+		border-radius: 16px;
+	}
+
+	.input-row {
+		display: flex;
+		gap: 8px;
+		width: 100%;
+		max-width: 340px;
+	}
+
+	.answer-input {
+		flex: 1;
+		padding: 14px 18px;
+		font-size: 1.1rem;
+		font-weight: 700;
+		font-family: inherit;
+		border: 3px solid var(--primary-light);
+		border-radius: 20px;
+		background: var(--surface);
+		color: var(--text);
+		outline: none;
+		transition: border-color 0.2s;
+	}
+
+	.answer-input:focus {
+		border-color: var(--primary);
+	}
+
+	.answer-input::placeholder {
+		color: var(--primary-light);
+		font-weight: 400;
+	}
+
+	.mic-btn {
+		width: 52px;
+		height: 52px;
+		border-radius: 50%;
+		background: var(--surface);
+		box-shadow: var(--shadow);
+		font-size: 1.4rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: transform 0.2s;
+	}
+
+	.mic-btn.listening {
+		background: #FFEBEE;
+		animation: pulse 1s ease-in-out infinite;
+	}
+
+	.mic-btn:active {
+		transform: scale(0.9);
+	}
+
+	.submit-btn {
+		width: 52px;
+		height: 52px;
+		border-radius: 50%;
+		background: var(--primary);
+		box-shadow: var(--shadow);
+		font-size: 1.4rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: transform 0.2s, opacity 0.2s;
+	}
+
+	.submit-btn:disabled {
+		opacity: 0.4;
+	}
+
+	.submit-btn:active {
+		transform: scale(0.9);
+	}
+
+	.hint-btn {
+		padding: 10px 24px;
+		font-size: 0.9rem;
+		font-weight: 700;
+		color: var(--primary);
+		background: var(--surface);
+		border-radius: 20px;
+		box-shadow: var(--shadow);
+		transition: transform 0.2s;
+	}
+
+	.hint-btn:active {
+		transform: scale(0.95);
+	}
+
+	/* Bottom area */
 	.bottom-area {
 		min-height: 60px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-	}
-
-	.bottom-spacer {
-		height: 60px;
 	}
 
 	.next-btn {
