@@ -648,7 +648,7 @@
 	.thread-meta {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-sm);
 		flex-wrap: wrap;
 	}
 
@@ -751,10 +751,10 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: var(--space-md);
-		padding: var(--space-sm) var(--space-md);
+		gap: var(--space-lg);
+		padding: var(--space-md) var(--space-lg);
 		border-radius: var(--radius-md);
-		margin-bottom: var(--space-md);
+		margin-bottom: var(--space-lg);
 		background: rgba(251, 191, 36, 0.1);
 		border: 1px solid rgba(251, 191, 36, 0.3);
 	}
@@ -798,7 +798,7 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: var(--space-sm) var(--space-md);
+		padding: var(--space-md) var(--space-lg);
 		background: var(--bg-surface);
 		border-bottom: 1px solid var(--border-subtle);
 	}
@@ -832,13 +832,14 @@
 	.history-timeline {
 		flex: 1;
 		overflow-y: auto;
-		padding: var(--space-xs) 0;
+		padding: var(--space-sm) 0;
 		display: flex;
 		flex-direction: column;
+		gap: var(--space-xs);
 	}
 
 	.post {
-		padding: 10px var(--space-md);
+		padding: var(--space-md) var(--space-lg);
 		border-bottom: 1px solid var(--border-subtle);
 		animation: post-in 0.25s ease-out;
 		transition: background 0.15s;
@@ -860,8 +861,8 @@
 	.post-header {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		margin-bottom: 4px;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-sm);
 	}
 
 	.post-number {
@@ -912,20 +913,20 @@
 		font-family: var(--font-mono);
 		font-size: 0.85rem;
 		color: var(--text-primary);
-		padding: 6px 10px;
+		padding: var(--space-sm) var(--space-md);
 		background: rgba(0, 0, 0, 0.12);
 		border-radius: 6px;
-		margin: 4px 0 2px 30px;
+		margin: var(--space-sm) 0 var(--space-xs) 30px;
 		border-left: 2px solid rgba(167, 139, 250, 0.3);
 	}
 
 	.post-diff {
 		font-family: var(--font-mono);
 		font-size: 0.78rem;
-		margin: 4px 0 2px 30px;
+		margin: var(--space-sm) 0 var(--space-xs) 30px;
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-sm);
 		flex-wrap: wrap;
 	}
 
@@ -955,8 +956,8 @@
 	.post-comment {
 		color: var(--text-muted);
 		font-size: 0.78rem;
-		margin: 4px 0 0 30px;
-		padding-left: 8px;
+		margin: var(--space-sm) 0 0 30px;
+		padding-left: var(--space-sm);
 		border-left: 2px solid var(--border-default);
 	}
 
@@ -964,9 +965,9 @@
 	.ai-comment {
 		display: flex;
 		align-items: flex-start;
-		gap: 6px;
-		margin: 6px 0 0 30px;
-		padding: 6px 10px;
+		gap: var(--space-sm);
+		margin: var(--space-sm) 0 0 30px;
+		padding: var(--space-sm) var(--space-md);
 		background: rgba(96, 165, 250, 0.08);
 		border-radius: 6px;
 		border-left: 2px solid rgba(96, 165, 250, 0.3);
@@ -1019,12 +1020,13 @@
 
 	/* Submit area (left panel bottom) */
 	.submit-area {
-		border-top: 1px solid var(--border-subtle);
-		padding: var(--space-sm) var(--space-md);
+		border-top: 2px solid var(--border-default);
+		margin-top: var(--space-lg);
+		padding: var(--space-lg);
 		background: var(--bg-surface);
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-xs);
+		gap: var(--space-md);
 	}
 
 	.submit-area--disabled {
@@ -1050,7 +1052,7 @@
 	.comment-textarea {
 		width: 100%;
 		font-size: 0.8rem;
-		padding: 6px 10px;
+		padding: var(--space-sm) var(--space-md);
 		border: 1px solid var(--border-default);
 		border-radius: 6px;
 		background: var(--bg-base);
@@ -1074,9 +1076,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 6px;
+		gap: var(--space-sm);
 		width: 100%;
-		padding: 8px 16px;
+		padding: var(--space-sm) var(--space-lg);
 		border-radius: var(--radius-md);
 		background: var(--accent-primary);
 		color: #fff;
@@ -1111,17 +1113,17 @@
 	}
 
 	.right-section {
-		padding: var(--space-sm);
+		padding: var(--space-md);
 	}
 
 	.right-section--bottom {
 		border-top: 1px solid var(--border-subtle);
-		padding: var(--space-sm) var(--space-md);
+		padding: var(--space-md) var(--space-lg);
 	}
 
 	/* Score area (right panel) */
 	.score-area {
-		padding: var(--space-sm);
+		padding: var(--space-md);
 	}
 
 	.empty-score {
