@@ -832,10 +832,10 @@
 	.history-timeline {
 		flex: 1;
 		overflow-y: auto;
-		padding: var(--space-sm) 0;
+		padding: var(--space-md) var(--space-md);
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-xs);
+		gap: var(--space-sm);
 	}
 
 	.post {
