@@ -146,20 +146,18 @@
 				<div class="wrong-msg pop-in">{'\u274C'} ちがうよ〜</div>
 			{/if}
 
-			<div class="input-row">
-				<input
-					bind:this={inputEl}
-					bind:value={inputText}
-					onkeydown={handleKeydown}
-					type="text"
-					placeholder="こたえを いれてね"
-					autocomplete="off"
-					class="answer-input"
-				/>
-				<button class="submit-btn" onclick={handleSubmit} disabled={!inputText.trim()}>
-					こたえる
-				</button>
-			</div>
+			<input
+				bind:this={inputEl}
+				bind:value={inputText}
+				onkeydown={handleKeydown}
+				type="text"
+				placeholder="こたえを いれてね"
+				autocomplete="off"
+				class="answer-input"
+			/>
+			<button class="submit-btn" onclick={handleSubmit} disabled={!inputText.trim()}>
+				こたえる!
+			</button>
 
 			{#if micSupported()}
 				<button
@@ -288,15 +286,9 @@
 		border-radius: 16px;
 	}
 
-	.input-row {
-		display: flex;
-		gap: 8px;
+	.answer-input {
 		width: 100%;
 		max-width: 340px;
-	}
-
-	.answer-input {
-		flex: 1;
 		padding: 14px 18px;
 		font-size: 16px; /* minimum 16px to prevent iOS zoom */
 		font-weight: 700;
@@ -319,15 +311,16 @@
 	}
 
 	.submit-btn {
+		width: 100%;
+		max-width: 340px;
 		padding: 14px 24px;
 		border-radius: 20px;
 		background: var(--primary);
 		color: white;
-		font-size: 1rem;
+		font-size: 1.1rem;
 		font-weight: 900;
 		box-shadow: var(--shadow);
 		transition: transform 0.2s, opacity 0.2s;
-		white-space: nowrap;
 	}
 
 	.submit-btn:disabled {
