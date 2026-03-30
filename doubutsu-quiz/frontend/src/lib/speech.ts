@@ -15,6 +15,20 @@ export function initAudio(): void {
 	}
 }
 
+// Warmup: send a tiny request to wake up VOICEVOX Cloud Run
+export async function warmup(): Promise<void> {
+	try {
+		await fetch('/api/voice', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			credentials: 'include',
+			body: JSON.stringify({ text: 'あ' })
+		});
+	} catch {
+		// ignore
+	}
+}
+
 // Pre-load voice audio for all quiz items during loading phase
 export async function preloadVoices(texts: string[]): Promise<void> {
 	preloading = true;

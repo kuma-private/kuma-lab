@@ -1,6 +1,6 @@
 import type { Genre, QuizPhase, QuizItem, BlurStage } from '../types';
 import { fetchQuizImages } from '../api';
-import { preloadVoices, clearCache } from '../speech';
+import { preloadVoices, clearCache, warmup } from '../speech';
 
 // Normalize: katakana→hiragana, remove spaces/symbols
 function normalize(s: string): string {
@@ -45,15 +45,20 @@ class QuizState {
 		this.error = '';
 
 		try {
-			this.items = await fetchQuizImages(genre);
+			// Start VOICEVOX warmup AND quiz fetch in parallel
+			clearCache();
+			const warmupPromise = warmup();
+			const itemsPromise = fetchQuizImages(genre);
+
+			this.items = await itemsPromise;
 			this._resetQuestion();
 			this.scores = [];
-			this.phase = 'quiz';
 
-			// Pre-load all voice audio in background (fire-and-forget)
+			// Start preloading voices immediately (warmup should be done by now)
 			const voiceTexts = this.items.map(i => `${i.name}! ${i.sound}`);
-			clearCache();
 			preloadVoices(voiceTexts).catch(() => {});
+
+			this.phase = 'quiz';
 		} catch (e) {
 			if (e instanceof Error && e.message === 'LOGIN_REQUIRED') {
 				window.location.href = '/auth/google';
