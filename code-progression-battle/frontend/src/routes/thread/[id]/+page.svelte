@@ -188,11 +188,11 @@
 
 	// Friendly creative prompts that rotate
 	const myTurnPrompts = [
-		'Next chord is yours. What sounds good?',
+		'次のコードはあなたの番。何を加える?',
 		'あなたの番! コード進行を追加しよう',
-		'The score awaits your touch.',
-		'Time to add your voice.',
-		"It's your turn. Let's hear it!",
+		'スコアがあなたを待っています',
+		'あなたの声を加えよう',
+		"あなたのターンです。聴かせて!",
 	];
 
 	const pickPrompt = (turnCount: number): string => {
@@ -325,8 +325,8 @@
 			<!-- Left: Chat-style history + ADD input -->
 			<div class="panel panel-left">
 				<div class="panel-header">
-					<h2>Session Log</h2>
-					<span class="count">{thread.history.length} moves</span>
+					<h2>セッションログ</h2>
+					<span class="count">{thread.history.length} ターン</span>
 				</div>
 
 				<div class="history-timeline" bind:this={historyEl}>
@@ -374,8 +374,8 @@
 									<circle cx="18" cy="16" r="3" />
 								</svg>
 							</div>
-							<p class="empty-title">No moves yet</p>
-							<p class="empty-sub">Add the first chord to start the session!</p>
+							<p class="empty-title">まだターンがありません</p>
+							<p class="empty-sub">最初のコードを追加してセッションを始めよう!</p>
 						</div>
 					{/if}
 				</div>
@@ -437,7 +437,7 @@
 								<circle cx="6" cy="18" r="3" />
 								<circle cx="18" cy="16" r="3" />
 							</svg>
-							<p>The score is empty. Drop the first chord!</p>
+							<p>スコアはまだ空です。最初のコードを追加しよう!</p>
 						</div>
 					{:else}
 						{#each thread.lines as line, i}
