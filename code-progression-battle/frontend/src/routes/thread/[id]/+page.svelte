@@ -64,11 +64,15 @@
 		}
 	});
 
-	// Re-sync when thread updates (after submit, etc.)
+	// Re-sync when thread updates (after submit)
+	// Only reset if turnCount changed (new data from server)
+	let lastSyncedTurnCount = $state(-1);
 	$effect(() => {
 		const thread = store.currentThread;
-		if (thread && scoreInitialized && !submitting) {
+		if (thread && scoreInitialized && !submitting && thread.turnCount !== lastSyncedTurnCount) {
 			scoreEditorValue = thread.lines.map(l => l.chords).join('\n');
+			lastSyncedTurnCount = thread.turnCount;
+			transposeSemitones = 0;
 		}
 	});
 

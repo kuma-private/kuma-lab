@@ -185,6 +185,7 @@
 		<!-- Actual textarea -->
 		<textarea
 			class="se-textarea"
+			class:se-textarea--degree={displayMode === 'degree'}
 			{value}
 			oninput={handleInput}
 			oncontextmenu={handleContextMenu}
@@ -250,6 +251,10 @@
 		outline: none;
 		resize: vertical;
 		z-index: 2;
+	}
+
+	.se-textarea--degree {
+		color: transparent !important;
 	}
 
 	.se-textarea::selection {
