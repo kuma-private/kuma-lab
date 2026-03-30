@@ -117,7 +117,13 @@
 		}
 	};
 
-	const handlePlay = () => { buildPlayer(); player?.play(); };
+	const handlePlay = async () => {
+		console.log('[handlePlay] scoreEditorValue=' + scoreEditorValue.substring(0, 30) + ' player=' + !!player);
+		buildPlayer();
+		console.log('[handlePlay] after build, player=' + !!player);
+		if (player) await player.play();
+		else console.error('[handlePlay] player is null after buildPlayer');
+	};
 	const handlePause = () => { player?.pause(); };
 	const handleStop = () => { player?.stop(); activeBarIndex = -1; currentChord = null; };
 	const handleSeek = (time: number) => { player?.seekTo(time); };

@@ -531,16 +531,13 @@ export class ChordPlayer {
 
   private ensureSynth(): Tone.PolySynth | Tone.Sampler {
     if (!this.synth) {
-      const reverb = new Tone.Reverb({ decay: 1.5, wet: 0.25 }).toDestination();
-      const compressor = new Tone.Compressor(-20, 4).connect(reverb);
-
       if (_currentOscPreset === 'piano') {
-        // Use shared piano sampler (already loading/loaded)
-        const sampler = getPianoSampler();
-        sampler.connect(compressor);
-        this.synth = sampler;
-        this._disposeSynth = false; // don't dispose shared sampler
+        // Use shared piano sampler (already connected to destination)
+        this.synth = getPianoSampler();
+        this._disposeSynth = false;
       } else {
+        const reverb = new Tone.Reverb({ decay: 1.5, wet: 0.25 }).toDestination();
+        const compressor = new Tone.Compressor(-20, 4).connect(reverb);
         const preset = OSC_PRESETS[_currentOscPreset];
         this.synth = new Tone.PolySynth(Tone.Synth, {
           oscillator: preset.osc as any,
