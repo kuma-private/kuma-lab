@@ -45,11 +45,11 @@
 		quiz.useHint();
 
 		if (quiz.revealed) {
+			// Gave up - no confetti
 			const item = quiz.items[quiz.currentIndex];
-			speak(`${item.name}! ${item.sound}`).catch(() => {});
-			showConfetti = true;
+			speak(`こたえは、${item.name}`).catch(() => {});
 			inputText = '';
-			setTimeout(() => { showNext = true; }, 1800);
+			setTimeout(() => { showNext = true; }, 1500);
 		}
 	}
 
@@ -109,9 +109,13 @@
 		<div class="stage-label pop-in">
 			&#x1F50D; これ、なーんだ?
 		</div>
-	{:else}
+	{:else if quiz.scores[quiz.currentIndex] > 0}
 		<div class="stage-label pop-in correct">
 			&#x1F389; せいかい!
+		</div>
+	{:else}
+		<div class="stage-label pop-in giveup">
+			&#x1F4A8; ざんねん！
 		</div>
 	{/if}
 
@@ -217,6 +221,11 @@
 
 	.stage-label.correct {
 		background: var(--primary);
+		color: white;
+	}
+
+	.stage-label.giveup {
+		background: var(--text-light);
 		color: white;
 	}
 
