@@ -15,6 +15,7 @@ export interface TurnAction {
 	chords: string;
 	previousChords: string;
 	comment: string;
+	aiComment: string;
 	createdAt: string;
 }
 

@@ -45,6 +45,7 @@ module Program =
 
         let builder = WebApplication.CreateBuilder(args)
 
+        builder.Services.AddHttpClient("Anthropic") |> ignore
         builder.Services.AddSingleton<AppConfig>(config) |> ignore
 
         builder.Services.AddCors(fun options ->
@@ -98,7 +99,7 @@ module Program =
         app.MapGet("/api/threads", Func<HttpContext, Task>(requireLogin (ThreadHandlers.listThreads repo)))
         |> ignore
 
-        app.MapPost("/api/threads", Func<HttpContext, Task>(requireLogin (withRateLimit (ThreadHandlers.createThread repo))))
+        app.MapPost("/api/threads", Func<HttpContext, Task>(requireLogin (withRateLimit (ThreadHandlers.createThread repo config))))
         |> ignore
 
         app.MapGet("/api/threads/{id}", Func<string, HttpContext, Task>(fun id ctx ->
@@ -110,7 +111,7 @@ module Program =
         |> ignore
 
         app.MapPost("/api/threads/{id}/turn", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (withRateLimit (ThreadHandlers.executeTurn repo id))) ctx))
+            (requireLogin (withRateLimit (ThreadHandlers.executeTurn repo config id))) ctx))
         |> ignore
 
         app.MapPost("/api/threads/{id}/propose-finish", Func<string, HttpContext, Task>(fun id ctx ->

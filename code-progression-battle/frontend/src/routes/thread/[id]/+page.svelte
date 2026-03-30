@@ -17,15 +17,13 @@
 	let activeBarIndex = $state(-1);
 
 	// Turn action state
-	let chordsInput = $state('');
 	let commentInput = $state('');
 	let submitting = $state(false);
+	let diffError = $state<string | null>(null);
 
-	// Inline edit state (right panel)
-	let editingLine = $state<number | null>(null);
-	let editingChords = $state('');
-	let hoveredLine = $state<number | null>(null);
-	let deleteConfirmLine = $state<number | null>(null);
+	// ScoreEditor state (right panel)
+	let scoreEditorValue = $state('');
+	let scoreInitialized = $state(false);
 
 	// History scroll ref
 	let historyEl: HTMLDivElement | undefined = $state();
@@ -37,6 +35,23 @@
 
 	onDestroy(() => {
 		player?.dispose();
+	});
+
+	// Sync ScoreEditor value from thread lines
+	$effect(() => {
+		const thread = store.currentThread;
+		if (thread && !scoreInitialized) {
+			scoreEditorValue = thread.lines.map(l => l.chords).join('\n');
+			scoreInitialized = true;
+		}
+	});
+
+	// Re-sync when thread updates (after submit, etc.)
+	$effect(() => {
+		const thread = store.currentThread;
+		if (thread && scoreInitialized && !submitting) {
+			scoreEditorValue = thread.lines.map(l => l.chords).join('\n');
+		}
 	});
 
 	// Auto-scroll history to bottom
@@ -82,7 +97,7 @@
 	const handleStop = () => { player?.stop(); activeBarIndex = -1; };
 	const handleSeek = (time: number) => { player?.seekTo(time); };
 
-	const handleエクスポート = () => {
+	const handleExport = () => {
 		const thread = store.currentThread;
 		if (!thread) return;
 		const header = `# ${thread.title}\nKey: ${thread.key} | ${thread.timeSignature} | BPM ${thread.bpm}\n\n`;
@@ -97,63 +112,121 @@
 		URL.revokeObjectURL(url);
 	};
 
-	// ADD action (left panel)
-	const handleAddTurn = async () => {
-		if (submitting || !chordsInput.trim()) return;
-		submitting = true;
-		try {
-			await store.submitTurn(threadId, 'add', 0, chordsInput.trim(), commentInput.trim());
-			chordsInput = '';
-			commentInput = '';
-			player?.dispose();
-			player = null;
-		} finally {
-			submitting = false;
+	// Diff calculation: compare old lines to new lines
+	type DiffResult =
+		| { action: 'add'; lineNumber: number; chords: string }
+		| { action: 'edit'; lineNumber: number; chords: string }
+		| { action: 'delete'; lineNumber: number }
+		| { action: 'none' }
+		| { action: 'error'; message: string };
+
+	const computeDiff = (oldLines: string[], newLines: string[]): DiffResult => {
+		// Filter out empty trailing lines for comparison
+		const trimTrailing = (lines: string[]): string[] => {
+			const result = [...lines];
+			while (result.length > 0 && result[result.length - 1].trim() === '') {
+				result.pop();
+			}
+			return result;
+		};
+
+		const oldTrimmed = trimTrailing(oldLines);
+		const newTrimmed = trimTrailing(newLines);
+
+		const oldLen = oldTrimmed.length;
+		const newLen = newTrimmed.length;
+
+		if (newLen > oldLen) {
+			// ADD: line count increased
+			if (newLen - oldLen !== 1) {
+				return { action: 'error', message: '1ターンにつき1行のみ追加できます' };
+			}
+			// Check that existing lines are unchanged
+			let insertIdx = -1;
+			let j = 0;
+			for (let i = 0; i < newLen; i++) {
+				if (j < oldLen && newTrimmed[i].trim() === oldTrimmed[j].trim()) {
+					j++;
+				} else if (insertIdx === -1) {
+					insertIdx = i;
+				} else {
+					return { action: 'error', message: '1ターンにつき1操作のみ可能です（複数行の変更が検出されました）' };
+				}
+			}
+			if (j !== oldLen) {
+				return { action: 'error', message: '1ターンにつき1操作のみ可能です（追加と編集が同時に検出されました）' };
+			}
+			if (insertIdx === -1) insertIdx = newLen - 1;
+			return { action: 'add', lineNumber: insertIdx + 1, chords: newTrimmed[insertIdx].trim() };
+		} else if (newLen < oldLen) {
+			// DELETE: line count decreased
+			if (oldLen - newLen !== 1) {
+				return { action: 'error', message: '1ターンにつき1行のみ削除できます' };
+			}
+			let deleteIdx = -1;
+			let j = 0;
+			for (let i = 0; i < oldLen; i++) {
+				if (j < newLen && oldTrimmed[i].trim() === newTrimmed[j].trim()) {
+					j++;
+				} else if (deleteIdx === -1) {
+					deleteIdx = i;
+				} else {
+					return { action: 'error', message: '1ターンにつき1操作のみ可能です（複数行の変更が検出されました）' };
+				}
+			}
+			if (j !== newLen) {
+				return { action: 'error', message: '1ターンにつき1操作のみ可能です（削除と編集が同時に検出されました）' };
+			}
+			if (deleteIdx === -1) deleteIdx = oldLen - 1;
+			return { action: 'delete', lineNumber: deleteIdx + 1 };
+		} else {
+			// Same length: check for edit
+			const changedIndices: number[] = [];
+			for (let i = 0; i < oldLen; i++) {
+				if (oldTrimmed[i].trim() !== newTrimmed[i].trim()) {
+					changedIndices.push(i);
+				}
+			}
+			if (changedIndices.length === 0) {
+				return { action: 'none' };
+			}
+			if (changedIndices.length > 1) {
+				return { action: 'error', message: '1ターンにつき1行のみ編集できます' };
+			}
+			const idx = changedIndices[0];
+			return { action: 'edit', lineNumber: idx + 1, chords: newTrimmed[idx].trim() };
 		}
 	};
 
-	// EDIT action (right panel inline)
-	const startEdit = (lineNum: number, chords: string) => {
-		editingLine = lineNum;
-		editingChords = chords;
-		deleteConfirmLine = null;
-	};
-
-	const cancelEdit = () => {
-		editingLine = null;
-		editingChords = '';
-	};
-
-	const submitEdit = async () => {
-		if (submitting || editingLine === null || !editingChords.trim()) return;
-		submitting = true;
-		try {
-			await store.submitTurn(threadId, 'edit', editingLine, editingChords.trim(), '');
-			editingLine = null;
-			editingChords = '';
-			player?.dispose();
-			player = null;
-		} finally {
-			submitting = false;
-		}
-	};
-
-	// DELETE action (right panel inline)
-	const confirmDelete = (lineNum: number) => {
-		deleteConfirmLine = lineNum;
-		editingLine = null;
-	};
-
-	const cancelDelete = () => {
-		deleteConfirmLine = null;
-	};
-
-	const submitDelete = async (lineNum: number) => {
+	// Submit turn using diff
+	const handleSubmitTurn = async () => {
 		if (submitting) return;
+		const thread = store.currentThread;
+		if (!thread) return;
+
+		diffError = null;
+
+		const oldLines = thread.lines.map(l => l.chords);
+		const newLines = scoreEditorValue.split('\n');
+
+		const diff = computeDiff(oldLines, newLines);
+
+		if (diff.action === 'error') {
+			diffError = diff.message;
+			return;
+		}
+		if (diff.action === 'none') {
+			diffError = '変更がありません';
+			return;
+		}
+
 		submitting = true;
 		try {
-			await store.submitTurn(threadId, 'delete', lineNum, '', '');
-			deleteConfirmLine = null;
+			const lineNumber = 'lineNumber' in diff ? diff.lineNumber : 0;
+			const chords = 'chords' in diff ? diff.chords : '';
+			await store.submitTurn(threadId, diff.action, lineNumber, chords, commentInput.trim());
+			commentInput = '';
+			scoreInitialized = false;
 			player?.dispose();
 			player = null;
 		} finally {
@@ -176,7 +249,7 @@
 		return name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 	};
 
-	// Action description for history (BBS-style)
+	// Action description for history
 	const actionLabel = (action: string, lineNum: number): string => {
 		switch (action) {
 			case 'add': return `L${lineNum} を追加`;
@@ -245,6 +318,13 @@
 		if (!t) return false;
 		return t.status === 'active' && store.isMyTurn && store.isPlayer;
 	});
+
+	let scoreReadonly = $derived(!canAct);
+
+	const handleScoreChange = (value: string) => {
+		scoreEditorValue = value;
+		diffError = null;
+	};
 </script>
 
 <svelte:head>
@@ -276,7 +356,7 @@
 						完成を提案
 					</button>
 				{/if}
-				<button class="btn btn-ghost" onclick={handleエクスポート}>エクスポート</button>
+				<button class="btn btn-ghost" onclick={handleExport}>エクスポート</button>
 			</div>
 		{/if}
 	</header>
@@ -322,7 +402,7 @@
 		{/if}
 
 		<div class="editor-layout">
-			<!-- Left: Chat-style history + ADD input -->
+			<!-- Left: Session log + comment input + submit button -->
 			<div class="panel panel-left">
 				<div class="panel-header">
 					<h2>セッションログ</h2>
@@ -362,6 +442,12 @@
 							{#if turn.comment}
 								<div class="post-comment">{turn.comment}</div>
 							{/if}
+							{#if turn.aiComment}
+								<div class="ai-comment">
+									<span class="ai-icon">AI</span>
+									<span class="ai-text">{turn.aiComment}</span>
+								</div>
+							{/if}
 						</div>
 					{/each}
 
@@ -375,62 +461,55 @@
 								</svg>
 							</div>
 							<p class="empty-title">まだターンがありません</p>
-							<p class="empty-sub">最初のコードを追加してセッションを始めよう!</p>
+							<p class="empty-sub">右のスコアを編集してセッションを始めよう!</p>
 						</div>
 					{/if}
 				</div>
 
-				<!-- ADD input at bottom -->
+				<!-- Comment input + submit button -->
 				{#if thread.status === 'active' && store.isPlayer}
-					<div class="add-input" class:add-input--disabled={!canAct}>
+					<div class="submit-area" class:submit-area--disabled={!canAct}>
 						{#if !canAct}
 							<div class="waiting-hint">@{opponentName} が作曲中...</div>
 						{/if}
-						<div class="add-input-row">
-							<textarea
-								class="chord-input"
-								bind:value={chordsInput}
-								placeholder="| Am7 | Dm7 | G7 | Cmaj7 |"
-								rows="1"
-								disabled={!canAct}
-								onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddTurn(); } }}
-							></textarea>
-							<button
-								class="btn-send"
-								onclick={handleAddTurn}
-								disabled={!canAct || submitting || !chordsInput.trim()}
-								title="Add line"
-							>
-								{#if submitting}
-									<span class="spinner"></span>
-								{:else}
-									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-										<line x1="22" y1="2" x2="11" y2="13" />
-										<polygon points="22 2 15 22 11 13 2 9 22 2" />
-									</svg>
-								{/if}
-							</button>
-						</div>
-						<input
-							type="text"
+						{#if diffError}
+							<div class="diff-error">{diffError}</div>
+						{/if}
+						<textarea
+							class="comment-textarea"
 							bind:value={commentInput}
 							placeholder="コメントを追加..."
-							class="comment-input"
+							rows="1"
 							disabled={!canAct}
-						/>
+						></textarea>
+						<button
+							class="btn-submit-turn"
+							onclick={handleSubmitTurn}
+							disabled={!canAct || submitting}
+						>
+							{#if submitting}
+								<span class="spinner"></span>
+							{:else}
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+									<line x1="22" y1="2" x2="11" y2="13" />
+									<polygon points="22 2 15 22 11 13 2 9 22 2" />
+								</svg>
+							{/if}
+							ターンを送信
+						</button>
 					</div>
 				{/if}
 			</div>
 
-			<!-- Right: Interactive Score -->
+			<!-- Right: Interactive Score (ScoreEditor) -->
 			<div class="panel panel-right">
 				<div class="panel-header">
 					<h2>Score</h2>
 					<span class="count">{thread.lines.length} lines</span>
 				</div>
 
-				<div class="score-lines">
-					{#if thread.lines.length === 0}
+				<div class="score-area">
+					{#if thread.lines.length === 0 && scoreReadonly}
 						<div class="empty-score">
 							<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.2">
 								<path d="M9 18V5l12-2v13" />
@@ -440,90 +519,11 @@
 							<p>スコアはまだ空です。最初のコードを追加しよう!</p>
 						</div>
 					{:else}
-						{#each thread.lines as line, i}
-							{@const lineNum = line.lineNumber}
-							<div
-								class="score-line"
-								class:score-line--hover={hoveredLine === lineNum && canAct}
-								class:score-line--editing={editingLine === lineNum}
-								class:score-line--deleting={deleteConfirmLine === lineNum}
-								onmouseenter={() => { if (canAct) hoveredLine = lineNum; }}
-								onmouseleave={() => { hoveredLine = null; }}
-							>
-								<span class="line-number">L{lineNum}</span>
-
-								{#if editingLine === lineNum}
-									<!-- Inline edit mode -->
-									<div class="inline-edit">
-										<textarea
-											class="inline-edit-input"
-											bind:value={editingChords}
-											rows="1"
-											onkeydown={(e) => {
-												if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitEdit(); }
-												if (e.key === 'Escape') cancelEdit();
-											}}
-										></textarea>
-										<div class="inline-edit-actions">
-											<button class="btn-inline btn-inline--save" onclick={submitEdit} disabled={submitting || !editingChords.trim()}>
-												Save
-											</button>
-											<button class="btn-inline btn-inline--cancel" onclick={cancelEdit}>
-												Cancel
-											</button>
-										</div>
-									</div>
-								{:else if deleteConfirmLine === lineNum}
-									<!-- Delete confirmation -->
-									<div class="delete-confirm">
-										<span class="delete-confirm-text">この行を削除しますか?</span>
-										<div class="delete-confirm-actions">
-											<button class="btn-inline btn-inline--danger" onclick={() => submitDelete(lineNum)} disabled={submitting}>
-												Delete
-											</button>
-											<button class="btn-inline btn-inline--cancel" onclick={cancelDelete}>
-												Cancel
-											</button>
-										</div>
-									</div>
-								{:else}
-									<!-- Normal display -->
-									<div class="line-chords-wrapper">
-										<ScoreEditor value={line.chords} readonly={true} />
-									</div>
-
-									<!-- Hover action icons -->
-									{#if canAct && hoveredLine === lineNum}
-										<div class="line-actions">
-											<button
-												class="line-action-btn"
-												onclick={() => startEdit(lineNum, line.chords)}
-												title="Edit this line"
-											>
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-													<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-													<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-												</svg>
-											</button>
-											<button
-												class="line-action-btn line-action-btn--delete"
-												onclick={() => confirmDelete(lineNum)}
-												title="Delete this line"
-											>
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-													<polyline points="3 6 5 6 21 6" />
-													<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-												</svg>
-											</button>
-										</div>
-									{/if}
-								{/if}
-
-								<span class="line-author" title="Added by {line.addedByName}">
-									{initials(line.addedByName)}
-								</span>
-							</div>
-						{/each}
+						<ScoreEditor
+							value={scoreEditorValue}
+							readonly={scoreReadonly}
+							onchange={handleScoreChange}
+						/>
 					{/if}
 				</div>
 			</div>
@@ -901,6 +901,36 @@
 		border-left: 2px solid var(--border-default);
 	}
 
+	/* AI comment bubble */
+	.ai-comment {
+		display: flex;
+		align-items: flex-start;
+		gap: 6px;
+		margin: 6px 0 0 30px;
+		padding: 6px 10px;
+		background: rgba(96, 165, 250, 0.08);
+		border-radius: 6px;
+		border-left: 2px solid rgba(96, 165, 250, 0.3);
+	}
+
+	.ai-icon {
+		font-size: 0.6rem;
+		font-weight: 700;
+		color: rgba(96, 165, 250, 0.8);
+		background: rgba(96, 165, 250, 0.15);
+		padding: 1px 4px;
+		border-radius: 3px;
+		flex-shrink: 0;
+		line-height: 1.4;
+	}
+
+	.ai-text {
+		font-size: 0.78rem;
+		font-style: italic;
+		color: var(--text-secondary);
+		line-height: 1.4;
+	}
+
 	.empty-history {
 		display: flex;
 		flex-direction: column;
@@ -928,14 +958,17 @@
 		margin: 0;
 	}
 
-	/* ADD input area */
-	.add-input {
+	/* Submit area (left panel bottom) */
+	.submit-area {
 		border-top: 1px solid var(--border-subtle);
 		padding: var(--space-sm) var(--space-md);
 		background: var(--bg-surface);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
 	}
 
-	.add-input--disabled {
+	.submit-area--disabled {
 		opacity: 0.5;
 	}
 
@@ -947,53 +980,60 @@
 		padding-bottom: var(--space-xs);
 	}
 
-	.add-input-row {
-		display: flex;
-		gap: var(--space-xs);
-		align-items: flex-end;
+	.diff-error {
+		font-size: 0.78rem;
+		color: var(--error);
+		padding: 4px 8px;
+		background: rgba(248, 113, 113, 0.1);
+		border-radius: 4px;
 	}
 
-	.chord-input {
-		flex: 1;
-		font-family: var(--font-mono);
-		font-size: 0.88rem;
-		resize: none;
-		border-radius: 8px;
-		padding: 8px 12px;
+	.comment-textarea {
+		width: 100%;
+		font-size: 0.8rem;
+		padding: 6px 10px;
 		border: 1px solid var(--border-default);
+		border-radius: 6px;
 		background: var(--bg-base);
 		color: var(--text-primary);
+		resize: none;
 		box-sizing: border-box;
-		min-height: 36px;
 	}
 
-	.chord-input:focus {
+	.comment-textarea:focus {
 		outline: none;
 		border-color: var(--accent-primary);
 		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
 	}
 
-	.btn-send {
-		width: 36px;
-		height: 36px;
-		border-radius: 50%;
-		background: var(--accent-primary);
-		color: #fff;
-		border: none;
-		cursor: pointer;
+	.comment-textarea::placeholder {
+		color: var(--text-muted);
+		opacity: 0.6;
+	}
+
+	.btn-submit-turn {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		flex-shrink: 0;
+		gap: 6px;
+		width: 100%;
+		padding: 8px 16px;
+		border-radius: var(--radius-md);
+		background: var(--accent-primary);
+		color: #fff;
+		border: none;
+		font-size: 0.82rem;
+		font-weight: 600;
+		cursor: pointer;
 		transition: all 0.2s;
 	}
 
-	.btn-send:hover:not(:disabled) {
+	.btn-submit-turn:hover:not(:disabled) {
 		background: var(--accent-secondary);
-		transform: scale(1.05);
+		transform: translateY(-1px);
 	}
 
-	.btn-send:disabled {
+	.btn-submit-turn:disabled {
 		opacity: 0.4;
 		cursor: default;
 	}
@@ -1011,234 +1051,9 @@
 		to { transform: rotate(360deg); }
 	}
 
-	.comment-input {
-		width: 100%;
-		font-size: 0.78rem;
-		padding: 4px 12px;
-		margin-top: 4px;
-		border: none;
-		border-radius: 4px;
-		background: transparent;
-		color: var(--text-muted);
-		box-sizing: border-box;
-	}
-
-	.comment-input:focus {
-		outline: none;
-		background: var(--bg-base);
-	}
-
-	.comment-input::placeholder {
-		color: var(--text-muted);
-		opacity: 0.6;
-	}
-
-	/* Score lines (right panel) */
-	.score-lines {
-		padding: var(--space-xs) 0;
-	}
-
-	.score-line {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 2px var(--space-md);
-		position: relative;
-		transition: background 0.15s;
-		border-bottom: 1px solid transparent;
-	}
-
-	.score-line--hover {
-		background: rgba(167, 139, 250, 0.05);
-		border-bottom-color: var(--border-subtle);
-	}
-
-	.score-line--editing {
-		background: rgba(167, 139, 250, 0.08);
-		border-bottom-color: var(--accent-primary);
-	}
-
-	.score-line--deleting {
-		background: rgba(248, 113, 113, 0.08);
-		border-bottom-color: rgba(248, 113, 113, 0.3);
-	}
-
-	.line-number {
-		font-family: var(--font-mono);
-		font-size: 0.7rem;
-		color: var(--text-muted);
-		width: 28px;
-		text-align: right;
-		flex-shrink: 0;
-		opacity: 0.6;
-	}
-
-	.line-chords-wrapper {
-		flex: 1;
-		min-width: 0;
-	}
-
-	/* Make inline ScoreEditor compact */
-	.line-chords-wrapper :global(.score-editor) {
-		width: 100%;
-	}
-
-	.line-chords-wrapper :global(.se-container) {
-		min-height: unset;
-	}
-
-	.line-chords-wrapper :global(.se-highlight),
-	.line-chords-wrapper :global(.se-textarea) {
-		padding: 0;
-		line-height: 2;
-		font-size: 0.9rem;
-	}
-
-	.line-chords-wrapper :global(.se-textarea) {
-		min-height: unset;
-		height: auto;
-	}
-
-	.line-actions {
-		display: flex;
-		gap: 4px;
-		flex-shrink: 0;
-	}
-
-	.line-action-btn {
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--border-default);
-		background: var(--bg-surface);
-		color: var(--text-muted);
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: all 0.15s;
-	}
-
-	.line-action-btn:hover {
-		border-color: var(--accent-primary);
-		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.1);
-	}
-
-	.line-action-btn--delete:hover {
-		border-color: var(--error);
-		color: var(--error);
-		background: rgba(248, 113, 113, 0.1);
-	}
-
-	.line-author {
-		font-size: 0.6rem;
-		font-weight: 600;
-		color: var(--text-muted);
-		opacity: 0.5;
-		flex-shrink: 0;
-		width: 20px;
-		text-align: center;
-	}
-
-	/* Inline edit */
-	.inline-edit {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		padding: 4px 0;
-	}
-
-	.inline-edit-input {
-		width: 100%;
-		font-family: var(--font-mono);
-		font-size: 0.88rem;
-		padding: 6px 10px;
-		border: 1px solid var(--accent-primary);
-		border-radius: 6px;
-		background: var(--bg-base);
-		color: var(--text-primary);
-		resize: none;
-		box-sizing: border-box;
-	}
-
-	.inline-edit-input:focus {
-		outline: none;
-		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.2);
-	}
-
-	.inline-edit-actions {
-		display: flex;
-		gap: 6px;
-		justify-content: flex-end;
-	}
-
-	.btn-inline {
-		padding: 3px 12px;
-		border-radius: var(--radius-md);
-		font-size: 0.75rem;
-		font-weight: 600;
-		cursor: pointer;
-		border: 1px solid transparent;
-		transition: all 0.15s;
-	}
-
-	.btn-inline--save {
-		background: var(--accent-primary);
-		color: #fff;
-	}
-
-	.btn-inline--save:hover {
-		opacity: 0.9;
-	}
-
-	.btn-inline--save:disabled {
-		opacity: 0.4;
-	}
-
-	.btn-inline--cancel {
-		background: transparent;
-		color: var(--text-muted);
-		border-color: var(--border-default);
-	}
-
-	.btn-inline--cancel:hover {
-		background: var(--bg-surface);
-	}
-
-	.btn-inline--danger {
-		background: var(--error);
-		color: #fff;
-	}
-
-	.btn-inline--danger:hover {
-		opacity: 0.9;
-	}
-
-	.btn-inline--danger:disabled {
-		opacity: 0.4;
-	}
-
-	/* Delete confirmation */
-	.delete-confirm {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		gap: var(--space-sm);
-		padding: 6px 0;
-	}
-
-	.delete-confirm-text {
-		font-size: 0.82rem;
-		color: var(--error);
-		font-weight: 500;
-	}
-
-	.delete-confirm-actions {
-		display: flex;
-		gap: 6px;
-		margin-left: auto;
+	/* Score area (right panel) */
+	.score-area {
+		padding: var(--space-sm);
 	}
 
 	.empty-score {

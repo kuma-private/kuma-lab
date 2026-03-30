@@ -131,6 +131,10 @@ module Repository =
               Chords = dict.["chords"] :?> string
               PreviousChords = dict.["previousChords"] :?> string
               Comment = dict.["comment"] :?> string
+              AiComment =
+                  match dict.TryGetValue("aiComment") with
+                  | true, v when v <> null -> v :?> string
+                  | _ -> ""
               CreatedAt =
                   match dict.["createdAt"] with
                   | :? Timestamp as ts -> ts.ToDateTime()
@@ -245,6 +249,7 @@ module Repository =
                       "chords", a.Chords :> obj
                       "previousChords", a.PreviousChords :> obj
                       "comment", a.Comment :> obj
+                      "aiComment", a.AiComment :> obj
                       "createdAt", Timestamp.FromDateTime(a.CreatedAt.ToUniversalTime()) :> obj ]
             )
 

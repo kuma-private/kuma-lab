@@ -13,6 +13,7 @@
 	let timeSigBottom = $state(4);
 	let bpm = $state(120);
 	let opponentEmail = $state('');
+	let vsCpu = $state(false);
 
 	const roots = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B'];
 	const qualities = ['Major', 'Minor', 'Dorian', 'Mixolydian', 'Phrygian', 'Lydian'];
@@ -27,7 +28,7 @@
 			key,
 			timeSignature,
 			bpm: Math.max(40, Math.min(300, bpm)),
-			opponentEmail: opponentEmail.trim()
+			opponentEmail: vsCpu ? 'cpu' : opponentEmail.trim()
 		});
 	};
 
@@ -100,9 +101,18 @@
 			</div>
 
 			<div class="field">
-				<label for="opponent">対戦相手のメールアドレス</label>
-				<input id="opponent" type="email" bind:value={opponentEmail} placeholder="friend@example.com" />
+				<label class="checkbox-label">
+					<input type="checkbox" bind:checked={vsCpu} />
+					vs CPU (Claude AI)
+				</label>
 			</div>
+
+			{#if !vsCpu}
+				<div class="field">
+					<label for="opponent">対戦相手のメールアドレス</label>
+					<input id="opponent" type="email" bind:value={opponentEmail} placeholder="friend@example.com" />
+				</div>
+			{/if}
 
 			<div class="actions">
 				<button type="button" class="btn btn-secondary" onclick={onClose}>キャンセル</button>
@@ -172,6 +182,22 @@
 
 	input[type="number"] {
 		max-width: 100px;
+	}
+
+	.checkbox-label {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+		cursor: pointer;
+	}
+
+	.checkbox-label input[type="checkbox"] {
+		width: 16px;
+		height: 16px;
+		accent-color: var(--accent-primary);
+		cursor: pointer;
 	}
 
 	.actions {
