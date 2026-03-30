@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { parseChord, type ParsedChord } from '$lib/chord-parser';
+	import { chordToNotes } from '$lib/chord-player';
+
 	interface Props {
 		currentKey?: string;
 		onSelect?: (chord: string) => void;
@@ -9,6 +12,15 @@
 
 	let selectedRoot = $state<string | null>(null);
 	let selectedQuality = $state('');
+	let synthModule: typeof import('$lib/chord-player') | null = null;
+	let pressedLabel = $state<string | null>(null);
+
+	const ensureSynth = async () => {
+		if (!synthModule) {
+			synthModule = await import('$lib/chord-player');
+		}
+		return synthModule;
+	};
 
 	// Circle of fifths order
 	const MAJOR_ROOTS = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
@@ -135,8 +147,9 @@
 		return selectedRoot + selectedQuality;
 	});
 
-	const handleChordClick = async (label: string, isMinor: boolean) => {
+	const handleChordDown = async (label: string, isMinor: boolean) => {
 		selectedRoot = label;
+		pressedLabel = label;
 		if (isMinor && selectedQuality === '') {
 			// Keep as minor
 		} else if (isMinor && selectedQuality === 'm') {
@@ -147,15 +160,31 @@
 		onSelect?.(chordName);
 
 		try {
-			const { playChordPreview } = await import('$lib/chord-player');
-			await playChordPreview(chordName);
+			const mod = await ensureSynth();
+			const parsed = parseChord(chordName);
+			const notes = chordToNotes(parsed);
+			await mod.keyboardAttack(notes);
 		} catch (err) {
-			console.error('[CircleOfFifths] preview error:', err);
+			console.error('[CircleOfFifths] attack error:', err);
 		}
 	};
 
-	const handleChordDblClick = (label: string) => {
-		const chordName = buildChordName(label);
+	const handleChordUp = (label: string) => {
+		if (pressedLabel !== label) return;
+		pressedLabel = null;
+		try {
+			const chordName = buildChordName(label);
+			const parsed = parseChord(chordName);
+			const notes = chordToNotes(parsed);
+			synthModule?.keyboardRelease(notes);
+		} catch (err) {
+			console.error('[CircleOfFifths] release error:', err);
+		}
+	};
+
+	const handleInsertClick = () => {
+		if (!selectedRoot) return;
+		const chordName = buildChordName(selectedRoot);
 		onInsert?.(chordName);
 	};
 
@@ -209,10 +238,10 @@
 				class:cof-segment--selected={isSelected}
 				class:cof-segment--hovered={isHovered}
 				style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
-				onclick={() => handleChordClick(label, false)}
-				ondblclick={() => handleChordDblClick(label)}
+				onpointerdown={() => handleChordDown(label, false)}
+				onpointerup={() => handleChordUp(label)}
+				onpointerleave={() => { hovered = null; handleChordUp(label); }}
 				onpointerenter={() => { hovered = label; }}
-				onpointerleave={() => { hovered = null; }}
 				role="button"
 				tabindex="0"
 			/>
@@ -243,10 +272,10 @@
 				class:cof-segment--selected={isSelected}
 				class:cof-segment--hovered={isHovered}
 				style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
-				onclick={() => handleChordClick(label, true)}
-				ondblclick={() => handleChordDblClick(label)}
+				onpointerdown={() => handleChordDown(label, true)}
+				onpointerup={() => handleChordUp(label)}
+				onpointerleave={() => { hovered = null; handleChordUp(label); }}
 				onpointerenter={() => { hovered = label; }}
-				onpointerleave={() => { hovered = null; }}
 				role="button"
 				tabindex="0"
 			/>
@@ -273,6 +302,13 @@
 			Key: {currentKey}
 		</text>
 	</svg>
+
+	<!-- Insert button -->
+	{#if selectedRoot}
+		<button class="cof-insert-btn" onclick={handleInsertClick}>
+			{buildChordName(selectedRoot)} を挿入
+		</button>
+	{/if}
 </div>
 
 <style>
@@ -397,5 +433,22 @@
 		font-family: var(--font-mono);
 		font-size: 10px;
 		fill: var(--text-muted);
+	}
+
+	.cof-insert-btn {
+		padding: 6px 16px;
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-md);
+		background: rgba(167, 139, 250, 0.15);
+		color: var(--accent-primary);
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.cof-insert-btn:hover {
+		background: rgba(167, 139, 250, 0.3);
 	}
 </style>

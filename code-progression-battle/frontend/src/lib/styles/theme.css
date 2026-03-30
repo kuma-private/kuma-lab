@@ -62,7 +62,7 @@
   --font-display: 'Space Grotesk', var(--font-sans);
 
   /* ---- Player bar height (for bottom padding) ---- */
-  --player-height: 72px;
+  --player-height: 60px;
 }
 
 /* ============================================

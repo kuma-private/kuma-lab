@@ -347,15 +347,47 @@ export const playNote = async (note: string): Promise<void> => {
   setTimeout(() => synth.dispose(), 1000);
 };
 
+// ── Oscillator type presets ──────────────────────────
+
+export type OscPreset = 'piano' | 'organ' | 'strings' | 'synth';
+
+interface OscConfig {
+  type: OscillatorType;
+  modulationType?: OscillatorType;
+  modulationIndex?: number;
+  harmonicity?: number;
+}
+
+const OSC_PRESETS: Record<OscPreset, { osc: OscConfig; envelope: { attack: number; decay: number; sustain: number; release: number } }> = {
+  piano:   { osc: { type: 'fmtriangle' as OscillatorType, modulationType: 'sine' as OscillatorType, modulationIndex: 2, harmonicity: 3.01 }, envelope: { attack: 0.005, decay: 0.6, sustain: 0.2, release: 1.2 } },
+  organ:   { osc: { type: 'sine' as OscillatorType }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.9, release: 0.3 } },
+  strings: { osc: { type: 'sawtooth' as OscillatorType }, envelope: { attack: 0.1, decay: 0.3, sustain: 0.7, release: 1.5 } },
+  synth:   { osc: { type: 'square' as OscillatorType }, envelope: { attack: 0.005, decay: 0.4, sustain: 0.3, release: 0.8 } },
+};
+
+let _currentOscPreset: OscPreset = 'piano';
+
+export const setGlobalOscPreset = (preset: OscPreset): void => {
+  _currentOscPreset = preset;
+  // Rebuild keyboard synth with new preset
+  if (_kbSynth) {
+    _kbSynth.dispose();
+    _kbSynth = null;
+  }
+};
+
+export const getGlobalOscPreset = (): OscPreset => _currentOscPreset;
+
 // ── Keyboard synth (sustained attack/release) ────────
 
 let _kbSynth: Tone.PolySynth | null = null;
 
 const getKeyboardSynth = (): Tone.PolySynth => {
   if (!_kbSynth) {
+    const preset = OSC_PRESETS[_currentOscPreset];
     _kbSynth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'triangle' as const },
-      envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.6 },
+      oscillator: preset.osc as any,
+      envelope: preset.envelope,
       volume: -8,
     }).toDestination();
   }
@@ -413,27 +445,25 @@ export class ChordPlayer {
 
   private ensureSynth(): Tone.PolySynth {
     if (!this.synth) {
-      // Piano-like sound: layered oscillators with harmonics + reverb
       const reverb = new Tone.Reverb({ decay: 1.5, wet: 0.25 }).toDestination();
       const compressor = new Tone.Compressor(-20, 4).connect(reverb);
+      const preset = OSC_PRESETS[_currentOscPreset];
 
       this.synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: {
-          type: 'fmtriangle',
-          modulationType: 'sine',
-          modulationIndex: 2,
-          harmonicity: 3.01,
-        },
-        envelope: {
-          attack: 0.005,
-          decay: 0.6,
-          sustain: 0.2,
-          release: 1.2,
-        },
+        oscillator: preset.osc as any,
+        envelope: preset.envelope,
         volume: -10,
       }).connect(compressor);
     }
     return this.synth;
+  }
+
+  setOscPreset(preset: OscPreset): void {
+    setGlobalOscPreset(preset);
+    if (this.synth) {
+      this.synth.dispose();
+      this.synth = null;
+    }
   }
 
   /**

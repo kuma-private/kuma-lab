@@ -3,7 +3,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { createAppStore } from '$lib/stores/app.svelte';
 	import { parseProgression, transpose } from '$lib/chord-parser';
-	import { ChordPlayer, type PlayerState } from '$lib/chord-player';
+	import { ChordPlayer, type PlayerState, type OscPreset, setGlobalOscPreset } from '$lib/chord-player';
 	import ScoreEditor from '$lib/components/ScoreEditor.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import AiReview from '$lib/components/AiReview.svelte';
@@ -108,6 +108,13 @@
 	const handleSeek = (time: number) => { player?.seekTo(time); };
 	const handleVolumeChange = (db: number) => { playerVolume = db; player?.setVolume(db); };
 	const handleLoopChange = (loop: boolean) => { playerLoop = loop; player?.setLoop(loop); };
+
+	let oscPreset = $state<OscPreset>('piano');
+	const handleOscPresetChange = (preset: OscPreset) => {
+		oscPreset = preset;
+		setGlobalOscPreset(preset);
+		player?.setOscPreset(preset);
+	};
 
 	const handleExport = () => {
 		const thread = store.currentThread;
@@ -673,12 +680,14 @@
 	{currentChord}
 	volume={playerVolume}
 	loop={playerLoop}
+	{oscPreset}
 	onplay={handlePlay}
 	onpause={handlePause}
 	onstop={handleStop}
 	onseek={handleSeek}
 	onVolumeChange={handleVolumeChange}
 	onLoopChange={handleLoopChange}
+	onOscPresetChange={handleOscPresetChange}
 />
 
 <style>
@@ -691,7 +700,7 @@
 	}
 
 	.page--piano-open {
-		padding-bottom: calc(var(--player-height) + 200px + var(--space-2xl));
+		padding-bottom: calc(var(--player-height) + 140px + var(--space-2xl));
 	}
 
 	/* Header */

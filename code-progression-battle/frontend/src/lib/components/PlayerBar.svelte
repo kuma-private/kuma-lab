@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PlayerState } from '$lib/chord-player';
+	import type { OscPreset } from '$lib/chord-player';
 
 	let {
 		state = 'stopped',
@@ -9,12 +10,14 @@
 		currentChord = null,
 		volume = -10,
 		loop = false,
+		oscPreset = 'piano' as OscPreset,
 		onplay,
 		onpause,
 		onstop,
 		onseek,
 		onVolumeChange,
-		onLoopChange
+		onLoopChange,
+		onOscPresetChange
 	}: {
 		state?: PlayerState;
 		currentTime?: number;
@@ -23,13 +26,29 @@
 		currentChord?: string | null;
 		volume?: number;
 		loop?: boolean;
+		oscPreset?: OscPreset;
 		onplay?: () => void;
 		onpause?: () => void;
 		onstop?: () => void;
 		onseek?: (time: number) => void;
 		onVolumeChange?: (db: number) => void;
 		onLoopChange?: (loop: boolean) => void;
+		onOscPresetChange?: (preset: OscPreset) => void;
 	} = $props();
+
+	const OSC_LABELS: Record<OscPreset, string> = {
+		piano: 'Piano',
+		organ: 'Organ',
+		strings: 'Strings',
+		synth: 'Synth',
+	};
+
+	const OSC_OPTIONS: OscPreset[] = ['piano', 'organ', 'strings', 'synth'];
+
+	const handleOscChange = (e: Event) => {
+		const val = (e.target as HTMLSelectElement).value as OscPreset;
+		onOscPresetChange?.(val);
+	};
 
 	const formatTime = (seconds: number): string => {
 		const m = Math.floor(seconds / 60);
@@ -173,6 +192,15 @@
 		/>
 	</div>
 
+	<!-- Tone selector -->
+	<div class="player-tone">
+		<select class="tone-select" value={oscPreset} onchange={handleOscChange} title="音色">
+			{#each OSC_OPTIONS as opt}
+				<option value={opt}>{OSC_LABELS[opt]}</option>
+			{/each}
+		</select>
+	</div>
+
 	<!-- BPM badge -->
 	<div class="player-bpm">
 		<span class="badge">BPM {bpm}</span>
@@ -227,8 +255,8 @@
 	}
 
 	.player-btn--play {
-		width: 44px;
-		height: 44px;
+		width: 36px;
+		height: 36px;
 		background: var(--accent-primary);
 		color: #fff;
 	}
@@ -398,6 +426,36 @@
 		border: none;
 	}
 
+	/* Tone selector */
+	.player-tone {
+		flex-shrink: 0;
+	}
+
+	.tone-select {
+		-webkit-appearance: none;
+		appearance: none;
+		padding: 2px 8px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		cursor: pointer;
+		outline: none;
+		transition: all 0.15s;
+	}
+
+	.tone-select:hover {
+		border-color: var(--accent-primary);
+		color: var(--text-primary);
+	}
+
+	.tone-select:focus {
+		border-color: var(--accent-primary);
+		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+	}
+
 	/* BPM */
 	.player-bpm {
 		flex-shrink: 0;
@@ -407,6 +465,7 @@
 	@media (max-width: 700px) {
 		.player-visualizer { display: none; }
 		.player-volume { display: none; }
+		.player-tone { display: none; }
 		.player-chord { min-width: 48px; }
 		.chord-name { font-size: 1rem; }
 	}

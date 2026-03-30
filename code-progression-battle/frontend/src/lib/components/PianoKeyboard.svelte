@@ -165,6 +165,7 @@
 		bottom: var(--player-height);
 		left: 0;
 		right: 0;
+		width: 100vw;
 		z-index: 49;
 		background: rgba(10, 10, 26, 0.95);
 		backdrop-filter: blur(16px);
@@ -263,7 +264,7 @@
 	.piano-keys {
 		position: relative;
 		display: flex;
-		height: 160px;
+		height: 100px;
 		user-select: none;
 		touch-action: none;
 		min-width: min-content;
@@ -314,7 +315,7 @@
 	.bk {
 		position: absolute;
 		width: 30px;
-		height: 100px;
+		height: 65px;
 		background: #2a2a2a;
 		border: 1px solid #111;
 		border-top: none;
@@ -352,11 +353,11 @@
 
 	@media (max-width: 700px) {
 		.piano-keys {
-			height: 120px;
+			height: 85px;
 		}
 
 		.bk {
-			height: 75px;
+			height: 55px;
 		}
 	}
 </style>
