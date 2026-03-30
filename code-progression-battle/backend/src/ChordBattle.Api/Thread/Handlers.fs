@@ -51,10 +51,10 @@ module ThreadHandlers =
         let factory = ctx.RequestServices.GetRequiredService<IHttpClientFactory>()
         factory.CreateClient("Anthropic")
 
-    let private tryReviewTurn (ctx: HttpContext) (apiKey: string) (thread: Thread) (action: string) (lineNumber: int) (chords: string) (allLines: Line list) : Task<string> =
+    let private tryReviewTurn (ctx: HttpContext) (apiKey: string) (thread: Thread) (action: string) (lineNumber: int) (chords: string) (allLines: Line list) : Task<struct (string * string)> =
         task {
             if String.IsNullOrEmpty(apiKey) then
-                return ""
+                return struct ("", "")
             else
                 let httpClient = getHttpClient ctx
                 let lineTexts = allLines |> List.map (fun l -> l.Chords)
@@ -62,8 +62,8 @@ module ThreadHandlers =
                     AnthropicClient.reviewTurn httpClient apiKey thread.Key thread.TimeSignature action lineNumber chords lineTexts
                     |> Async.StartAsTask
                 match result with
-                | Ok comment -> return comment
-                | Error _ -> return ""
+                | Ok r -> return struct (r.Comment, r.ScoresJson)
+                | Error _ -> return struct ("", "")
         }
 
     let private tryGenerateChords (ctx: HttpContext) (apiKey: string) (thread: Thread) (allLines: Line list) : Task<string option> =
@@ -191,7 +191,7 @@ module ThreadHandlers =
                           AddedByName = "Claude AI"
                           LastEditedBy = "cpu" }
                     let cpuLines = updatedThread.Lines @ [ cpuLine ]
-                    let! cpuAiComment = tryReviewTurn ctx config.AnthropicApiKey updatedThread "add" cpuLineNumber chords cpuLines
+                    let! struct (cpuAiComment, cpuAiScores) = tryReviewTurn ctx config.AnthropicApiKey updatedThread "add" cpuLineNumber chords cpuLines
                     let cpuAction =
                         { TurnNumber = updatedThread.TurnCount + 1
                           UserId = "cpu"
@@ -202,6 +202,7 @@ module ThreadHandlers =
                           PreviousChords = ""
                           Comment = ""
                           AiComment = cpuAiComment
+                          AiScores = cpuAiScores
                           CreatedAt = DateTime.UtcNow }
                     let cpuNextTurn = getOpponentId updatedThread "cpu"
                     let! cpuResult = repo.ExecuteTurn threadId cpuAction cpuLines cpuNextTurn
@@ -246,7 +247,7 @@ module ThreadHandlers =
                                       AddedByName = userName
                                       LastEditedBy = userId }
                                 let updatedLines = t.Lines @ [ newLine ]
-                                let! aiComment = tryReviewTurn ctx config.AnthropicApiKey t "add" newLineNumber req.chords updatedLines
+                                let! struct (aiComment, aiScores) = tryReviewTurn ctx config.AnthropicApiKey t "add" newLineNumber req.chords updatedLines
                                 let action =
                                     { TurnNumber = t.TurnCount + 1
                                       UserId = userId
@@ -257,6 +258,7 @@ module ThreadHandlers =
                                       PreviousChords = ""
                                       Comment = req.comment
                                       AiComment = aiComment
+                                      AiScores = aiScores
                                       CreatedAt = DateTime.UtcNow }
 
                                 let! result = repo.ExecuteTurn threadId action updatedLines nextTurn
@@ -283,7 +285,7 @@ module ThreadHandlers =
                                         if i = req.lineNumber - 1 then
                                             { line with Chords = req.chords; LastEditedBy = userId }
                                         else line)
-                                let! aiComment = tryReviewTurn ctx config.AnthropicApiKey t "edit" req.lineNumber req.chords updatedLines
+                                let! struct (aiComment, aiScores) = tryReviewTurn ctx config.AnthropicApiKey t "edit" req.lineNumber req.chords updatedLines
                                 let action =
                                     { TurnNumber = t.TurnCount + 1
                                       UserId = userId
@@ -294,6 +296,7 @@ module ThreadHandlers =
                                       PreviousChords = targetLine.Chords
                                       Comment = req.comment
                                       AiComment = aiComment
+                                      AiScores = aiScores
                                       CreatedAt = DateTime.UtcNow }
 
                                 let! result = repo.ExecuteTurn threadId action updatedLines nextTurn
@@ -315,7 +318,7 @@ module ThreadHandlers =
                                     t.Lines
                                     |> List.filter (fun line -> line.LineNumber <> req.lineNumber)
                                     |> List.mapi (fun i line -> { line with LineNumber = i + 1 })
-                                let! aiComment = tryReviewTurn ctx config.AnthropicApiKey t "delete" req.lineNumber "" updatedLines
+                                let! struct (aiComment, aiScores) = tryReviewTurn ctx config.AnthropicApiKey t "delete" req.lineNumber "" updatedLines
                                 let action =
                                     { TurnNumber = t.TurnCount + 1
                                       UserId = userId
@@ -326,6 +329,7 @@ module ThreadHandlers =
                                       PreviousChords = targetLine.Chords
                                       Comment = req.comment
                                       AiComment = aiComment
+                                      AiScores = aiScores
                                       CreatedAt = DateTime.UtcNow }
 
                                 let! result = repo.ExecuteTurn threadId action updatedLines nextTurn

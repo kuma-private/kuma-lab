@@ -3,7 +3,7 @@
 
 import * as Tone from 'tone';
 import type { ParsedBar, BarEntry, ParsedChord } from './chord-parser';
-import { resolveRepeats } from './chord-parser';
+import { resolveRepeats, parseChord, parseProgression } from './chord-parser';
 
 // ── Types ──────────────────────────────────────────────
 
@@ -29,6 +29,7 @@ export interface PlayerCallbacks {
   onStateChange?: (state: PlayerState) => void;
   onProgress?: (currentTime: number, totalDuration: number) => void;
   onBarChange?: (barIndex: number) => void;
+  onChordChange?: (chordName: string | null) => void;
 }
 
 // ── Note mapping ───────────────────────────────────────
@@ -262,6 +263,76 @@ function entryToNotes(entry: BarEntry, lastChordNotes: string[] | null): string[
   }
 }
 
+// ── Standalone preview functions ──────────────────────
+
+/**
+ * Play a single chord for 0.5 seconds (preview).
+ * Uses a disposable PolySynth to avoid interfering with the main player.
+ */
+export const playChordPreview = async (chordName: string): Promise<void> => {
+  await Tone.start();
+  const parsed = parseChord(chordName);
+  const notes = chordToNotes(parsed);
+
+  const synth = new Tone.PolySynth(Tone.Synth, {
+    oscillator: { type: 'fmtriangle' as const, modulationType: 'sine' as const, modulationIndex: 2, harmonicity: 3.01 },
+    envelope: { attack: 0.005, decay: 0.4, sustain: 0.2, release: 0.8 },
+    volume: -12,
+  }).toDestination();
+
+  synth.triggerAttackRelease(notes, 0.5);
+  await new Promise<void>((resolve) => setTimeout(() => { synth.dispose(); resolve(); }, 800));
+};
+
+/**
+ * Parse and play a selection of text as a chord progression.
+ * Returns a promise that resolves when playback completes.
+ */
+export const playSelection = async (text: string, config: PlayerConfig): Promise<void> => {
+  await Tone.start();
+  const { bars } = parseProgression(text);
+  if (bars.length === 0) return;
+
+  const schedule = buildSchedule(bars, config);
+  if (schedule.length === 0) return;
+
+  const barDur = (60 / config.bpm) * config.timeSignature.beats;
+  const resolved = resolveRepeats(bars);
+  const totalDuration = resolved.length * barDur;
+
+  const reverb = new Tone.Reverb({ decay: 1.2, wet: 0.2 }).toDestination();
+  const synth = new Tone.PolySynth(Tone.Synth, {
+    oscillator: { type: 'fmtriangle' as const, modulationType: 'sine' as const, modulationIndex: 2, harmonicity: 3.01 },
+    envelope: { attack: 0.005, decay: 0.5, sustain: 0.2, release: 1.0 },
+    volume: -10,
+  }).connect(reverb);
+
+  const transport = Tone.getTransport();
+  const ids: number[] = [];
+
+  for (const event of schedule) {
+    const id = transport.schedule((time) => {
+      synth.triggerAttackRelease(event.notes, event.duration, time);
+    }, '+' + event.time);
+    ids.push(id);
+  }
+
+  return new Promise<void>((resolve) => {
+    const stopId = transport.schedule(() => {
+      for (const id of ids) transport.clear(id);
+      transport.clear(stopId);
+      synth.dispose();
+      reverb.dispose();
+      resolve();
+    }, '+' + totalDuration);
+    ids.push(stopId);
+
+    if (transport.state !== 'started') {
+      transport.start();
+    }
+  });
+};
+
 // ── Player class ───────────────────────────────────────
 
 export class ChordPlayer {
@@ -273,6 +344,9 @@ export class ChordPlayer {
   private _callbacks: PlayerCallbacks;
   private progressInterval: ReturnType<typeof setInterval> | null = null;
   private startOffset = 0;
+  private _loop = false;
+  private _currentChord: string | null = null;
+  private _bars: ParsedBar[] = [];
 
   constructor(config: PlayerConfig, callbacks: PlayerCallbacks = {}) {
     this._config = config;
@@ -328,18 +402,38 @@ export class ChordPlayer {
    */
   load(bars: ParsedBar[]): void {
     this.clearSchedule();
+    this._bars = bars;
+    this._currentChord = null;
 
     const schedule = buildSchedule(bars, this._config);
     console.log('[ChordPlayer] load: bars=', bars.length, 'scheduled notes=', schedule.length);
-    for (const s of schedule) {
-      console.log('[ChordPlayer] note:', s.time.toFixed(2), s.notes, s.duration.toFixed(2));
-    }
     const transport = Tone.getTransport();
     transport.bpm.value = this._config.bpm;
     transport.timeSignature = this._config.timeSignature.beats;
 
     const synth = this.ensureSynth();
     const barDur = barDuration(this._config);
+
+    // Build a chord-name schedule from resolved bars
+    const resolved = resolveRepeats(bars);
+    const chordNames: { time: number; name: string }[] = [];
+    let lastChordName: string | null = null;
+    for (let barIdx = 0; barIdx < resolved.length; barIdx++) {
+      const bar = resolved[barIdx];
+      const barStart = barIdx * barDur;
+      const entryCount = bar.entries.length || 1;
+      const entryDur = barDur / entryCount;
+      for (let entryIdx = 0; entryIdx < bar.entries.length; entryIdx++) {
+        const entry = bar.entries[entryIdx];
+        const time = barStart + entryIdx * entryDur;
+        if (entry.type === 'chord') {
+          lastChordName = entry.chord.raw;
+          chordNames.push({ time, name: entry.chord.raw });
+        } else if ((entry.type === 'sustain' || entry.type === 'repeat') && lastChordName) {
+          chordNames.push({ time, name: lastChordName });
+        }
+      }
+    }
 
     for (const event of schedule) {
       const id = transport.schedule((time) => {
@@ -348,8 +442,16 @@ export class ChordPlayer {
       this.scheduledEvents.push(id);
     }
 
+    // Track chord changes
+    for (const cn of chordNames) {
+      const id = transport.schedule(() => {
+        this._currentChord = cn.name;
+        this._callbacks.onChordChange?.(cn.name);
+      }, cn.time);
+      this.scheduledEvents.push(id);
+    }
+
     // Track bar changes
-    const resolved = resolveRepeats(bars);
     for (let i = 0; i < resolved.length; i++) {
       const id = transport.schedule(() => {
         this._callbacks.onBarChange?.(i);
@@ -359,9 +461,15 @@ export class ChordPlayer {
 
     this._totalDuration = resolved.length * barDur;
 
-    // Auto-stop at end
+    // Auto-stop or loop at end
     const stopId = transport.schedule(() => {
-      this.stop();
+      if (this._loop) {
+        transport.stop();
+        transport.position = 0;
+        transport.start();
+      } else {
+        this.stop();
+      }
     }, this._totalDuration);
     this.scheduledEvents.push(stopId);
   }
@@ -416,6 +524,8 @@ export class ChordPlayer {
     transport.stop();
     transport.position = 0;
     this.synth?.releaseAll();
+    this._currentChord = null;
+    this._callbacks.onChordChange?.(null);
     this.setState('stopped');
     this.stopProgressTracking();
     this._callbacks.onProgress?.(0, this._totalDuration);
@@ -434,6 +544,19 @@ export class ChordPlayer {
   seekToBar(barIndex: number): void {
     const barDur = barDuration(this._config);
     this.seekTo(barIndex * barDur);
+  }
+
+  setVolume(db: number): void {
+    const synth = this.ensureSynth();
+    synth.volume.value = db;
+  }
+
+  setLoop(loop: boolean): void {
+    this._loop = loop;
+  }
+
+  getCurrentChord(): string | null {
+    return this._currentChord;
   }
 
   updateConfig(config: Partial<PlayerConfig>): void {

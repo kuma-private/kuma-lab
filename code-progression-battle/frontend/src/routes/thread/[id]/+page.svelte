@@ -6,6 +6,8 @@
 	import { ChordPlayer, type PlayerState } from '$lib/chord-player';
 	import ScoreEditor from '$lib/components/ScoreEditor.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
+	import AiReview from '$lib/components/AiReview.svelte';
+	import PatternPicker from '$lib/components/PatternPicker.svelte';
 
 	const store = createAppStore();
 	const threadId = page.params.id as string;
@@ -15,6 +17,9 @@
 	let currentTime = $state(0);
 	let totalDuration = $state(0);
 	let activeBarIndex = $state(-1);
+	let currentChord = $state<string | null>(null);
+	let playerVolume = $state(-10);
+	let playerLoop = $state(false);
 
 	// Turn action state
 	let commentInput = $state('');
@@ -78,9 +83,12 @@
 			{
 				onStateChange: (s) => { playerState = s; },
 				onProgress: (ct, td) => { currentTime = ct; totalDuration = td; },
-				onBarChange: (idx) => { activeBarIndex = idx; }
+				onBarChange: (idx) => { activeBarIndex = idx; },
+				onChordChange: (chord) => { currentChord = chord; }
 			}
 		);
+		player.setVolume(playerVolume);
+		player.setLoop(playerLoop);
 		try {
 			const allBars = thread.lines.flatMap(l => {
 				try { return parseProgression(l.chords).bars; }
@@ -94,8 +102,10 @@
 
 	const handlePlay = () => { buildPlayer(); player?.play(); };
 	const handlePause = () => { player?.pause(); };
-	const handleStop = () => { player?.stop(); activeBarIndex = -1; };
+	const handleStop = () => { player?.stop(); activeBarIndex = -1; currentChord = null; };
 	const handleSeek = (time: number) => { player?.seekTo(time); };
+	const handleVolumeChange = (db: number) => { playerVolume = db; player?.setVolume(db); };
+	const handleLoopChange = (loop: boolean) => { playerLoop = loop; player?.setLoop(loop); };
 
 	const handleExport = () => {
 		const thread = store.currentThread;
@@ -321,6 +331,38 @@
 
 	let scoreReadonly = $derived(!canAct);
 
+	// AI Review: extract from latest turn
+	const latestAiComment = $derived.by(() => {
+		const t = store.currentThread;
+		if (!t || t.history.length === 0) return '';
+		const latest = t.history[t.history.length - 1];
+		return latest.aiComment || '';
+	});
+
+	const latestAiScores = $derived.by(() => {
+		const t = store.currentThread;
+		if (!t || t.history.length === 0) return null;
+		const latest = t.history[t.history.length - 1];
+		if (!latest.aiScores) return null;
+		try {
+			const parsed = JSON.parse(latest.aiScores);
+			if (typeof parsed.tension === 'number' && typeof parsed.creativity === 'number'
+				&& typeof parsed.coherence === 'number' && typeof parsed.surprise === 'number') {
+				return parsed as { tension: number; creativity: number; coherence: number; surprise: number };
+			}
+		} catch { /* ignore */ }
+		return null;
+	});
+
+	// Pattern insert handler
+	const handlePatternInsert = (chords: string) => {
+		if (scoreReadonly) return;
+		scoreEditorValue = scoreEditorValue
+			? scoreEditorValue + '\n' + chords
+			: chords;
+		diffError = null;
+	};
+
 	const handleScoreChange = (value: string) => {
 		scoreEditorValue = value;
 		diffError = null;
@@ -501,8 +543,14 @@
 				{/if}
 			</div>
 
-			<!-- Right: Interactive Score (ScoreEditor) -->
+			<!-- Right: AI Review + Score + Pattern Picker -->
 			<div class="panel panel-right">
+				{#if latestAiComment || latestAiScores}
+					<div class="right-section">
+						<AiReview comment={latestAiComment} scores={latestAiScores} />
+					</div>
+				{/if}
+
 				<div class="panel-header">
 					<h2>Score</h2>
 					<span class="count">{thread.lines.length} lines</span>
@@ -526,6 +574,12 @@
 						/>
 					{/if}
 				</div>
+
+				{#if canAct && thread.key}
+					<div class="right-section right-section--bottom">
+						<PatternPicker key={thread.key} onInsert={handlePatternInsert} />
+					</div>
+				{/if}
 			</div>
 		</div>
 	{:else if store.loading}
@@ -541,28 +595,33 @@
 	{currentTime}
 	{totalDuration}
 	bpm={store.currentThread?.bpm ?? 120}
+	{currentChord}
+	volume={playerVolume}
+	loop={playerLoop}
 	onplay={handlePlay}
 	onpause={handlePause}
 	onstop={handleStop}
 	onseek={handleSeek}
+	onVolumeChange={handleVolumeChange}
+	onLoopChange={handleLoopChange}
 />
 
 <style>
 	.page {
 		max-width: 1200px;
 		margin: 0 auto;
-		padding: var(--space-md) var(--space-lg);
-		padding-bottom: calc(var(--player-height) + var(--space-xl));
+		padding: var(--space-lg) var(--space-xl);
+		padding-bottom: calc(var(--player-height) + var(--space-2xl));
 	}
 
 	/* Header */
 	.thread-header {
 		display: flex;
 		align-items: flex-start;
-		gap: var(--space-md);
-		padding-bottom: var(--space-md);
+		gap: var(--space-lg);
+		padding-bottom: var(--space-lg);
 		border-bottom: 1px solid var(--border-subtle);
-		margin-bottom: var(--space-sm);
+		margin-bottom: var(--space-lg);
 	}
 
 	.back-link {
@@ -627,9 +686,9 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: var(--space-sm) var(--space-md);
+		padding: var(--space-md) var(--space-lg);
 		border-radius: var(--radius-md);
-		margin-bottom: var(--space-md);
+		margin-bottom: var(--space-lg);
 		font-size: 0.85rem;
 		transition: all 0.3s ease;
 	}
@@ -720,7 +779,7 @@
 	.editor-layout {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: var(--space-md);
+		gap: var(--space-xl);
 		align-items: start;
 	}
 
@@ -1049,6 +1108,15 @@
 
 	@keyframes spin {
 		to { transform: rotate(360deg); }
+	}
+
+	.right-section {
+		padding: var(--space-sm);
+	}
+
+	.right-section--bottom {
+		border-top: 1px solid var(--border-subtle);
+		padding: var(--space-sm) var(--space-md);
 	}
 
 	/* Score area (right panel) */

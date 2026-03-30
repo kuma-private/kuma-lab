@@ -21,6 +21,7 @@ module Models =
           PreviousChords: string
           Comment: string
           AiComment: string
+          AiScores: string
           CreatedAt: DateTime }
 
     type Thread =

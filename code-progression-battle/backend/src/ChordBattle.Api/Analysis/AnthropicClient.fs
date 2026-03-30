@@ -72,6 +72,28 @@ module AnthropicClient =
                 return Error $"Exception calling Anthropic API: {ex.Message}"
         }
 
+    [<CLIMutable>]
+    type ReviewScores =
+        { [<JsonPropertyName("tension")>]
+          Tension: int
+          [<JsonPropertyName("creativity")>]
+          Creativity: int
+          [<JsonPropertyName("coherence")>]
+          Coherence: int
+          [<JsonPropertyName("surprise")>]
+          Surprise: int }
+
+    [<CLIMutable>]
+    type ReviewResponse =
+        { [<JsonPropertyName("comment")>]
+          Comment: string
+          [<JsonPropertyName("scores")>]
+          Scores: ReviewScores }
+
+    type ReviewResult =
+        { Comment: string
+          ScoresJson: string }
+
     let reviewTurn
         (httpClient: HttpClient)
         (apiKey: string)
@@ -81,12 +103,26 @@ module AnthropicClient =
         (lineNumber: int)
         (chords: string)
         (allLines: string list)
-        : Async<Result<string, string>> =
+        : Async<Result<ReviewResult, string>> =
 
         let systemPrompt =
             "あなたは音楽理論に精通したコード進行の評論家です。\n"
-            + "コード進行を分析し、日本語で短い一言コメント(1-2文)をしてください。\n"
-            + "コメントではコードパターンの認識、テンションの使い方、転調の効果、前後の文脈との関連性を意識し、ポジティブかつ建設的に。"
+            + "以下のコード進行を分析し、JSONで回答してください。\n\n"
+            + "{\n"
+            + "  \"comment\": \"日本語で短い一言コメント(1-2文)\",\n"
+            + "  \"scores\": {\n"
+            + "    \"tension\": 1-5,\n"
+            + "    \"creativity\": 1-5,\n"
+            + "    \"coherence\": 1-5,\n"
+            + "    \"surprise\": 1-5\n"
+            + "  }\n"
+            + "}\n\n"
+            + "各スコアの基準:\n"
+            + "- tension: テンションノートや不協和音の使い方。5=大胆に活用、1=ほぼなし\n"
+            + "- creativity: 独創性、意外なコード選択。5=非常にユニーク、1=ありきたり\n"
+            + "- coherence: 前後のコードとの繋がり、音楽的整合性。5=完璧な流れ、1=不自然\n"
+            + "- surprise: サプライズ感、転調や意外な展開。5=驚きの展開、1=予想通り\n\n"
+            + "JSONのみ出力してください。"
 
         let scoreText =
             allLines
@@ -94,12 +130,23 @@ module AnthropicClient =
             |> String.concat "\n"
 
         let userMessage =
-            $"キー: {key}, 拍子: {timeSignature}\n"
+            $"キー: {key}\n拍子: {timeSignature}\n"
             + $"今回のアクション: {action} (行{lineNumber})\n"
-            + $"追加/変更されたコード: {chords}\n"
+            + $"追加/変更されたコード: {chords}\n\n"
             + $"スコア全体:\n{scoreText}"
 
-        callApi httpClient apiKey systemPrompt userMessage 200
+        async {
+            let! result = callApi httpClient apiKey systemPrompt userMessage 300
+            match result with
+            | Error e -> return Error e
+            | Ok text ->
+                try
+                    let parsed = JsonSerializer.Deserialize<ReviewResponse>(text.Trim())
+                    let scoresJson = JsonSerializer.Serialize(parsed.Scores)
+                    return Ok { Comment = parsed.Comment; ScoresJson = scoresJson }
+                with _ ->
+                    return Ok { Comment = text; ScoresJson = "" }
+        }
 
     let generateChords
         (httpClient: HttpClient)
