@@ -11,7 +11,7 @@
 
 {#if threads.length === 0}
 	<div class="empty">
-		<p>No threads yet. Create the first one!</p>
+		<p>まだセッションがありません。最初のセッションを作ろう!</p>
 	</div>
 {:else}
 	<div class="thread-list">

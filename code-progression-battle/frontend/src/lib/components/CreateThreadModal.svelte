@@ -45,7 +45,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="modal" onclick={(e) => e.stopPropagation()}>
 		<div class="modal-header">
-			<h2>New Thread</h2>
+			<h2>新しいセッション</h2>
 			<button class="btn btn-ghost" onclick={onClose} aria-label="Close">
 				<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2">
 					<line x1="4" y1="4" x2="14" y2="14" />
@@ -56,12 +56,12 @@
 
 		<form onsubmit={handleSubmit}>
 			<div class="field">
-				<label for="title">Title</label>
-				<input id="title" type="text" bind:value={title} placeholder="Midnight Jazz Session..." />
+				<label for="title">タイトル</label>
+				<input id="title" type="text" bind:value={title} placeholder="真夜中のジャズセッション..." />
 			</div>
 
 			<div class="field">
-				<label for="root">Key</label>
+				<label for="root">キー</label>
 				<div class="field-row-inner">
 					<select id="root" bind:value={rootNote}>
 						{#each roots as r}
@@ -78,7 +78,7 @@
 
 			<div class="field-row">
 				<div class="field">
-					<label for="ts-top">Time Signature</label>
+					<label for="ts-top">拍子</label>
 					<div class="field-row-inner">
 						<select id="ts-top" bind:value={timeSigTop}>
 							{#each timeSigOptions as n}
@@ -100,14 +100,14 @@
 			</div>
 
 			<div class="field">
-				<label for="opponent">Opponent Email</label>
+				<label for="opponent">対戦相手のメールアドレス</label>
 				<input id="opponent" type="email" bind:value={opponentEmail} placeholder="friend@example.com" />
 			</div>
 
 			<div class="actions">
-				<button type="button" class="btn btn-secondary" onclick={onClose}>Cancel</button>
+				<button type="button" class="btn btn-secondary" onclick={onClose}>キャンセル</button>
 				<button type="submit" class="btn btn-primary" disabled={!title.trim()}>
-					Create Battle
+					セッション開始
 				</button>
 			</div>
 		</form>

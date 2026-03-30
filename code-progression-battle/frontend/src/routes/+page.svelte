@@ -21,13 +21,13 @@
 	<header class="header">
 		<div class="header-left">
 			<h1 class="logo">Code Progression Battle</h1>
-			<p class="subtitle">Build chord progressions together</p>
+			<p class="subtitle">コード進行を一緒に作ろう</p>
 		</div>
 		<div class="header-right">
 			{#if store.loggedIn}
 				<span class="user-name">@{store.user?.name}</span>
 			{:else}
-				<a href="/auth/google" class="btn btn-secondary">Login with Google</a>
+				<a href="/auth/google" class="btn btn-secondary">Googleでログイン</a>
 			{/if}
 		</div>
 	</header>
@@ -35,7 +35,7 @@
 	<main class="main">
 		<div class="toolbar">
 			<button class="btn btn-primary" onclick={() => (showCreateModal = true)}>
-				+ New Thread
+				+ 新しいセッション
 			</button>
 		</div>
 
@@ -44,7 +44,7 @@
 		{/if}
 
 		{#if store.loading}
-			<p class="loading">Loading...</p>
+			<p class="loading">読み込み中...</p>
 		{:else}
 			<ThreadList threads={store.threads} />
 		{/if}

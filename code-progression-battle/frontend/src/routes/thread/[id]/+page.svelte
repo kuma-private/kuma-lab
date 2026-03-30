@@ -82,7 +82,7 @@
 	const handleStop = () => { player?.stop(); activeBarIndex = -1; };
 	const handleSeek = (time: number) => { player?.seekTo(time); };
 
-	const handleExport = () => {
+	const handleエクスポート = () => {
 		const thread = store.currentThread;
 		if (!thread) return;
 		const header = `# ${thread.title}\nKey: ${thread.key} | ${thread.timeSignature} | BPM ${thread.bpm}\n\n`;
@@ -179,9 +179,9 @@
 	// Action description for history (BBS-style)
 	const actionLabel = (action: string, lineNum: number): string => {
 		switch (action) {
-			case 'add': return `added line ${lineNum}`;
-			case 'edit': return `edited line ${lineNum}`;
-			case 'delete': return `removed line ${lineNum}`;
+			case 'add': return `L${lineNum} を追加`;
+			case 'edit': return `L${lineNum} を編集`;
+			case 'delete': return `L${lineNum} を削除`;
 			default: return action;
 		}
 	};
@@ -189,7 +189,7 @@
 	// Friendly creative prompts that rotate
 	const myTurnPrompts = [
 		'Next chord is yours. What sounds good?',
-		'Your move. Drop some chords!',
+		'あなたの番! コード進行を追加しよう',
 		'The score awaits your touch.',
 		'Time to add your voice.',
 		"It's your turn. Let's hear it!",
@@ -211,10 +211,10 @@
 		const t = store.currentThread;
 		if (!t) return '';
 		switch (t.status) {
-			case 'waiting': return 'Waiting for someone to join the session...';
-			case 'active': return store.isMyTurn ? pickPrompt(t.turnCount) : `@${opponentName} is thinking...`;
-			case 'finish_proposed': return t.finishProposedBy === store.user?.sub ? 'Finish proposed. Waiting for response...' : `@${opponentName} thinks the score is complete!`;
-			case 'completed': return 'Session complete. Nice work!';
+			case 'waiting': return '参加者を待っています...';
+			case 'active': return store.isMyTurn ? pickPrompt(t.turnCount) : `@${opponentName} が考え中...`;
+			case 'finish_proposed': return t.finishProposedBy === store.user?.sub ? '完成を提案しました。返答待ち...' : `@${opponentName} がスコアの完成を提案しています!`;
+			case 'completed': return 'セッション完了! お疲れさまでした!';
 			default: return t.status;
 		}
 	});
@@ -257,7 +257,7 @@
 			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
 				<polyline points="10,2 4,8 10,14" />
 			</svg>
-			Back
+			戻る
 		</a>
 		{#if store.currentThread}
 			{@const thread = store.currentThread}
@@ -273,10 +273,10 @@
 			<div class="header-actions">
 				{#if canAct}
 					<button class="btn-propose" onclick={() => store.proposeFinish(threadId)} title="Propose to finish">
-						Propose Finish
+						完成を提案
 					</button>
 				{/if}
-				<button class="btn btn-ghost" onclick={handleExport}>Export</button>
+				<button class="btn btn-ghost" onclick={handleエクスポート}>エクスポート</button>
 			</div>
 		{/if}
 	</header>
@@ -302,17 +302,17 @@
 		<!-- Join button for invited player -->
 		{#if thread.status === 'waiting' && !store.isPlayer}
 			<div class="join-section">
-				<button class="btn btn-primary" onclick={() => store.joinThread(threadId)}>Join this battle!</button>
+				<button class="btn btn-primary" onclick={() => store.joinThread(threadId)}>このセッションに参加!</button>
 			</div>
 		{/if}
 
 		<!-- Finish proposal response -->
 		{#if isOpponentFinishProposal && store.isPlayer}
 			<div class="finish-response">
-				<span class="finish-text">@{opponentName} thinks the score is ready. Wrap it up?</span>
+				<span class="finish-text">@{opponentName} がスコアの完成を提案しています。終了しますか?</span>
 				<div class="finish-buttons">
-					<button class="btn btn-primary btn-sm" onclick={() => store.acceptFinish(threadId)}>Accept</button>
-					<button class="btn btn-secondary btn-sm" onclick={() => store.rejectFinish(threadId)}>Reject</button>
+					<button class="btn btn-primary btn-sm" onclick={() => store.acceptFinish(threadId)}>承認</button>
+					<button class="btn btn-secondary btn-sm" onclick={() => store.rejectFinish(threadId)}>却下</button>
 				</div>
 			</div>
 		{/if}
@@ -384,7 +384,7 @@
 				{#if thread.status === 'active' && store.isPlayer}
 					<div class="add-input" class:add-input--disabled={!canAct}>
 						{#if !canAct}
-							<div class="waiting-hint">@{opponentName} is composing...</div>
+							<div class="waiting-hint">@{opponentName} が作曲中...</div>
 						{/if}
 						<div class="add-input-row">
 							<textarea
@@ -414,7 +414,7 @@
 						<input
 							type="text"
 							bind:value={commentInput}
-							placeholder="Add a comment..."
+							placeholder="コメントを追加..."
 							class="comment-input"
 							disabled={!canAct}
 						/>
@@ -432,7 +432,12 @@
 				<div class="score-lines">
 					{#if thread.lines.length === 0}
 						<div class="empty-score">
-							<p>No lines yet. Add the first chord progression!</p>
+							<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.2">
+								<path d="M9 18V5l12-2v13" />
+								<circle cx="6" cy="18" r="3" />
+								<circle cx="18" cy="16" r="3" />
+							</svg>
+							<p>The score is empty. Drop the first chord!</p>
 						</div>
 					{:else}
 						{#each thread.lines as line, i}
@@ -471,7 +476,7 @@
 								{:else if deleteConfirmLine === lineNum}
 									<!-- Delete confirmation -->
 									<div class="delete-confirm">
-										<span class="delete-confirm-text">Delete this line?</span>
+										<span class="delete-confirm-text">この行を削除しますか?</span>
 										<div class="delete-confirm-actions">
 											<button class="btn-inline btn-inline--danger" onclick={() => submitDelete(lineNum)} disabled={submitting}>
 												Delete
@@ -651,17 +656,15 @@
 		50% { box-shadow: 0 0 30px rgba(167, 139, 250, 0.5), 0 0 60px rgba(167, 139, 250, 0.2); }
 	}
 
-	.pulse-dot {
-		width: 8px;
-		height: 8px;
-		background: var(--accent-primary);
-		border-radius: 50%;
-		animation: pulse 1.5s ease-in-out infinite;
+	.status-note {
+		animation: note-bounce 1.5s ease-in-out infinite;
+		flex-shrink: 0;
 	}
 
-	@keyframes pulse {
-		0%, 100% { opacity: 1; transform: scale(1); }
-		50% { opacity: 0.5; transform: scale(1.3); }
+	@keyframes note-bounce {
+		0%, 100% { transform: translateY(0) rotate(0deg); }
+		25% { transform: translateY(-2px) rotate(-5deg); }
+		75% { transform: translateY(1px) rotate(3deg); }
 	}
 
 	.status-waiting {
@@ -671,7 +674,7 @@
 	}
 
 	.status-completed {
-		background: rgba(52, 211, 153, 0.1);
+		background: linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(167, 139, 250, 0.08));
 		border: 1px solid var(--success);
 		color: var(--success);
 	}
