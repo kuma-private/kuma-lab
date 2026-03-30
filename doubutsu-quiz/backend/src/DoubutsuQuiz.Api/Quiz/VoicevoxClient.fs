@@ -8,15 +8,42 @@ module VoicevoxClient =
 
     let private zundamonSpeakerId = 3
 
+    let private getIdToken (httpClient: HttpClient) (audience: string) : Async<string option> =
+        async {
+            try
+                // GCP metadata server for ID token
+                let metadataUrl =
+                    $"http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience={Uri.EscapeDataString(audience)}"
+                let request = new HttpRequestMessage(HttpMethod.Get, metadataUrl)
+                request.Headers.Add("Metadata-Flavor", "Google")
+                let! response = httpClient.SendAsync(request) |> Async.AwaitTask
+                if response.IsSuccessStatusCode then
+                    let! token = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+                    return Some token
+                else
+                    return None
+            with _ ->
+                // Not running on GCP (local dev)
+                return None
+        }
+
     let synthesize (httpClient: HttpClient) (baseUrl: string) (text: string) : Async<Result<byte array, string>> =
         async {
             try
                 if String.IsNullOrEmpty(baseUrl) then
                     return Error "VOICEVOX_URL not configured"
                 else
+                    // Get auth token for Cloud Run service-to-service
+                    let! idToken = getIdToken httpClient baseUrl
+
                     // Step 1: Create audio query
                     let queryUrl = $"{baseUrl}/audio_query?text={Uri.EscapeDataString(text)}&speaker={zundamonSpeakerId}"
-                    let! queryResponse = httpClient.PostAsync(queryUrl, null) |> Async.AwaitTask
+                    let queryRequest = new HttpRequestMessage(HttpMethod.Post, queryUrl)
+                    match idToken with
+                    | Some token -> queryRequest.Headers.Add("Authorization", $"Bearer {token}")
+                    | None -> ()
+
+                    let! queryResponse = httpClient.SendAsync(queryRequest) |> Async.AwaitTask
                     let! queryBody = queryResponse.Content.ReadAsStringAsync() |> Async.AwaitTask
 
                     if not queryResponse.IsSuccessStatusCode then
@@ -24,8 +51,13 @@ module VoicevoxClient =
                     else
                         // Step 2: Synthesize audio
                         let synthUrl = $"{baseUrl}/synthesis?speaker={zundamonSpeakerId}"
-                        let synthContent = new StringContent(queryBody, Encoding.UTF8, "application/json")
-                        let! synthResponse = httpClient.PostAsync(synthUrl, synthContent) |> Async.AwaitTask
+                        let synthRequest = new HttpRequestMessage(HttpMethod.Post, synthUrl)
+                        synthRequest.Content <- new StringContent(queryBody, Encoding.UTF8, "application/json")
+                        match idToken with
+                        | Some token -> synthRequest.Headers.Add("Authorization", $"Bearer {token}")
+                        | None -> ()
+
+                        let! synthResponse = httpClient.SendAsync(synthRequest) |> Async.AwaitTask
 
                         if not synthResponse.IsSuccessStatusCode then
                             let! errBody = synthResponse.Content.ReadAsStringAsync() |> Async.AwaitTask

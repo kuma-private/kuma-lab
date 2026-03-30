@@ -1,16 +1,14 @@
 let audioCtx: AudioContext | null = null;
+let audioInitialized = false;
 
-// Only create AudioContext on user interaction
+// Must call from user gesture (click/tap) to enable audio on mobile
 export function initAudio(): void {
-	if (!audioCtx) {
-		try {
-			audioCtx = new AudioContext();
-		} catch {
-			// AudioContext not supported
-		}
-	}
-	if (audioCtx && audioCtx.state === 'suspended') {
-		audioCtx.resume().catch(() => {});
+	if (audioInitialized) return;
+	try {
+		audioCtx = new AudioContext();
+		audioInitialized = true;
+	} catch {
+		// AudioContext not available
 	}
 }
 
