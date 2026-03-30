@@ -508,37 +508,10 @@
 					{/if}
 				</div>
 
-				<!-- Comment input + submit button -->
-				{#if thread.status === 'active' && store.isPlayer}
-					<div class="submit-area" class:submit-area--disabled={!canAct}>
-						{#if !canAct}
-							<div class="waiting-hint">@{opponentName} が作曲中...</div>
-						{/if}
-						{#if diffError}
-							<div class="diff-error">{diffError}</div>
-						{/if}
-						<textarea
-							class="comment-textarea"
-							bind:value={commentInput}
-							placeholder="コメントを追加..."
-							rows="1"
-							disabled={!canAct}
-						></textarea>
-						<button
-							class="btn-submit-turn"
-							onclick={handleSubmitTurn}
-							disabled={!canAct || submitting}
-						>
-							{#if submitting}
-								<span class="spinner"></span>
-							{:else}
-								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-									<line x1="22" y1="2" x2="11" y2="13" />
-									<polygon points="22 2 15 22 11 13 2 9 22 2" />
-								</svg>
-							{/if}
-							ターンを送信
-						</button>
+				<!-- Waiting hint when not your turn -->
+				{#if thread.status === 'active' && store.isPlayer && !canAct}
+					<div class="submit-area submit-area--disabled">
+						<div class="waiting-hint">@{opponentName} が作曲中...</div>
 					</div>
 				{/if}
 			</div>
@@ -575,10 +548,40 @@
 					{/if}
 				</div>
 
-				{#if canAct && thread.key}
-					<div class="right-section right-section--bottom">
-						<PatternPicker key={thread.key} onInsert={handlePatternInsert} />
+				{#if canAct}
+					<div class="save-area">
+						{#if diffError}
+							<div class="diff-error">{diffError}</div>
+						{/if}
+						<textarea
+							class="comment-textarea"
+							bind:value={commentInput}
+							placeholder="コメントを残す..."
+							rows="1"
+						></textarea>
+						<button
+							class="btn-submit-turn"
+							onclick={handleSubmitTurn}
+							disabled={submitting}
+						>
+							{#if submitting}
+								<span class="spinner"></span>
+							{:else}
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+									<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+									<polyline points="17 21 17 13 7 13 7 21" />
+									<polyline points="7 3 7 8 15 8" />
+								</svg>
+							{/if}
+							保存
+						</button>
 					</div>
+
+					{#if thread.key}
+						<div class="right-section right-section--bottom">
+							<PatternPicker key={thread.key} onInsert={handlePatternInsert} />
+						</div>
+					{/if}
 				{/if}
 			</div>
 		</div>
@@ -1020,13 +1023,19 @@
 
 	/* Submit area (left panel bottom) */
 	.submit-area {
-		border-top: 2px solid var(--border-default);
-		margin-top: var(--space-lg);
-		padding: var(--space-lg);
+		padding: var(--space-md) var(--space-lg);
 		background: var(--bg-surface);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-md);
+	}
+
+	.save-area {
+		border-top: 1px solid var(--border-subtle);
+		padding: var(--space-md) var(--space-lg);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
 	}
 
 	.submit-area--disabled {
