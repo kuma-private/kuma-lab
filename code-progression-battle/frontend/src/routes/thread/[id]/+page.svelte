@@ -276,37 +276,14 @@
 				{/if}
 			</div>
 
-			<!-- Right: Score editor -->
+			<!-- Right: Score (unified view) -->
 			<div class="panel panel-right">
 				<div class="panel-header">
 					<h2>Score</h2>
 					<span class="count">{thread.lines.length} lines</span>
 				</div>
 
-				{#if thread.lines.length > 0}
-					<div class="score-lines">
-						{#each thread.lines as line}
-							<div
-								class="score-line"
-								class:score-line--selected={selectedLineNumber === line.lineNumber}
-								class:score-line--clickable={store.isMyTurn && thread.status === 'active' && (selectedAction === 'edit' || selectedAction === 'delete')}
-								onclick={() => {
-									if (!store.isMyTurn || thread.status !== 'active') return;
-									if (selectedAction === 'edit') selectLineForEdit(line.lineNumber, line.chords);
-									else if (selectedAction === 'delete') selectLineForDelete(line.lineNumber);
-								}}
-								role={store.isMyTurn && (selectedAction === 'edit' || selectedAction === 'delete') ? 'button' : undefined}
-								tabindex={store.isMyTurn && (selectedAction === 'edit' || selectedAction === 'delete') ? 0 : undefined}
-							>
-								<span class="line-number">L{line.lineNumber}</span>
-								<ScoreEditor value={line.chords} readonly={true} />
-								<span class="line-author">@{line.addedByName}</span>
-							</div>
-						{/each}
-					</div>
-				{:else}
-					<div class="empty-score">No lines yet. Add the first one!</div>
-				{/if}
+				<ScoreEditor value={scoreText} readonly={true} />
 			</div>
 		</div>
 	{:else if store.loading}
@@ -601,49 +578,6 @@
 		display: flex;
 		gap: var(--space-sm);
 		justify-content: center;
-	}
-
-	/* Score lines */
-	.score-lines {
-		display: flex;
-		flex-direction: column;
-	}
-
-	.score-line {
-		display: flex;
-		align-items: center;
-		gap: var(--space-sm);
-		padding: 6px var(--space-md);
-		border-bottom: 1px solid var(--border-subtle);
-		transition: background 0.15s;
-	}
-
-	.score-line--clickable {
-		cursor: pointer;
-	}
-
-	.score-line--clickable:hover {
-		background: var(--bg-hover);
-	}
-
-	.score-line--selected {
-		background: rgba(167, 139, 250, 0.1);
-		border-left: 3px solid var(--accent-primary);
-	}
-
-	.line-number {
-		font-family: var(--font-mono);
-		font-size: 0.7rem;
-		color: var(--text-muted);
-		min-width: 24px;
-		flex-shrink: 0;
-	}
-
-	.line-author {
-		font-size: 0.7rem;
-		color: var(--text-muted);
-		flex-shrink: 0;
-		margin-left: auto;
 	}
 
 	.empty, .empty-score {
