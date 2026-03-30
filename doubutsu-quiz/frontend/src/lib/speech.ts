@@ -29,26 +29,33 @@ export async function warmup(): Promise<void> {
 	}
 }
 
-// Pre-load voice audio for all quiz items during loading phase
+async function fetchVoice(text: string): Promise<void> {
+	try {
+		const res = await fetch('/api/voice', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			credentials: 'include',
+			body: JSON.stringify({ text })
+		});
+		if (res.ok) {
+			const buf = await res.arrayBuffer();
+			audioCache.set(text, buf);
+		}
+	} catch {
+		// skip
+	}
+}
+
+// Pre-load voices: first 2 items immediately, rest in pairs
 export async function preloadVoices(texts: string[]): Promise<void> {
 	preloading = true;
-	const promises = texts.map(async (text) => {
-		try {
-			const res = await fetch('/api/voice', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({ text })
-			});
-			if (res.ok) {
-				const buf = await res.arrayBuffer();
-				audioCache.set(text, buf);
-			}
-		} catch {
-			// skip failed ones
-		}
-	});
-	await Promise.allSettled(promises);
+
+	// Load in pairs of 2, preserving order so early questions are ready first
+	for (let i = 0; i < texts.length; i += 2) {
+		const batch = texts.slice(i, i + 2);
+		await Promise.allSettled(batch.map(fetchVoice));
+	}
+
 	preloading = false;
 }
 
