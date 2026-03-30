@@ -53,23 +53,29 @@
 		}
 	}
 
-	function toggleMic() {
+	function micDown() {
 		initAudio();
+		listening = true;
+		inputText = '';
+		startListening(
+			(text, isFinal) => {
+				inputText = text;
+				if (isFinal) {
+					// Auto-check on final result
+					setTimeout(() => handleSubmit(), 100);
+				}
+			},
+			() => { listening = false; }
+		);
+	}
 
-		if (listening) {
-			stopListening();
-			listening = false;
-		} else {
-			listening = true;
-			startListening(
-				(text) => {
-					inputText = text;
-					listening = false;
-					// Auto-check on voice result
-					setTimeout(() => handleSubmit(), 200);
-				},
-				() => { listening = false; }
-			);
+	function micUp() {
+		if (!listening) return;
+		stopListening();
+		listening = false;
+		// Submit whatever we have
+		if (inputText.trim()) {
+			setTimeout(() => handleSubmit(), 100);
 		}
 	}
 
@@ -156,8 +162,19 @@
 			</div>
 
 			{#if micSupported()}
-				<button class="mic-btn" class:listening onclick={toggleMic}>
-					{listening ? '\u{1F534} きいてるよ...' : '\u{1F3A4} こえで こたえる'}
+				<button
+					class="mic-btn"
+					class:listening
+					onpointerdown={micDown}
+					onpointerup={micUp}
+					onpointerleave={micUp}
+				>
+					{#if listening}
+						<span class="mic-pulse"></span>
+						<span>{'\u{1F534}'} はなすと こたえる</span>
+					{:else}
+						<span>{'\u{1F3A4}'} おして はなす</span>
+					{/if}
 				</button>
 			{/if}
 
@@ -322,27 +339,45 @@
 	}
 
 	.mic-btn {
-		padding: 10px 24px;
-		border-radius: 20px;
+		padding: 14px 28px;
+		border-radius: 24px;
 		background: var(--surface);
 		box-shadow: var(--shadow);
-		font-size: 0.9rem;
+		font-size: 1rem;
 		font-weight: 700;
 		color: var(--text-light);
 		display: flex;
 		align-items: center;
+		justify-content: center;
 		gap: 6px;
-		transition: transform 0.2s;
+		transition: transform 0.2s, background 0.2s;
+		user-select: none;
+		-webkit-user-select: none;
+		touch-action: none;
+		position: relative;
+		overflow: hidden;
+		width: 100%;
+		max-width: 340px;
 	}
 
 	.mic-btn.listening {
 		background: #FFEBEE;
 		color: #E57373;
-		animation: pulse 1s ease-in-out infinite;
+		box-shadow: 0 0 20px rgba(229, 115, 115, 0.4);
+		transform: scale(1.03);
 	}
 
 	.mic-btn:active {
-		transform: scale(0.93);
+		transform: scale(0.97);
+	}
+
+	.mic-pulse {
+		position: absolute;
+		inset: 0;
+		border-radius: 24px;
+		border: 3px solid #E57373;
+		animation: pulse 1s ease-in-out infinite;
+		pointer-events: none;
 	}
 
 	.hint-btn {
