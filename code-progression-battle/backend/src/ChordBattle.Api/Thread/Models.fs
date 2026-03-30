@@ -4,10 +4,21 @@ open System
 
 module Models =
 
-    type Post =
-        { UserId: string
-          UserName: string
+    type Line =
+        { LineNumber: int
           Chords: string
+          AddedBy: string
+          AddedByName: string
+          LastEditedBy: string }
+
+    type TurnAction =
+        { TurnNumber: int
+          UserId: string
+          UserName: string
+          Action: string
+          LineNumber: int
+          Chords: string
+          PreviousChords: string
           Comment: string
           CreatedAt: DateTime }
 
@@ -19,15 +30,26 @@ module Models =
           Bpm: int
           CreatedBy: string
           CreatedByName: string
+          OpponentId: string
+          OpponentName: string
+          OpponentEmail: string
           CreatedAt: DateTime
-          Posts: Post list }
+          Status: string
+          CurrentTurn: string
+          TurnCount: int
+          FinishProposedBy: string
+          Lines: Line list
+          History: TurnAction list }
 
     type CreateThreadRequest =
         { title: string
           key: string
           timeSignature: string
-          bpm: int }
+          bpm: int
+          opponentEmail: string }
 
-    type CreatePostRequest =
-        { chords: string
+    type TurnRequest =
+        { action: string
+          lineNumber: int
+          chords: string
           comment: string }

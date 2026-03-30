@@ -1,7 +1,19 @@
-export interface Post {
+export interface Line {
+	lineNumber: number;
+	chords: string;
+	addedBy: string;
+	addedByName: string;
+	lastEditedBy: string;
+}
+
+export interface TurnAction {
+	turnNumber: number;
 	userId: string;
 	userName: string;
+	action: 'add' | 'edit' | 'delete';
+	lineNumber: number;
 	chords: string;
+	previousChords: string;
 	comment: string;
 	createdAt: string;
 }
@@ -14,7 +26,10 @@ export interface ThreadSummary {
 	bpm: number;
 	createdByName: string;
 	createdAt: string;
-	postCount: number;
+	status: string;
+	currentTurn: string;
+	lineCount: number;
+	turnCount: number;
 }
 
 export interface Thread {
@@ -25,8 +40,16 @@ export interface Thread {
 	bpm: number;
 	createdBy: string;
 	createdByName: string;
+	opponentId: string;
+	opponentName: string;
+	opponentEmail: string;
 	createdAt: string;
-	posts: Post[];
+	status: string;
+	currentTurn: string;
+	turnCount: number;
+	finishProposedBy: string;
+	lines: Line[];
+	history: TurnAction[];
 }
 
 export interface UserInfo {
@@ -65,6 +88,7 @@ export async function createThread(data: {
 	key: string;
 	timeSignature: string;
 	bpm: number;
+	opponentEmail: string;
 }): Promise<{ id: string }> {
 	const res = await apiFetch('/api/threads', {
 		method: 'POST',
@@ -74,15 +98,35 @@ export async function createThread(data: {
 	return res.json();
 }
 
-export async function addPost(
+export async function joinThread(threadId: string): Promise<{ ok: boolean }> {
+	const res = await apiFetch(`/api/threads/${threadId}/join`, { method: 'POST' });
+	return res.json();
+}
+
+export async function submitTurn(
 	threadId: string,
-	data: { chords: string; comment: string }
+	data: { action: string; lineNumber: number; chords: string; comment: string }
 ): Promise<{ ok: boolean }> {
-	const res = await apiFetch(`/api/threads/${threadId}/posts`, {
+	const res = await apiFetch(`/api/threads/${threadId}/turn`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(data)
 	});
+	return res.json();
+}
+
+export async function proposeFinish(threadId: string): Promise<{ ok: boolean }> {
+	const res = await apiFetch(`/api/threads/${threadId}/propose-finish`, { method: 'POST' });
+	return res.json();
+}
+
+export async function acceptFinish(threadId: string): Promise<{ ok: boolean }> {
+	const res = await apiFetch(`/api/threads/${threadId}/accept-finish`, { method: 'POST' });
+	return res.json();
+}
+
+export async function rejectFinish(threadId: string): Promise<{ ok: boolean }> {
+	const res = await apiFetch(`/api/threads/${threadId}/reject-finish`, { method: 'POST' });
 	return res.json();
 }
 

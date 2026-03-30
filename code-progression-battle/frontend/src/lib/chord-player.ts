@@ -78,6 +78,67 @@ const QUALITY_INTERVALS: Record<string, number[]> = {
   // Suspended sevenths
   '7sus4':  [0, 5, 7, 10],
   '7sus2':  [0, 2, 7, 10],
+
+  // Power chord
+  '5':      [0, 7],
+
+  // Altered tensions
+  '7b9':    [0, 4, 7, 10, 13],
+  '7#9':    [0, 4, 7, 10, 15],
+  '7#11':   [0, 4, 7, 10, 18],
+  '7b13':   [0, 4, 7, 10, 20],
+  '7b5':    [0, 4, 6, 10],
+  '7#5':    [0, 4, 8, 10],
+  '7alt':   [0, 4, 8, 10, 13],
+
+  // Augmented extended
+  'aug9':   [0, 4, 8, 10, 14],
+  'augM7':  [0, 4, 8, 11],
+  'augmaj7':[0, 4, 8, 11],
+
+  // Six-nine
+  '69':     [0, 4, 7, 9, 14],
+  'm69':    [0, 3, 7, 9, 14],
+
+  // Minor-major seventh (alternate spellings)
+  'mmaj7':  [0, 3, 7, 11],
+  'm(maj7)':[0, 3, 7, 11],
+  'mMaj7':  [0, 3, 7, 11],
+
+  // Diminished extended
+  'dim9':   [0, 3, 6, 9, 14],
+
+  // Add chords (more)
+  'add2':   [0, 2, 4, 7],
+  'add4':   [0, 4, 5, 7],
+  'madd11': [0, 3, 7, 17],
+
+  // Dominant extended with alterations
+  '9#11':   [0, 4, 7, 10, 14, 18],
+  '9b5':    [0, 4, 6, 10, 14],
+  '13b9':   [0, 4, 7, 10, 13, 21],
+  'm7b9':   [0, 3, 7, 10, 13],
+
+  // 13th extended
+  'M13':    [0, 4, 7, 11, 14, 21],
+  'maj13':  [0, 4, 7, 11, 14, 21],
+  '13#11':  [0, 4, 7, 10, 18, 21],
+  '13sus4': [0, 5, 7, 10, 14, 21],
+
+  // 11th extended
+  'M11':    [0, 4, 7, 11, 14, 17],
+  'maj11':  [0, 4, 7, 11, 14, 17],
+  '11b9':   [0, 4, 7, 10, 13, 17],
+
+  // 9th extended
+  'm9b5':   [0, 3, 6, 10, 14],
+  'mM9':    [0, 3, 7, 11, 14],
+  'mmaj9':  [0, 3, 7, 11, 14],
+  '9sus4':  [0, 5, 7, 10, 14],
+
+  // Omit chords (approximate voicing)
+  'omit3':  [0, 7],
+  'omit5':  [0, 4],
 };
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -114,8 +175,7 @@ function midiToNoteName(midi: number): string {
 export function chordToNotes(chord: ParsedChord): string[] {
   const intervals = QUALITY_INTERVALS[chord.quality];
   if (!intervals) {
-    // Fallback: treat as major triad
-    return chordToNotes({ ...chord, quality: '' });
+    throw new Error(`Unknown chord quality: "${chord.quality}" in "${chord.raw}"`);
   }
 
   const rootMidi = rootToMidi(chord.root, 3);
@@ -187,11 +247,15 @@ export function buildSchedule(
 function entryToNotes(entry: BarEntry, lastChordNotes: string[] | null): string[] | null {
   switch (entry.type) {
     case 'chord':
-      return chordToNotes(entry.chord);
+      try {
+        return chordToNotes(entry.chord);
+      } catch (e) {
+        console.error(`[ChordPlayer] ${e instanceof Error ? e.message : e}`);
+        return null;
+      }
     case 'sustain':
       return lastChordNotes;
     case 'repeat':
-      // Should already be resolved, but fallback
       return lastChordNotes;
     case 'rest':
       return null;
@@ -235,16 +299,25 @@ export class ChordPlayer {
 
   private ensureSynth(): Tone.PolySynth {
     if (!this.synth) {
+      // Piano-like sound: layered oscillators with harmonics + reverb
+      const reverb = new Tone.Reverb({ decay: 1.5, wet: 0.25 }).toDestination();
+      const compressor = new Tone.Compressor(-20, 4).connect(reverb);
+
       this.synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: 'triangle' },
-        envelope: {
-          attack: 0.02,
-          decay: 0.3,
-          sustain: 0.4,
-          release: 0.8,
+        oscillator: {
+          type: 'fmtriangle',
+          modulationType: 'sine',
+          modulationIndex: 2,
+          harmonicity: 3.01,
         },
-        volume: -8,
-      }).toDestination();
+        envelope: {
+          attack: 0.005,
+          decay: 0.6,
+          sustain: 0.2,
+          release: 1.2,
+        },
+        volume: -10,
+      }).connect(compressor);
     }
     return this.synth;
   }
@@ -257,6 +330,10 @@ export class ChordPlayer {
     this.clearSchedule();
 
     const schedule = buildSchedule(bars, this._config);
+    console.log('[ChordPlayer] load: bars=', bars.length, 'scheduled notes=', schedule.length);
+    for (const s of schedule) {
+      console.log('[ChordPlayer] note:', s.time.toFixed(2), s.notes, s.duration.toFixed(2));
+    }
     const transport = Tone.getTransport();
     transport.bpm.value = this._config.bpm;
     transport.timeSignature = this._config.timeSignature.beats;
@@ -309,6 +386,7 @@ export class ChordPlayer {
 
   async play(): Promise<void> {
     await Tone.start(); // Required: user gesture unlocks audio context
+    console.log('[ChordPlayer] play: AudioContext state=', Tone.getContext().state, 'scheduled=', this.scheduledEvents.length, 'totalDuration=', this._totalDuration);
     const transport = Tone.getTransport();
 
     if (this._state === 'paused') {
@@ -321,6 +399,7 @@ export class ChordPlayer {
     transport.stop();
     transport.position = 0;
     transport.start();
+    console.log('[ChordPlayer] transport started, state=', transport.state);
     this.setState('playing');
     this.startProgressTracking();
   }

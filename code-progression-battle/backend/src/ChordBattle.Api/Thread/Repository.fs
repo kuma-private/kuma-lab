@@ -7,7 +7,6 @@ open ChordBattle.Api.Thread.Models
 
 module Repository =
 
-    // In-memory implementation for DEV_MODE / when Firestore is not configured
     module InMemory =
 
         let private threads = ConcurrentDictionary<string, Thread>()
@@ -33,17 +32,79 @@ module Repository =
                 return thread
             }
 
-        let addPost (threadId: string) (post: Post) : Task<Thread option> =
+        let update (thread: Thread) : Task<Thread> =
+            task {
+                threads.[thread.Id] <- thread
+                return thread
+            }
+
+        let joinThread (threadId: string) (opponentId: string) (opponentName: string) : Task<Thread option> =
             task {
                 match threads.TryGetValue(threadId) with
                 | true, thread ->
-                    let updated = { thread with Posts = thread.Posts @ [ post ] }
+                    let updated =
+                        { thread with
+                            OpponentId = opponentId
+                            OpponentName = opponentName
+                            Status = "active" }
                     threads.[threadId] <- updated
                     return Some updated
                 | false, _ -> return None
             }
 
-    // Firestore implementation
+        let executeTurn (threadId: string) (action: TurnAction) (updatedLines: Line list) (nextTurn: string) : Task<Thread option> =
+            task {
+                match threads.TryGetValue(threadId) with
+                | true, thread ->
+                    let updated =
+                        { thread with
+                            Lines = updatedLines
+                            History = thread.History @ [ action ]
+                            CurrentTurn = nextTurn
+                            TurnCount = thread.TurnCount + 1 }
+                    threads.[threadId] <- updated
+                    return Some updated
+                | false, _ -> return None
+            }
+
+        let proposeFinish (threadId: string) (userId: string) (nextTurn: string) : Task<Thread option> =
+            task {
+                match threads.TryGetValue(threadId) with
+                | true, thread ->
+                    let updated =
+                        { thread with
+                            Status = "finish_proposed"
+                            FinishProposedBy = userId
+                            CurrentTurn = nextTurn }
+                    threads.[threadId] <- updated
+                    return Some updated
+                | false, _ -> return None
+            }
+
+        let acceptFinish (threadId: string) : Task<Thread option> =
+            task {
+                match threads.TryGetValue(threadId) with
+                | true, thread ->
+                    let updated = { thread with Status = "completed" }
+                    threads.[threadId] <- updated
+                    return Some updated
+                | false, _ -> return None
+            }
+
+        let rejectFinish (threadId: string) (rejecterTurn: string) : Task<Thread option> =
+            task {
+                match threads.TryGetValue(threadId) with
+                | true, thread ->
+                    let updated =
+                        { thread with
+                            Status = "active"
+                            FinishProposedBy = ""
+                            CurrentTurn = rejecterTurn }
+                    threads.[threadId] <- updated
+                    return Some updated
+                | false, _ -> return None
+            }
+
     module Firestore =
 
         open Google.Cloud.Firestore
@@ -54,10 +115,21 @@ module Repository =
                 FirestoreDb.Create(projectId)
             )
 
-        let private toPost (dict: System.Collections.Generic.IDictionary<string, obj>) : Post =
-            { UserId = dict.["userId"] :?> string
-              UserName = dict.["userName"] :?> string
+        let private toLine (dict: System.Collections.Generic.IDictionary<string, obj>) : Line =
+            { LineNumber = dict.["lineNumber"] :?> int64 |> int
               Chords = dict.["chords"] :?> string
+              AddedBy = dict.["addedBy"] :?> string
+              AddedByName = dict.["addedByName"] :?> string
+              LastEditedBy = dict.["lastEditedBy"] :?> string }
+
+        let private toTurnAction (dict: System.Collections.Generic.IDictionary<string, obj>) : TurnAction =
+            { TurnNumber = dict.["turnNumber"] :?> int64 |> int
+              UserId = dict.["userId"] :?> string
+              UserName = dict.["userName"] :?> string
+              Action = dict.["action"] :?> string
+              LineNumber = dict.["lineNumber"] :?> int64 |> int
+              Chords = dict.["chords"] :?> string
+              PreviousChords = dict.["previousChords"] :?> string
               Comment = dict.["comment"] :?> string
               CreatedAt =
                   match dict.["createdAt"] with
@@ -65,12 +137,21 @@ module Repository =
                   | _ -> DateTime.UtcNow }
 
         let private toThread (doc: DocumentSnapshot) : Thread =
-            let posts =
-                match doc.GetValue<obj>("posts") with
+            let lines =
+                match doc.GetValue<obj>("lines") with
                 | :? System.Collections.IList as list ->
                     list
                     |> Seq.cast<System.Collections.Generic.IDictionary<string, obj>>
-                    |> Seq.map toPost
+                    |> Seq.map toLine
+                    |> Seq.toList
+                | _ -> []
+
+            let history =
+                match doc.GetValue<obj>("history") with
+                | :? System.Collections.IList as list ->
+                    list
+                    |> Seq.cast<System.Collections.Generic.IDictionary<string, obj>>
+                    |> Seq.map toTurnAction
                     |> Seq.toList
                 | _ -> []
 
@@ -81,17 +162,16 @@ module Repository =
               Bpm = doc.GetValue<int>("bpm")
               CreatedBy = doc.GetValue<string>("createdBy")
               CreatedByName = doc.GetValue<string>("createdByName")
+              OpponentId = doc.GetValue<string>("opponentId")
+              OpponentName = doc.GetValue<string>("opponentName")
+              OpponentEmail = doc.GetValue<string>("opponentEmail")
               CreatedAt = doc.GetValue<Timestamp>("createdAt").ToDateTime()
-              Posts = posts }
-
-        let private toFirestorePost (post: Post) : System.Collections.Generic.Dictionary<string, obj> =
-            let d = System.Collections.Generic.Dictionary<string, obj>()
-            d.["userId"] <- post.UserId
-            d.["userName"] <- post.UserName
-            d.["chords"] <- post.Chords
-            d.["comment"] <- post.Comment
-            d.["createdAt"] <- Timestamp.FromDateTime(post.CreatedAt.ToUniversalTime())
-            d
+              Status = doc.GetValue<string>("status")
+              CurrentTurn = doc.GetValue<string>("currentTurn")
+              TurnCount = doc.GetValue<int>("turnCount")
+              FinishProposedBy = doc.GetValue<string>("finishProposedBy")
+              Lines = lines
+              History = history }
 
         let getAll () : Task<Thread list> =
             task {
@@ -128,43 +208,87 @@ module Repository =
                               "bpm", thread.Bpm :> obj
                               "createdBy", thread.CreatedBy :> obj
                               "createdByName", thread.CreatedByName :> obj
+                              "opponentId", thread.OpponentId :> obj
+                              "opponentName", thread.OpponentName :> obj
+                              "opponentEmail", thread.OpponentEmail :> obj
                               "createdAt", Timestamp.FromDateTime(thread.CreatedAt.ToUniversalTime()) :> obj
-                              "posts", System.Collections.Generic.List<obj>() :> obj ]
+                              "status", thread.Status :> obj
+                              "currentTurn", thread.CurrentTurn :> obj
+                              "turnCount", thread.TurnCount :> obj
+                              "finishProposedBy", thread.FinishProposedBy :> obj
+                              "lines", System.Collections.Generic.List<obj>() :> obj
+                              "history", System.Collections.Generic.List<obj>() :> obj ]
                     )
 
                 let! _ = docRef.SetAsync(data)
                 return thread
             }
 
-        let addPost (threadId: string) (post: Post) : Task<Thread option> =
+        let update (_thread: Thread) : Task<Thread> =
             task {
-                let docRef = db.Value.Collection("threads").Document(threadId)
-                let! snapshot = docRef.GetSnapshotAsync()
-
-                if snapshot.Exists then
-                    let postData = toFirestorePost post
-                    let! _ = docRef.UpdateAsync("posts", FieldValue.ArrayUnion(postData))
-                    let! updated = docRef.GetSnapshotAsync()
-                    return Some(toThread updated)
-                else
-                    return None
+                // TODO: Firestore update implementation
+                return _thread
             }
 
-    // Repository interface that delegates to the appropriate implementation
+        let joinThread (_threadId: string) (_opponentId: string) (_opponentName: string) : Task<Thread option> =
+            task {
+                // TODO: Firestore implementation
+                return None
+            }
+
+        let executeTurn (_threadId: string) (_action: TurnAction) (_updatedLines: Line list) (_nextTurn: string) : Task<Thread option> =
+            task {
+                // TODO: Firestore implementation
+                return None
+            }
+
+        let proposeFinish (_threadId: string) (_userId: string) (_nextTurn: string) : Task<Thread option> =
+            task {
+                // TODO: Firestore implementation
+                return None
+            }
+
+        let acceptFinish (_threadId: string) : Task<Thread option> =
+            task {
+                // TODO: Firestore implementation
+                return None
+            }
+
+        let rejectFinish (_threadId: string) (_rejecterTurn: string) : Task<Thread option> =
+            task {
+                // TODO: Firestore implementation
+                return None
+            }
+
     type IThreadRepository =
         { GetAll: unit -> Task<Thread list>
           GetById: string -> Task<Thread option>
           Create: Thread -> Task<Thread>
-          AddPost: string -> Post -> Task<Thread option> }
+          Update: Thread -> Task<Thread>
+          JoinThread: string -> string -> string -> Task<Thread option>
+          ExecuteTurn: string -> TurnAction -> Line list -> string -> Task<Thread option>
+          ProposeFinish: string -> string -> string -> Task<Thread option>
+          AcceptFinish: string -> Task<Thread option>
+          RejectFinish: string -> string -> Task<Thread option> }
 
     let create (firestoreProjectId: string) : IThreadRepository =
         if String.IsNullOrEmpty(firestoreProjectId) then
             { GetAll = InMemory.getAll
               GetById = InMemory.getById
               Create = InMemory.create
-              AddPost = InMemory.addPost }
+              Update = InMemory.update
+              JoinThread = InMemory.joinThread
+              ExecuteTurn = InMemory.executeTurn
+              ProposeFinish = InMemory.proposeFinish
+              AcceptFinish = InMemory.acceptFinish
+              RejectFinish = InMemory.rejectFinish }
         else
             { GetAll = Firestore.getAll
               GetById = Firestore.getById
               Create = Firestore.create
-              AddPost = Firestore.addPost }
+              Update = Firestore.update
+              JoinThread = Firestore.joinThread
+              ExecuteTurn = Firestore.executeTurn
+              ProposeFinish = Firestore.proposeFinish
+              AcceptFinish = Firestore.acceptFinish
+              RejectFinish = Firestore.rejectFinish }

@@ -1,7 +1,7 @@
 <script lang="ts">
 	interface Props {
 		onClose: () => void;
-		onCreate: (data: { title: string; key: string; timeSignature: string; bpm: number }) => void;
+		onCreate: (data: { title: string; key: string; timeSignature: string; bpm: number; opponentEmail: string }) => void;
 	}
 
 	let { onClose, onCreate }: Props = $props();
@@ -12,12 +12,13 @@
 	let timeSigTop = $state(4);
 	let timeSigBottom = $state(4);
 	let bpm = $state(120);
+	let opponentEmail = $state('');
 
 	const roots = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B'];
 	const qualities = ['Major', 'Minor', 'Dorian', 'Mixolydian', 'Phrygian', 'Lydian'];
 	const timeSigOptions = [2, 3, 4, 5, 6, 7];
 
-	function handleSubmit() {
+	const handleSubmit = () => {
 		if (!title.trim()) return;
 		const key = `${rootNote} ${quality}`;
 		const timeSignature = `${timeSigTop}/${timeSigBottom}`;
@@ -25,13 +26,14 @@
 			title: title.trim(),
 			key,
 			timeSignature,
-			bpm: Math.max(40, Math.min(300, bpm))
+			bpm: Math.max(40, Math.min(300, bpm)),
+			opponentEmail: opponentEmail.trim()
 		});
-	}
+	};
 
-	function handleKeydown(e: KeyboardEvent) {
+	const handleKeydown = (e: KeyboardEvent) => {
 		if (e.key === 'Escape') onClose();
-	}
+	};
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -97,10 +99,15 @@
 				</div>
 			</div>
 
+			<div class="field">
+				<label for="opponent">Opponent Email</label>
+				<input id="opponent" type="email" bind:value={opponentEmail} placeholder="friend@example.com" />
+			</div>
+
 			<div class="actions">
 				<button type="button" class="btn btn-secondary" onclick={onClose}>Cancel</button>
 				<button type="submit" class="btn btn-primary" disabled={!title.trim()}>
-					Create Thread
+					Create Battle
 				</button>
 			</div>
 		</form>

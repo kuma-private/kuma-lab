@@ -16,6 +16,16 @@ export function createAppStore() {
 		get error() { return error; },
 		get loggedIn() { return user !== null; },
 
+		get isMyTurn() {
+			if (!user || !currentThread) return false;
+			return currentThread.currentTurn === user.sub;
+		},
+
+		get isPlayer() {
+			if (!user || !currentThread) return false;
+			return currentThread.createdBy === user.sub || currentThread.opponentId === user.sub;
+		},
+
 		async checkLogin() {
 			try {
 				user = await api.getMe();
@@ -52,12 +62,11 @@ export function createAppStore() {
 			}
 		},
 
-		async createThread(data: { title: string; key: string; timeSignature: string; bpm: number }) {
+		async createThread(data: { title: string; key: string; timeSignature: string; bpm: number; opponentEmail: string }) {
 			loading = true;
 			error = null;
 			try {
-				const result = await api.createThread(data);
-				return result;
+				return await api.createThread(data);
 			} catch (e) {
 				error = e instanceof Error ? e.message : 'Failed to create thread';
 				return null;
@@ -66,13 +75,53 @@ export function createAppStore() {
 			}
 		},
 
-		async addPost(threadId: string, chords: string, comment: string) {
+		async joinThread(threadId: string) {
 			error = null;
 			try {
-				await api.addPost(threadId, { chords, comment });
+				await api.joinThread(threadId);
 				await this.loadThread(threadId);
 			} catch (e) {
-				error = e instanceof Error ? e.message : 'Failed to add post';
+				error = e instanceof Error ? e.message : 'Failed to join';
+			}
+		},
+
+		async submitTurn(threadId: string, action: string, lineNumber: number, chords: string, comment: string) {
+			error = null;
+			try {
+				await api.submitTurn(threadId, { action, lineNumber, chords, comment });
+				await this.loadThread(threadId);
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Failed to submit turn';
+			}
+		},
+
+		async proposeFinish(threadId: string) {
+			error = null;
+			try {
+				await api.proposeFinish(threadId);
+				await this.loadThread(threadId);
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Failed to propose finish';
+			}
+		},
+
+		async acceptFinish(threadId: string) {
+			error = null;
+			try {
+				await api.acceptFinish(threadId);
+				await this.loadThread(threadId);
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Failed to accept';
+			}
+		},
+
+		async rejectFinish(threadId: string) {
+			error = null;
+			try {
+				await api.rejectFinish(threadId);
+				await this.loadThread(threadId);
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Failed to reject';
 			}
 		},
 
