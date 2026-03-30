@@ -35,7 +35,7 @@
 	};
 
 	const getPreview = (pattern: ChordPattern): string => {
-		return getPatternChords(pattern, keyName);
+		return '| ' + pattern.degrees.join(' | ') + ' |';
 	};
 </script>
 

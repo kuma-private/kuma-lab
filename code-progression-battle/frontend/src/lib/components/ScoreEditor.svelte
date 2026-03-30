@@ -1,13 +1,19 @@
 <script lang="ts">
 	import { extractRoot } from '$lib/chord-parser';
+	import { chordToDegree } from '$lib/chord-suggest';
+
+	export type DisplayMode = 'chord' | 'degree';
 
 	interface Props {
 		value: string;
 		readonly?: boolean;
+		activeBarIndex?: number;
+		displayMode?: DisplayMode;
+		musicalKey?: string;
 		onchange?: (value: string) => void;
 	}
 
-	let { value, readonly = false, onchange }: Props = $props();
+	let { value, readonly = false, activeBarIndex = -1, displayMode = 'chord', musicalKey = 'C', onchange }: Props = $props();
 
 	// Color map for root notes
 	const ROOT_COLORS: Record<string, string> = {
@@ -25,14 +31,28 @@
 		'B': 'var(--chord-b-text)',
 	};
 
-	const colorize = (text: string): string => {
+	const colorize = (text: string, activeBar: number, mode: DisplayMode, key: string): string => {
+		// Track bar index across all lines: bars are segments between | delimiters
+		let barCounter = 0;
+
 		return text.split('\n').map(line => {
 			if (line.trim().startsWith('#')) {
 				return `<span class="se-comment">${escapeHtml(line)}</span>`;
 			}
-			return line.split(/(\|)/).map(segment => {
-				if (segment === '|') return '<span class="se-bar">|</span>';
-				return segment.split(/(\s+)/).map(token => {
+			const parts = line.split(/(\|)/);
+			// Count how many | are in this line to know how many bars
+			let insideBar = false;
+			return parts.map(segment => {
+				if (segment === '|') {
+					if (insideBar) {
+						// Closing a bar
+						barCounter++;
+					}
+					insideBar = true;
+					return '<span class="se-bar">|</span>';
+				}
+				const isActive = activeBar >= 0 && insideBar && barCounter === activeBar;
+				const tokenized = segment.split(/(\s+)/).map(token => {
 					if (!token.trim()) return token;
 					if (token === '%' || token === '_' || token === '=') {
 						return `<span class="se-special">${token}</span>`;
@@ -40,14 +60,22 @@
 					try {
 						const root = extractRoot(token);
 						const color = ROOT_COLORS[root] || 'var(--text-primary)';
+						const activeClass = isActive ? ' se-active' : '';
+
+						if (mode === 'degree') {
+							const degree = chordToDegree(token, key);
+							return `<span class="se-degree${activeClass}">${escapeHtml(degree)}</span>`;
+						}
+
 						const rootLen = root.length;
 						const rootPart = token.slice(0, rootLen);
 						const qualityPart = token.slice(rootLen);
-						return `<span style="color:${color}"><strong>${escapeHtml(rootPart)}</strong><span class="se-quality">${escapeHtml(qualityPart)}</span></span>`;
+						return `<span class="${activeClass}" style="color:${color}"><strong>${escapeHtml(rootPart)}</strong><span class="se-quality">${escapeHtml(qualityPart)}</span></span>`;
 					} catch {
 						return escapeHtml(token);
 					}
 				}).join('');
+				return tokenized;
 			}).join('');
 		}).join('\n');
 	};
@@ -56,7 +84,7 @@
 		return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 	};
 
-	let highlighted = $derived(colorize(value));
+	let highlighted = $derived(colorize(value, activeBarIndex, displayMode, musicalKey));
 
 	const handleInput = (e: Event) => {
 		const target = e.target as HTMLTextAreaElement;
@@ -88,6 +116,31 @@
 	};
 
 	const closeContextMenu = () => { contextMenu = null; };
+
+	// ── Double-click chord preview ──
+	// ── Drag & drop from CircleOfFifths ──
+	const handleDragOver = (e: DragEvent) => {
+		e.preventDefault();
+		if (e.dataTransfer) {
+			e.dataTransfer.dropEffect = 'copy';
+		}
+	};
+
+	const handleDrop = (e: DragEvent) => {
+		e.preventDefault();
+		const chord = e.dataTransfer?.getData('text/plain')?.trim();
+		if (!chord) return;
+
+		const textarea = e.target as HTMLTextAreaElement;
+		const pos = textarea.selectionStart ?? value.length;
+		const before = value.slice(0, pos);
+		const after = value.slice(pos);
+		// Insert chord with space padding
+		const spaceBefore = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n') && !before.endsWith('|') ? ' ' : '';
+		const spaceAfter = after.length > 0 && !after.startsWith(' ') && !after.startsWith('\n') && !after.startsWith('|') ? ' ' : '';
+		const newValue = before + spaceBefore + chord + spaceAfter + after;
+		onchange?.(newValue);
+	};
 
 	// ── Double-click chord preview ──
 	const handleDblClick = async (e: MouseEvent) => {
@@ -136,7 +189,9 @@
 			oninput={handleInput}
 			oncontextmenu={handleContextMenu}
 			ondblclick={handleDblClick}
-			{readonly}
+			ondragover={handleDragOver}
+			ondrop={handleDrop}
+			readonly={readonly || displayMode === 'degree'}
 			spellcheck="false"
 			placeholder="# Chords will appear here&#10;G | D | Em | B7 |&#10;C | G | Am7 | D7 |"
 		></textarea>
@@ -153,6 +208,12 @@
 		position: relative;
 		min-height: 200px;
 		background: var(--bg-base);
+		border: 1px solid transparent;
+		transition: border-color 0.2s;
+	}
+
+	.se-container:focus-within {
+		border-color: var(--accent-primary);
 	}
 
 	.se-highlight,
@@ -161,10 +222,14 @@
 		font-size: 1rem;
 		font-weight: 500;
 		line-height: 2;
+		letter-spacing: 0;
+		word-spacing: normal;
 		padding: var(--space-md);
 		white-space: pre-wrap;
 		word-wrap: break-word;
 		overflow-wrap: break-word;
+		box-sizing: border-box;
+		border: none;
 	}
 
 	.se-highlight {
@@ -182,15 +247,9 @@
 		background: transparent;
 		color: rgba(232, 232, 240, 0.05);
 		caret-color: var(--accent-primary);
-		border: 1px solid transparent;
 		outline: none;
 		resize: vertical;
 		z-index: 2;
-		transition: border-color 0.2s;
-	}
-
-	.se-textarea:focus {
-		border-color: var(--accent-primary);
 	}
 
 	.se-textarea::selection {
@@ -225,6 +284,18 @@
 		font-weight: 400;
 		opacity: 0.75;
 		font-size: 0.85em;
+	}
+
+	:global(.se-degree) {
+		color: var(--accent-primary);
+		font-weight: 600;
+	}
+
+	:global(.se-active) {
+		background: rgba(167, 139, 250, 0.3);
+		border-radius: 4px;
+		padding: 1px 2px;
+		transition: background 0.15s;
 	}
 
 	/* Context menu */

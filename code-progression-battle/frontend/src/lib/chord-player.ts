@@ -274,6 +274,12 @@ export const playChordPreview = async (chordName: string): Promise<void> => {
   const parsed = parseChord(chordName);
   const notes = chordToNotes(parsed);
 
+  if (_currentOscPreset === 'piano') {
+    const sampler = getPianoSampler();
+    sampler.triggerAttackRelease(notes, 0.5);
+    return;
+  }
+
   const synth = new Tone.PolySynth(Tone.Synth, {
     oscillator: { type: 'fmtriangle' as const, modulationType: 'sine' as const, modulationIndex: 2, harmonicity: 3.01 },
     envelope: { attack: 0.005, decay: 0.4, sustain: 0.2, release: 0.8 },
@@ -301,11 +307,20 @@ export const playSelection = async (text: string, config: PlayerConfig): Promise
   const totalDuration = resolved.length * barDur;
 
   const reverb = new Tone.Reverb({ decay: 1.2, wet: 0.2 }).toDestination();
-  const synth = new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: 'fmtriangle' as const, modulationType: 'sine' as const, modulationIndex: 2, harmonicity: 3.01 },
-    envelope: { attack: 0.005, decay: 0.5, sustain: 0.2, release: 1.0 },
-    volume: -10,
-  }).connect(reverb);
+  let synth: Tone.PolySynth | Tone.Sampler;
+  let disposeSynth = true;
+  if (_currentOscPreset === 'piano') {
+    const sampler = getPianoSampler();
+    // Don't dispose the shared sampler
+    disposeSynth = false;
+    synth = sampler;
+  } else {
+    synth = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'fmtriangle' as const, modulationType: 'sine' as const, modulationIndex: 2, harmonicity: 3.01 },
+      envelope: { attack: 0.005, decay: 0.5, sustain: 0.2, release: 1.0 },
+      volume: -10,
+    }).connect(reverb);
+  }
 
   const transport = Tone.getTransport();
   const ids: number[] = [];
@@ -321,7 +336,7 @@ export const playSelection = async (text: string, config: PlayerConfig): Promise
     const stopId = transport.schedule(() => {
       for (const id of ids) transport.clear(id);
       transport.clear(stopId);
-      synth.dispose();
+      if (disposeSynth) synth.dispose();
       reverb.dispose();
       resolve();
     }, '+' + totalDuration);
@@ -338,6 +353,13 @@ export const playSelection = async (text: string, config: PlayerConfig): Promise
  */
 export const playNote = async (note: string): Promise<void> => {
   await Tone.start();
+
+  if (_currentOscPreset === 'piano') {
+    const sampler = getPianoSampler();
+    sampler.triggerAttackRelease(note, '8n');
+    return;
+  }
+
   const synth = new Tone.Synth({
     oscillator: { type: 'triangle' as const },
     envelope: { attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.5 },
@@ -365,6 +387,64 @@ const OSC_PRESETS: Record<OscPreset, { osc: OscConfig; envelope: { attack: numbe
   synth:   { osc: { type: 'square' as OscillatorType }, envelope: { attack: 0.005, decay: 0.4, sustain: 0.3, release: 0.8 } },
 };
 
+// ── Salamander Grand Piano Sampler ──────────────────
+
+const PIANO_SAMPLES_URL = 'https://tonejs.github.io/audio/salamander/';
+
+let _pianoSampler: Tone.Sampler | null = null;
+let _pianoSamplerLoaded = false;
+
+const createPianoSampler = (): Tone.Sampler => {
+  return new Tone.Sampler({
+    urls: {
+      A0: 'A0.mp3',
+      C1: 'C1.mp3',
+      'D#1': 'Ds1.mp3',
+      'F#1': 'Fs1.mp3',
+      A1: 'A1.mp3',
+      C2: 'C2.mp3',
+      'D#2': 'Ds2.mp3',
+      'F#2': 'Fs2.mp3',
+      A2: 'A2.mp3',
+      C3: 'C3.mp3',
+      'D#3': 'Ds3.mp3',
+      'F#3': 'Fs3.mp3',
+      A3: 'A3.mp3',
+      C4: 'C4.mp3',
+      'D#4': 'Ds4.mp3',
+      'F#4': 'Fs4.mp3',
+      A4: 'A4.mp3',
+      C5: 'C5.mp3',
+      'D#5': 'Ds5.mp3',
+      'F#5': 'Fs5.mp3',
+      A5: 'A5.mp3',
+      C6: 'C6.mp3',
+      'D#6': 'Ds6.mp3',
+      'F#6': 'Fs6.mp3',
+      A6: 'A6.mp3',
+      C7: 'C7.mp3',
+    },
+    baseUrl: PIANO_SAMPLES_URL,
+    release: 1,
+    onload: () => {
+      _pianoSamplerLoaded = true;
+      console.log('[ChordPlayer] Piano sampler loaded');
+    },
+  });
+};
+
+const getPianoSampler = (): Tone.Sampler => {
+  if (!_pianoSampler) {
+    _pianoSampler = createPianoSampler().toDestination();
+  }
+  return _pianoSampler;
+};
+
+// Start loading piano samples immediately on module import
+getPianoSampler();
+
+export const isPianoLoaded = (): boolean => _pianoSamplerLoaded;
+
 let _currentOscPreset: OscPreset = 'piano';
 
 export const setGlobalOscPreset = (preset: OscPreset): void => {
@@ -380,16 +460,21 @@ export const getGlobalOscPreset = (): OscPreset => _currentOscPreset;
 
 // ── Keyboard synth (sustained attack/release) ────────
 
-let _kbSynth: Tone.PolySynth | null = null;
+let _kbSynth: Tone.PolySynth | Tone.Sampler | null = null;
 
-const getKeyboardSynth = (): Tone.PolySynth => {
+const getKeyboardSynth = (): Tone.PolySynth | Tone.Sampler => {
   if (!_kbSynth) {
-    const preset = OSC_PRESETS[_currentOscPreset];
-    _kbSynth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: preset.osc as any,
-      envelope: preset.envelope,
-      volume: -8,
-    }).toDestination();
+    if (_currentOscPreset === 'piano') {
+      const sampler = getPianoSampler();
+      _kbSynth = sampler;
+    } else {
+      const preset = OSC_PRESETS[_currentOscPreset];
+      _kbSynth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: preset.osc as any,
+        envelope: preset.envelope,
+        volume: -8,
+      }).toDestination();
+    }
   }
   return _kbSynth;
 };
@@ -408,7 +493,7 @@ export const keyboardRelease = (notes: string[]): void => {
 // ── Player class ───────────────────────────────────────
 
 export class ChordPlayer {
-  private synth: Tone.PolySynth | null = null;
+  private synth: Tone.PolySynth | Tone.Sampler | null = null;
   private scheduledEvents: number[] = [];
   private _state: PlayerState = 'stopped';
   private _totalDuration = 0;
@@ -443,17 +528,24 @@ export class ChordPlayer {
     this._callbacks.onStateChange?.(state);
   }
 
-  private ensureSynth(): Tone.PolySynth {
+  private ensureSynth(): Tone.PolySynth | Tone.Sampler {
     if (!this.synth) {
       const reverb = new Tone.Reverb({ decay: 1.5, wet: 0.25 }).toDestination();
       const compressor = new Tone.Compressor(-20, 4).connect(reverb);
-      const preset = OSC_PRESETS[_currentOscPreset];
 
-      this.synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: preset.osc as any,
-        envelope: preset.envelope,
-        volume: -10,
-      }).connect(compressor);
+      if (_currentOscPreset === 'piano') {
+        const sampler = createPianoSampler();
+        sampler.volume.value = -10;
+        sampler.connect(compressor);
+        this.synth = sampler;
+      } else {
+        const preset = OSC_PRESETS[_currentOscPreset];
+        this.synth = new Tone.PolySynth(Tone.Synth, {
+          oscillator: preset.osc as any,
+          envelope: preset.envelope,
+          volume: -10,
+        }).connect(compressor);
+      }
     }
     return this.synth;
   }
@@ -593,7 +685,9 @@ export class ChordPlayer {
     const transport = Tone.getTransport();
     transport.stop();
     transport.position = 0;
-    this.synth?.releaseAll();
+    if (this.synth && 'releaseAll' in this.synth) {
+      (this.synth as Tone.PolySynth).releaseAll();
+    }
     this._currentChord = null;
     this._callbacks.onChordChange?.(null);
     this.setState('stopped');

@@ -4,7 +4,7 @@
 	import { createAppStore } from '$lib/stores/app.svelte';
 	import { parseProgression, transpose } from '$lib/chord-parser';
 	import { ChordPlayer, type PlayerState, type OscPreset, setGlobalOscPreset } from '$lib/chord-player';
-	import ScoreEditor from '$lib/components/ScoreEditor.svelte';
+	import ScoreEditor, { type DisplayMode } from '$lib/components/ScoreEditor.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import AiReview from '$lib/components/AiReview.svelte';
 	import PatternPicker from '$lib/components/PatternPicker.svelte';
@@ -31,6 +31,7 @@
 	// ScoreEditor state (right panel)
 	let scoreEditorValue = $state('');
 	let scoreInitialized = $state(false);
+	let scoreDisplayMode = $state<DisplayMode>('chord');
 
 	// History scroll ref
 	let historyEl: HTMLDivElement | undefined = $state();
@@ -377,24 +378,6 @@
 		diffError = null;
 	};
 
-	// Circle of Fifths chord insert
-	const handleChordInsert = (chord: string) => {
-		if (scoreReadonly) return;
-		// Append chord with space to the current value
-		if (!scoreEditorValue.trim()) {
-			scoreEditorValue = '| ' + chord + ' |';
-		} else {
-			// Insert before the last | if it exists, or append
-			const trimmed = scoreEditorValue.trimEnd();
-			if (trimmed.endsWith('|')) {
-				scoreEditorValue = trimmed.slice(0, -1).trimEnd() + ' ' + chord + ' |';
-			} else {
-				scoreEditorValue = trimmed + ' ' + chord;
-			}
-		}
-		diffError = null;
-	};
-
 	// Transpose handlers (preview only)
 	let transposeSemitones = $state(0);
 
@@ -585,7 +568,18 @@
 				{/if}
 
 				<div class="panel-header">
-					<h2>Score</h2>
+					<div class="score-tabs">
+						<button
+							class="score-tab"
+							class:score-tab--active={scoreDisplayMode === 'chord'}
+							onclick={() => { scoreDisplayMode = 'chord'; }}
+						>コード</button>
+						<button
+							class="score-tab"
+							class:score-tab--active={scoreDisplayMode === 'degree'}
+							onclick={() => { scoreDisplayMode = 'degree'; }}
+						>ディグリー</button>
+					</div>
 					<div class="panel-header-right">
 						<div class="transpose-controls">
 							<button class="transpose-btn" onclick={handleTransposeDown} title="半音下げ">-</button>
@@ -616,6 +610,9 @@
 						<ScoreEditor
 							value={scoreEditorValue}
 							readonly={scoreReadonly}
+							activeBarIndex={activeBarIndex}
+							displayMode={scoreDisplayMode}
+							musicalKey={thread.key}
 							onchange={handleScoreChange}
 						/>
 					{/if}
@@ -652,7 +649,7 @@
 
 					{#if thread.key}
 						<div class="right-section right-section--bottom">
-							<CircleOfFifths currentKey={thread.key} onInsert={handleChordInsert} />
+							<CircleOfFifths currentKey={thread.key} />
 						</div>
 						<div class="right-section right-section--bottom">
 							<PatternPicker key={thread.key} onInsert={handlePatternInsert} />
@@ -900,6 +897,37 @@
 		margin: 0;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
+	}
+
+	.score-tabs {
+		display: flex;
+		gap: 2px;
+		background: var(--bg-base);
+		border-radius: var(--radius-sm);
+		padding: 2px;
+	}
+
+	.score-tab {
+		padding: 4px 12px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.12s;
+	}
+
+	.score-tab:hover {
+		color: var(--text-primary);
+	}
+
+	.score-tab--active {
+		background: var(--bg-elevated);
+		color: var(--accent-primary);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 	}
 
 	.count { font-size: 0.75rem; color: var(--text-muted); }

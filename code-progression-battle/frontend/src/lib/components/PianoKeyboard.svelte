@@ -6,8 +6,8 @@
 	let octaveStart = $state(3);
 
 	const OCTAVE_MIN = 2;
-	const OCTAVE_MAX = 5;
-	const OCTAVES_VISIBLE = 3;
+	const OCTAVE_MAX = 6;
+	const OCTAVES_VISIBLE = 2;
 
 	const WHITE_NOTES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 	const BLACK_NOTE_MAP: Record<string, { label: string; offsetIndex: number }> = {
@@ -18,12 +18,15 @@
 		'A#': { label: 'A#', offsetIndex: 6 },
 	};
 
-	const KEY_WIDTH = 50;
-	const BLACK_KEY_WIDTH = 30;
+	// 2 octaves = 14 white keys, full screen width
+	const TOTAL_WHITE_KEYS = 14;
+	const BLACK_KEY_RATIO = 0.6;
 
 	const buildKeys = (startOctave: number, count: number) => {
 		const whites: { note: string; label: string }[] = [];
-		const blacks: { note: string; label: string; leftPx: number }[] = [];
+		const blacks: { note: string; label: string; leftPercent: number }[] = [];
+		const whiteWidthPercent = 100 / TOTAL_WHITE_KEYS;
+		const blackWidthPercent = whiteWidthPercent * BLACK_KEY_RATIO;
 
 		for (let o = 0; o < count; o++) {
 			const oct = startOctave + o;
@@ -32,17 +35,15 @@
 			}
 			for (const [name, info] of Object.entries(BLACK_NOTE_MAP)) {
 				const whiteIndex = o * 7 + info.offsetIndex;
-				const leftPx = whiteIndex * KEY_WIDTH + KEY_WIDTH - BLACK_KEY_WIDTH / 2;
-				blacks.push({ note: `${name}${oct}`, label: info.label, leftPx });
+				const leftPercent = (whiteIndex + 1) * whiteWidthPercent - blackWidthPercent / 2;
+				blacks.push({ note: `${name}${oct}`, label: info.label, leftPercent });
 			}
 		}
 
-		return { whites, blacks };
+		return { whites, blacks, whiteWidthPercent, blackWidthPercent };
 	};
 
 	let keys = $derived(buildKeys(octaveStart, OCTAVES_VISIBLE));
-	let totalWhites = $derived(keys.whites.length);
-	let keysWidthPx = $derived(totalWhites * KEY_WIDTH);
 
 	// Synth module loaded lazily
 	let synthModule: typeof import('$lib/chord-player') | null = null;
@@ -94,7 +95,7 @@
 	};
 
 	const canShiftDown = $derived(octaveStart > OCTAVE_MIN);
-	const canShiftUp = $derived(octaveStart + OCTAVES_VISIBLE - 1 < OCTAVE_MAX);
+	const canShiftUp = $derived(octaveStart + OCTAVES_VISIBLE <= OCTAVE_MAX);
 </script>
 
 <div class="piano-dock" class:piano-dock--open={!isCollapsed}>
@@ -128,12 +129,13 @@
 	</div>
 
 	{#if !isCollapsed}
-		<div class="piano-scroll">
-			<div class="piano-keys" style="width: {keysWidthPx}px">
+		<div class="piano-full">
+			<div class="piano-keys">
 				{#each keys.whites as key}
 					<button
 						class="wk"
 						class:wk--active={activeKeys.has(key.note)}
+						style="width: {keys.whiteWidthPercent}%"
 						onpointerdown={() => handleKeyDown(key.note)}
 						onpointerup={() => handleKeyUp(key.note)}
 						onpointerleave={() => handlePointerLeave(key.note)}
@@ -146,7 +148,7 @@
 					<button
 						class="bk"
 						class:bk--active={activeKeys.has(key.note)}
-						style="left: {key.leftPx}px"
+						style="left: {key.leftPercent}%; width: {keys.blackWidthPercent}%"
 						onpointerdown={() => handleKeyDown(key.note)}
 						onpointerup={() => handleKeyUp(key.note)}
 						onpointerleave={() => handlePointerLeave(key.note)}
@@ -245,35 +247,23 @@
 		text-align: center;
 	}
 
-	.piano-scroll {
-		overflow-x: auto;
-		overflow-y: hidden;
-		padding: 4px var(--space-md) var(--space-sm);
-		-webkit-overflow-scrolling: touch;
-	}
-
-	.piano-scroll::-webkit-scrollbar {
-		height: 4px;
-	}
-
-	.piano-scroll::-webkit-scrollbar-thumb {
-		background: var(--border-subtle);
-		border-radius: 2px;
+	.piano-full {
+		width: 100vw;
+		padding: 0;
 	}
 
 	.piano-keys {
 		position: relative;
 		display: flex;
+		width: 100%;
 		height: 100px;
 		user-select: none;
 		touch-action: none;
-		min-width: min-content;
 	}
 
 	/* White keys */
 	.wk {
-		width: 50px;
-		min-width: 50px;
+		flex: none;
 		height: 100%;
 		background: #f0f0f0;
 		border: 1px solid #c0c0c0;
@@ -314,7 +304,6 @@
 	/* Black keys */
 	.bk {
 		position: absolute;
-		width: 30px;
 		height: 65px;
 		background: #2a2a2a;
 		border: 1px solid #111;

@@ -109,7 +109,8 @@ export const degreeToChord = (degree: string, key: string): string => {
   const intervals = isMinor ? MINOR_INTERVALS : MAJOR_INTERVALS;
 
   // Parse the degree: extract roman numeral prefix and any suffix quality
-  const match = degree.match(/^(#?b?)(I{1,3}|IV|V?I{0,3}|i{1,3}|iv|v?i{0,3})(.*)/);
+  // Order matters: longer numerals (VII, IV, III) must come before shorter ones (V, I)
+  const match = degree.match(/^([#b]?)(VII|VI|IV|V|III|II|I|vii|vi|iv|v|iii|ii|i)(.*)/);
   if (!match) return degree; // fallback
 
   const [, accidental, roman, suffix] = match;
@@ -142,6 +143,79 @@ export const degreeToChord = (degree: string, key: string): string => {
   // Override based on case
   if (isLowerCase) return noteName + 'm';
   return noteName;
+};
+
+// Roman numeral strings indexed by degree (0-based)
+const ROMAN_UPPER = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+const ROMAN_LOWER = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii'];
+
+/**
+ * Convert a real chord name to a degree string in the given key.
+ * In C Major: Am7 → vi7, Dm7 → ii7, G7 → V7, Cmaj7 → Imaj7
+ * Major chords → uppercase, minor/dim → lowercase.
+ */
+export const chordToDegree = (chord: string, key: string): string => {
+  const { root, isMinor } = parseKeyString(key);
+  const rootIdx = noteToIndex(root);
+  const intervals = isMinor ? MINOR_INTERVALS : MAJOR_INTERVALS;
+
+  // Parse the chord: extract root note, then quality
+  // Root can be a letter + optional # or b
+  const chordMatch = chord.match(/^([A-G][#b]?)(.*)/);
+  if (!chordMatch) return chord;
+
+  const [, chordRoot, qualitySuffix] = chordMatch;
+
+  let chordRootIdx: number;
+  try {
+    chordRootIdx = noteToIndex(chordRoot);
+  } catch {
+    return chord;
+  }
+
+  // Find which scale degree this root corresponds to
+  const semitoneFromKey = ((chordRootIdx - rootIdx) % 12 + 12) % 12;
+
+  let degreeIdx = intervals.indexOf(semitoneFromKey);
+  let accidental = '';
+
+  if (degreeIdx === -1) {
+    // Non-diatonic: try sharp or flat of a diatonic degree
+    const sharpIdx = intervals.indexOf(((semitoneFromKey - 1) % 12 + 12) % 12);
+    const flatIdx = intervals.indexOf(((semitoneFromKey + 1) % 12 + 12) % 12);
+    if (sharpIdx !== -1) {
+      degreeIdx = sharpIdx;
+      accidental = '#';
+    } else if (flatIdx !== -1) {
+      degreeIdx = flatIdx;
+      accidental = 'b';
+    } else {
+      return chord; // can't map
+    }
+  }
+
+  // Determine if the chord is minor/dim based on quality suffix
+  // Quality starts with 'm' (but not 'maj') → minor; 'dim' → diminished
+  const isMinorChord = /^m($|[^a])/.test(qualitySuffix) || qualitySuffix.startsWith('min');
+  const isDimChord = qualitySuffix.startsWith('dim');
+
+  // Use lowercase for minor/dim, uppercase for major
+  const roman = (isMinorChord || isDimChord)
+    ? ROMAN_LOWER[degreeIdx]
+    : ROMAN_UPPER[degreeIdx];
+
+  // Strip the leading 'm' or 'dim' from quality suffix to avoid duplication,
+  // since case already conveys major/minor
+  let displaySuffix = qualitySuffix;
+  if (isMinorChord) {
+    // Remove leading 'm' but keep the rest (e.g., 'm7' → '7', 'min7' → '7')
+    displaySuffix = qualitySuffix.replace(/^min|^m/, '');
+  } else if (isDimChord) {
+    // Keep 'dim' in suffix since lowercase alone doesn't convey diminished
+    // (convention: vii° or viidim)
+  }
+
+  return accidental + roman + displaySuffix;
 };
 
 /**

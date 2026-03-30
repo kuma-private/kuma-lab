@@ -5,13 +5,14 @@
 	interface Props {
 		currentKey?: string;
 		onSelect?: (chord: string) => void;
-		onInsert?: (chord: string) => void;
 	}
 
-	let { currentKey = 'C', onSelect, onInsert }: Props = $props();
+	let { currentKey = 'C', onSelect }: Props = $props();
 
 	let selectedRoot = $state<string | null>(null);
 	let selectedQuality = $state('');
+	let onMode = $state(false);
+	let selectedBass = $state<string | null>(null);
 	let synthModule: typeof import('$lib/chord-player') | null = null;
 	let pressedLabel = $state<string | null>(null);
 
@@ -138,17 +139,44 @@
 
 	const currentChordName = $derived(() => {
 		if (!selectedRoot) return '';
+		let name: string;
 		// If root already has 'm' suffix and quality starts with 'm', avoid doubling
-		if (selectedRoot.endsWith('m') && !selectedQuality) return selectedRoot;
-		if (selectedRoot.endsWith('m') && selectedQuality === 'm') return selectedRoot;
-		if (selectedRoot.endsWith('m') && selectedQuality.startsWith('m')) {
-			return getRootFromLabel(selectedRoot) + selectedQuality;
+		if (selectedRoot.endsWith('m') && !selectedQuality) name = selectedRoot;
+		else if (selectedRoot.endsWith('m') && selectedQuality === 'm') name = selectedRoot;
+		else if (selectedRoot.endsWith('m') && selectedQuality.startsWith('m')) {
+			name = getRootFromLabel(selectedRoot) + selectedQuality;
+		} else {
+			name = selectedRoot + selectedQuality;
 		}
-		return selectedRoot + selectedQuality;
+		if (onMode && !selectedBass) return name + '/';
+		if (selectedBass) return name + '/' + selectedBass;
+		return name;
 	});
 
 	const handleChordDown = async (label: string, isMinor: boolean) => {
+		// If "on" mode is active and we already have a root, this click sets the bass note
+		if (onMode && selectedRoot) {
+			const bassNote = getRootFromLabel(label);
+			selectedBass = bassNote;
+			onMode = false;
+			pressedLabel = label;
+
+			const chordName = buildChordName(selectedRoot);
+			onSelect?.(chordName);
+
+			try {
+				const mod = await ensureSynth();
+				const parsed = parseChord(chordName);
+				const notes = chordToNotes(parsed);
+				await mod.keyboardAttack(notes);
+			} catch (err) {
+				console.error('[CircleOfFifths] attack error:', err);
+			}
+			return;
+		}
+
 		selectedRoot = label;
+		selectedBass = null;
 		pressedLabel = label;
 		if (isMinor && selectedQuality === '') {
 			// Keep as minor
@@ -182,20 +210,27 @@
 		}
 	};
 
-	const handleInsertClick = () => {
-		if (!selectedRoot) return;
-		const chordName = buildChordName(selectedRoot);
-		onInsert?.(chordName);
+	const handleDragStart = (e: DragEvent, label: string) => {
+		const chordName = buildChordName(label);
+		e.dataTransfer?.setData('text/plain', chordName);
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = 'copy';
+		}
 	};
 
 	const buildChordName = (label: string): string => {
-		if (!selectedQuality) return label;
-		if (label.endsWith('m')) {
-			if (selectedQuality === 'm') return label;
-			if (selectedQuality.startsWith('m')) return getRootFromLabel(label) + selectedQuality;
-			return getRootFromLabel(label) + selectedQuality;
+		let name: string;
+		if (!selectedQuality) {
+			name = label;
+		} else if (label.endsWith('m')) {
+			if (selectedQuality === 'm') name = label;
+			else if (selectedQuality.startsWith('m')) name = getRootFromLabel(label) + selectedQuality;
+			else name = getRootFromLabel(label) + selectedQuality;
+		} else {
+			name = label + selectedQuality;
 		}
-		return label + selectedQuality;
+		if (selectedBass) return name + '/' + selectedBass;
+		return name;
 	};
 
 	const handleQualityClick = (q: string) => {
@@ -203,6 +238,18 @@
 		if (selectedRoot) {
 			const chordName = buildChordName(selectedRoot);
 			onSelect?.(chordName);
+		}
+	};
+
+	const handleOnToggle = () => {
+		if (onMode) {
+			// Cancel on mode
+			onMode = false;
+			selectedBass = null;
+		} else if (selectedRoot) {
+			// Enter on mode
+			onMode = true;
+			selectedBass = null;
 		}
 	};
 
@@ -221,6 +268,15 @@
 				{QUALITY_LABELS[i]}
 			</button>
 		{/each}
+		<button
+			class="cof-q-btn cof-q-btn--on"
+			class:cof-q-btn--active={onMode}
+			onclick={handleOnToggle}
+			disabled={!selectedRoot}
+			title="分数コード（オンコード）"
+		>
+			on
+		</button>
 	</div>
 
 	<!-- SVG Circle -->
@@ -231,6 +287,7 @@
 			{@const diatonic = isDiatonic(label)}
 			{@const isSelected = selectedRoot === label}
 			{@const isHovered = hovered === label}
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<path
 				d={arcPath(i, R_OUTER, R_MID)}
 				class="cof-segment cof-segment--outer"
@@ -242,6 +299,8 @@
 				onpointerup={() => handleChordUp(label)}
 				onpointerleave={() => { hovered = null; handleChordUp(label); }}
 				onpointerenter={() => { hovered = label; }}
+				draggable="true"
+				ondragstart={(e: DragEvent) => handleDragStart(e, label)}
 				role="button"
 				tabindex="0"
 			/>
@@ -265,6 +324,7 @@
 			{@const diatonic = isDiatonic(label)}
 			{@const isSelected = selectedRoot === label}
 			{@const isHovered = hovered === label}
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<path
 				d={arcPath(i, R_MID, R_INNER)}
 				class="cof-segment cof-segment--inner"
@@ -276,6 +336,8 @@
 				onpointerup={() => handleChordUp(label)}
 				onpointerleave={() => { hovered = null; handleChordUp(label); }}
 				onpointerenter={() => { hovered = label; }}
+				draggable="true"
+				ondragstart={(e: DragEvent) => handleDragStart(e, label)}
 				role="button"
 				tabindex="0"
 			/>
@@ -303,11 +365,15 @@
 		</text>
 	</svg>
 
-	<!-- Insert button -->
-	{#if selectedRoot}
-		<button class="cof-insert-btn" onclick={handleInsertClick}>
-			{buildChordName(selectedRoot)} を挿入
-		</button>
+	<!-- Drag hint / on-mode hint -->
+	{#if onMode}
+		<div class="cof-on-hint">
+			ベース音を選択してください
+		</div>
+	{:else if selectedRoot}
+		<div class="cof-drag-hint">
+			ドラッグしてエディタに挿入
+		</div>
 	{/if}
 </div>
 
@@ -329,13 +395,13 @@
 	}
 
 	.cof-q-btn {
-		padding: 3px 8px;
+		padding: 6px 12px;
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-sm);
 		background: var(--bg-elevated);
 		color: var(--text-muted);
 		font-family: var(--font-mono);
-		font-size: 0.68rem;
+		font-size: 0.82rem;
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.12s;
@@ -435,20 +501,32 @@
 		fill: var(--text-muted);
 	}
 
-	.cof-insert-btn {
-		padding: 6px 16px;
-		border: 1px solid var(--accent-primary);
-		border-radius: var(--radius-md);
-		background: rgba(167, 139, 250, 0.15);
-		color: var(--accent-primary);
-		font-family: var(--font-mono);
-		font-size: 0.78rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.15s;
+	.cof-q-btn--on {
+		border-style: dashed;
 	}
 
-	.cof-insert-btn:hover {
-		background: rgba(167, 139, 250, 0.3);
+	.cof-q-btn:disabled {
+		opacity: 0.3;
+		cursor: default;
+	}
+
+	.cof-on-hint {
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		color: var(--accent-primary);
+		font-weight: 600;
+		animation: pulse-hint 1.2s ease-in-out infinite;
+	}
+
+	@keyframes pulse-hint {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.5; }
+	}
+
+	.cof-drag-hint {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		color: var(--text-muted);
+		font-style: italic;
 	}
 </style>
