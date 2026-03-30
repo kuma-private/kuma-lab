@@ -178,6 +178,52 @@ export function resolveRepeats(bars: ParsedBar[]): ParsedBar[] {
   return resolved;
 }
 
+// ── Transpose ─────────────────────────────────────────
+
+const PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+const ENHARMONIC_TO_SHARP: Record<string, string> = {
+  'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B',
+};
+
+const transposeRoot = (root: string, semitones: number): string => {
+  const normalized = ENHARMONIC_TO_SHARP[root] ?? root;
+  const idx = PITCH_NAMES.indexOf(normalized);
+  if (idx === -1) return root;
+  const newIdx = ((idx + semitones) % 12 + 12) % 12;
+  return PITCH_NAMES[newIdx];
+};
+
+const CHORD_TOKEN_PATTERN = /^([A-G][#b]?)(.*?)(?:\/([A-G][#b]?))?$/;
+
+const transposeToken = (token: string, semitones: number): string => {
+  const m = token.match(CHORD_TOKEN_PATTERN);
+  if (!m) return token;
+  const [, root, quality, bass] = m;
+  const newRoot = transposeRoot(root, semitones);
+  const newBass = bass ? transposeRoot(bass, semitones) : '';
+  return newRoot + quality + (newBass ? '/' + newBass : '');
+};
+
+/**
+ * Transpose all chords in a rechord-style input string by N semitones.
+ * Comments, bar lines, and special tokens (%, _, =) are preserved.
+ */
+export const transpose = (input: string, semitones: number): string => {
+  if (semitones === 0) return input;
+  return input.split('\n').map(line => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('#') || !trimmed) return line;
+    return line.split(/(\|)/).map(segment => {
+      if (segment === '|') return segment;
+      return segment.split(/(\s+)/).map(token => {
+        if (!token.trim() || token === '%' || token === '_' || token === '=') return token;
+        return transposeToken(token, semitones);
+      }).join('');
+    }).join('');
+  }).join('\n');
+};
+
 // ── Serialization ──────────────────────────────────────
 
 function entryToString(entry: BarEntry): string {

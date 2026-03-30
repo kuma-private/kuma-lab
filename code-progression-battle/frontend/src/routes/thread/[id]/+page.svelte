@@ -2,12 +2,14 @@
 	import { page } from '$app/state';
 	import { onMount, onDestroy } from 'svelte';
 	import { createAppStore } from '$lib/stores/app.svelte';
-	import { parseProgression } from '$lib/chord-parser';
+	import { parseProgression, transpose } from '$lib/chord-parser';
 	import { ChordPlayer, type PlayerState } from '$lib/chord-player';
 	import ScoreEditor from '$lib/components/ScoreEditor.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import AiReview from '$lib/components/AiReview.svelte';
 	import PatternPicker from '$lib/components/PatternPicker.svelte';
+	import PianoKeyboard from '$lib/components/PianoKeyboard.svelte';
+	import CircleOfFifths from '$lib/components/CircleOfFifths.svelte';
 
 	const store = createAppStore();
 	const threadId = page.params.id as string;
@@ -367,13 +369,51 @@
 		scoreEditorValue = value;
 		diffError = null;
 	};
+
+	// Circle of Fifths chord insert
+	const handleChordInsert = (chord: string) => {
+		if (scoreReadonly) return;
+		// Append chord with space to the current value
+		if (!scoreEditorValue.trim()) {
+			scoreEditorValue = '| ' + chord + ' |';
+		} else {
+			// Insert before the last | if it exists, or append
+			const trimmed = scoreEditorValue.trimEnd();
+			if (trimmed.endsWith('|')) {
+				scoreEditorValue = trimmed.slice(0, -1).trimEnd() + ' ' + chord + ' |';
+			} else {
+				scoreEditorValue = trimmed + ' ' + chord;
+			}
+		}
+		diffError = null;
+	};
+
+	// Transpose handlers (preview only)
+	let transposeSemitones = $state(0);
+
+	const handleTransposeUp = () => {
+		transposeSemitones++;
+		scoreEditorValue = transpose(scoreEditorValue, 1);
+	};
+
+	const handleTransposeDown = () => {
+		transposeSemitones--;
+		scoreEditorValue = transpose(scoreEditorValue, -1);
+	};
+
+	// Piano keyboard open state for padding adjustment
+	let pianoOpen = $state(false);
+
+	const handlePianoToggle = (open: boolean) => {
+		pianoOpen = open;
+	};
 </script>
 
 <svelte:head>
 	<title>{store.currentThread?.title || 'Thread'} - Code Progression Battle</title>
 </svelte:head>
 
-<div class="page">
+<div class="page" class:page--piano-open={pianoOpen}>
 	<header class="thread-header">
 		<a href="/" class="back-link">
 			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -487,7 +527,20 @@
 							{#if turn.aiComment}
 								<div class="ai-comment">
 									<span class="ai-icon">AI</span>
-									<span class="ai-text">{turn.aiComment}</span>
+									<div class="ai-body">
+										<span class="ai-text">{turn.aiComment}</span>
+										{#if turn.aiScores}
+											{@const scores = (() => { try { return JSON.parse(turn.aiScores); } catch { return null; } })()}
+											{#if scores && typeof scores.tension === 'number'}
+												<div class="ai-scores">
+													<span class="ai-score" title="テンション">T:{scores.tension}</span>
+													<span class="ai-score" title="創造性">C:{scores.creativity}</span>
+													<span class="ai-score" title="整合性">H:{scores.coherence}</span>
+													<span class="ai-score" title="サプライズ">S:{scores.surprise}</span>
+												</div>
+											{/if}
+										{/if}
+									</div>
 								</div>
 							{/if}
 						</div>
@@ -526,7 +579,20 @@
 
 				<div class="panel-header">
 					<h2>Score</h2>
-					<span class="count">{thread.lines.length} lines</span>
+					<div class="panel-header-right">
+						<div class="transpose-controls">
+							<button class="transpose-btn" onclick={handleTransposeDown} title="半音下げ">-</button>
+							<span class="transpose-label">
+								{#if transposeSemitones !== 0}
+									{transposeSemitones > 0 ? '+' : ''}{transposeSemitones}
+								{:else}
+									Key: {thread.key}
+								{/if}
+							</span>
+							<button class="transpose-btn" onclick={handleTransposeUp} title="半音上げ">+</button>
+						</div>
+						<span class="count">{thread.lines.length} lines</span>
+					</div>
 				</div>
 
 				<div class="score-area">
@@ -579,10 +645,14 @@
 
 					{#if thread.key}
 						<div class="right-section right-section--bottom">
+							<CircleOfFifths currentKey={thread.key} onInsert={handleChordInsert} />
+						</div>
+						<div class="right-section right-section--bottom">
 							<PatternPicker key={thread.key} onInsert={handlePatternInsert} />
 						</div>
 					{/if}
 				{/if}
+
 			</div>
 		</div>
 	{:else if store.loading}
@@ -592,6 +662,8 @@
 		</div>
 	{/if}
 </div>
+
+<PianoKeyboard collapsed={true} onToggle={handlePianoToggle} />
 
 <PlayerBar
 	state={playerState}
@@ -615,6 +687,11 @@
 		margin: 0 auto;
 		padding: var(--space-lg) var(--space-xl);
 		padding-bottom: calc(var(--player-height) + var(--space-2xl));
+		transition: padding-bottom 0.2s;
+	}
+
+	.page--piano-open {
+		padding-bottom: calc(var(--player-height) + 200px + var(--space-2xl));
 	}
 
 	/* Header */
@@ -987,11 +1064,33 @@
 		line-height: 1.4;
 	}
 
+	.ai-body {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
 	.ai-text {
 		font-size: 0.78rem;
 		font-style: italic;
 		color: var(--text-secondary);
 		line-height: 1.4;
+	}
+
+	.ai-scores {
+		display: flex;
+		gap: 6px;
+	}
+
+	.ai-score {
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+		font-style: normal;
+		font-weight: 600;
+		color: rgba(96, 165, 250, 0.7);
+		background: rgba(96, 165, 250, 0.08);
+		padding: 1px 5px;
+		border-radius: 3px;
 	}
 
 	.empty-history {
@@ -1128,6 +1227,50 @@
 	.right-section--bottom {
 		border-top: 1px solid var(--border-subtle);
 		padding: var(--space-md) var(--space-lg);
+	}
+
+	.panel-header-right {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+	}
+
+	.transpose-controls {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.transpose-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		font-size: 0.85rem;
+		font-weight: 700;
+		font-family: var(--font-mono);
+		cursor: pointer;
+		transition: all 0.15s;
+		line-height: 1;
+	}
+
+	.transpose-btn:hover {
+		background: var(--bg-hover);
+		border-color: var(--accent-primary);
+		color: var(--accent-primary);
+	}
+
+	.transpose-label {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		color: var(--text-muted);
+		min-width: 48px;
+		text-align: center;
 	}
 
 	/* Score area (right panel) */

@@ -152,6 +152,7 @@
 	.se-container {
 		position: relative;
 		min-height: 200px;
+		background: var(--bg-base);
 	}
 
 	.se-highlight,
@@ -179,12 +180,21 @@
 		width: 100%;
 		min-height: 200px;
 		background: transparent;
-		color: transparent;
-		caret-color: var(--text-primary);
-		border: none;
+		color: rgba(232, 232, 240, 0.05);
+		caret-color: var(--accent-primary);
+		border: 1px solid transparent;
 		outline: none;
 		resize: vertical;
 		z-index: 2;
+		transition: border-color 0.2s;
+	}
+
+	.se-textarea:focus {
+		border-color: var(--accent-primary);
+	}
+
+	.se-textarea::selection {
+		background: rgba(167, 139, 250, 0.3);
 	}
 
 	.se-textarea::placeholder {
@@ -196,8 +206,8 @@
 	}
 
 	:global(.se-bar) {
-		color: var(--border-default);
-		font-weight: 400;
+		color: var(--border-strong);
+		font-weight: 500;
 		margin: 0 2px;
 	}
 
@@ -207,7 +217,7 @@
 	}
 
 	:global(.se-comment) {
-		color: var(--text-muted);
+		color: var(--text-secondary);
 		font-style: italic;
 	}
 

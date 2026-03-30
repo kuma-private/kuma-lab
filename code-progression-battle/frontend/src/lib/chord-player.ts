@@ -333,6 +333,46 @@ export const playSelection = async (text: string, config: PlayerConfig): Promise
   });
 };
 
+/**
+ * Play a single note for preview (e.g. from piano keyboard).
+ */
+export const playNote = async (note: string): Promise<void> => {
+  await Tone.start();
+  const synth = new Tone.Synth({
+    oscillator: { type: 'triangle' as const },
+    envelope: { attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.5 },
+    volume: -8,
+  }).toDestination();
+  synth.triggerAttackRelease(note, '8n');
+  setTimeout(() => synth.dispose(), 1000);
+};
+
+// ── Keyboard synth (sustained attack/release) ────────
+
+let _kbSynth: Tone.PolySynth | null = null;
+
+const getKeyboardSynth = (): Tone.PolySynth => {
+  if (!_kbSynth) {
+    _kbSynth = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'triangle' as const },
+      envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.6 },
+      volume: -8,
+    }).toDestination();
+  }
+  return _kbSynth;
+};
+
+export const keyboardAttack = async (notes: string[]): Promise<void> => {
+  await Tone.start();
+  const synth = getKeyboardSynth();
+  synth.triggerAttack(notes);
+};
+
+export const keyboardRelease = (notes: string[]): void => {
+  if (!_kbSynth) return;
+  _kbSynth.triggerRelease(notes);
+};
+
 // ── Player class ───────────────────────────────────────
 
 export class ChordPlayer {
