@@ -5,9 +5,9 @@ export default defineConfig({
 	plugins: [sveltekit()],
 	server: {
 		proxy: {
-			'/api': 'http://localhost:5000',
-			'/auth': 'http://localhost:5000',
-			'/health': 'http://localhost:5000'
+			'/api': 'http://localhost:5050',
+			'/auth': 'http://localhost:5050',
+			'/health': 'http://localhost:5050'
 		}
 	}
 });
