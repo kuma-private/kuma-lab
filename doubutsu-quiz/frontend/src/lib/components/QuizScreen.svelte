@@ -245,6 +245,8 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 10px;
+		position: relative;
+		z-index: 10;
 	}
 
 	.input-area.shake {
@@ -279,7 +281,7 @@
 	.answer-input {
 		flex: 1;
 		padding: 14px 18px;
-		font-size: 1.1rem;
+		font-size: 16px; /* minimum 16px to prevent iOS zoom */
 		font-weight: 700;
 		font-family: inherit;
 		border: 3px solid var(--primary-light);
