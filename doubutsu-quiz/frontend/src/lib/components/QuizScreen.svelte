@@ -150,15 +150,16 @@
 					autocomplete="off"
 					class="answer-input"
 				/>
-				{#if micSupported()}
-					<button class="mic-btn" class:listening onclick={toggleMic}>
-						{listening ? '\u{1F534}' : '\u{1F3A4}'}
-					</button>
-				{/if}
 				<button class="submit-btn" onclick={handleSubmit} disabled={!inputText.trim()}>
-					{'\u2705'}
+					こたえる
 				</button>
 			</div>
+
+			{#if micSupported()}
+				<button class="mic-btn" class:listening onclick={toggleMic}>
+					{listening ? '\u{1F534} きいてるよ...' : '\u{1F3A4} こえで こたえる'}
+				</button>
+			{/if}
 
 			{#if quiz.hintsUsed < 3}
 				<button class="hint-btn" onclick={handleHint}>
@@ -298,47 +299,48 @@
 		font-weight: 400;
 	}
 
+	.submit-btn {
+		padding: 14px 24px;
+		border-radius: 20px;
+		background: var(--primary);
+		color: white;
+		font-size: 1rem;
+		font-weight: 900;
+		box-shadow: var(--shadow);
+		transition: transform 0.2s, opacity 0.2s;
+		white-space: nowrap;
+	}
+
+	.submit-btn:disabled {
+		opacity: 0.3;
+	}
+
+	.submit-btn:active {
+		transform: scale(0.93);
+	}
+
 	.mic-btn {
-		width: 52px;
-		height: 52px;
-		border-radius: 50%;
+		padding: 10px 24px;
+		border-radius: 20px;
 		background: var(--surface);
 		box-shadow: var(--shadow);
-		font-size: 1.4rem;
+		font-size: 0.9rem;
+		font-weight: 700;
+		color: var(--text-light);
 		display: flex;
 		align-items: center;
-		justify-content: center;
+		gap: 6px;
 		transition: transform 0.2s;
 	}
 
 	.mic-btn.listening {
 		background: #FFEBEE;
+		color: #E57373;
 		animation: pulse 1s ease-in-out infinite;
 	}
 
 	.mic-btn:active {
-		transform: scale(0.9);
-	}
-
-	.submit-btn {
-		width: 52px;
-		height: 52px;
-		border-radius: 50%;
-		background: var(--primary);
-		box-shadow: var(--shadow);
-		font-size: 1.4rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: transform 0.2s, opacity 0.2s;
-	}
-
-	.submit-btn:disabled {
-		opacity: 0.4;
-	}
-
-	.submit-btn:active {
-		transform: scale(0.9);
+		transform: scale(0.93);
 	}
 
 	.hint-btn {

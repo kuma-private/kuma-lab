@@ -32,13 +32,13 @@
 		<div class="loading">
 			<div class="loading-icons">
 				<span class="loading-icon bounce" style="animation-delay: 0s">
-					{quiz.genre === 'doubutsu' ? '\u{1F436}' : '\u{1F345}'}
+					{quiz.genre === 'doubutsu' ? '\u{1F436}' : quiz.genre === 'norimono' ? '\u{1F697}' : '\u{1F345}'}
 				</span>
 				<span class="loading-icon bounce" style="animation-delay: 0.2s">
-					{quiz.genre === 'doubutsu' ? '\u{1F431}' : '\u{1F955}'}
+					{quiz.genre === 'doubutsu' ? '\u{1F431}' : quiz.genre === 'norimono' ? '\u{1F682}' : '\u{1F955}'}
 				</span>
 				<span class="loading-icon bounce" style="animation-delay: 0.4s">
-					{quiz.genre === 'doubutsu' ? '\u{1F418}' : '\u{1F33D}'}
+					{quiz.genre === 'doubutsu' ? '\u{1F418}' : quiz.genre === 'norimono' ? '\u{2708}' : '\u{1F33D}'}
 				</span>
 			</div>
 			<p class="loading-text">じゅんびちゅう{loadingDots}</p>

@@ -16,6 +16,7 @@ module IrasutoyaScraper =
         let d = Dictionary<string, string>()
         d.["doubutsu"] <- "https://www.irasutoya.com/feeds/posts/default/-/%E5%8B%95%E7%89%A9?alt=json&max-results=200"
         d.["yasai"] <- "https://www.irasutoya.com/feeds/posts/default/-/%E9%87%8E%E8%8F%9C?alt=json&max-results=200"
+        d.["norimono"] <- "https://www.irasutoya.com/feeds/posts/default/-/%E4%B9%97%E3%82%8A%E7%89%A9?alt=json&max-results=200"
         d
 
     let private parseEntries (json: string) : ScrapedItem list =

@@ -1,4 +1,4 @@
-export type Genre = 'doubutsu' | 'yasai';
+export type Genre = 'doubutsu' | 'yasai' | 'norimono';
 
 export type QuizPhase = 'select' | 'loading' | 'quiz' | 'complete';
 

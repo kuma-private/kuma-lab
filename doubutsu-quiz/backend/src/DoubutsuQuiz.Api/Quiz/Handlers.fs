@@ -27,7 +27,7 @@ module QuizHandlers =
 
             let genre =
                 match body.genre with
-                | "doubutsu" | "yasai" -> body.genre
+                | "doubutsu" | "yasai" | "norimono" -> body.genre
                 | _ ->
                     ctx.Response.StatusCode <- 400
                     "invalid"

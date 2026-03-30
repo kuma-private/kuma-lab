@@ -30,6 +30,12 @@
 				<span class="genre-label">やさい</span>
 				<span class="genre-sub">にんじん、トマト...</span>
 			</button>
+
+			<button class="genre-btn norimono" onclick={() => quiz.startQuiz('norimono')}>
+				<span class="genre-icon bounce" style="animation-delay: 0.6s">&#x1F697;</span>
+				<span class="genre-label">のりもの</span>
+				<span class="genre-sub">くるま、でんしゃ...</span>
+			</button>
 		</div>
 
 		{#if quiz.userName}
@@ -124,6 +130,10 @@
 
 	.yasai {
 		background: linear-gradient(145deg, #B2DFDB, #4DB6AC);
+	}
+
+	.norimono {
+		background: linear-gradient(145deg, #BBDEFB, #64B5F6);
 	}
 
 	.genre-icon {
