@@ -89,7 +89,10 @@
 
 	const buildPlayer = () => {
 		const thread = store.currentThread;
-		if (!thread || !thread.lines.length) return;
+		if (!thread) return;
+		// Use scoreEditorValue (includes live edits) instead of thread.lines
+		const textToPlay = scoreEditorValue || thread.lines.map(l => l.chords).join('\n');
+		if (!textToPlay.trim()) return;
 		player?.dispose();
 		player = new ChordPlayer(
 			{ bpm: thread.bpm, timeSignature: parseTimeSignature(thread.timeSignature) },
@@ -103,11 +106,8 @@
 		player.setVolume(playerVolume);
 		player.setLoop(playerLoop);
 		try {
-			const allBars = thread.lines.flatMap(l => {
-				try { return parseProgression(l.chords).bars; }
-				catch { return []; }
-			});
-			if (allBars.length > 0) player.load(allBars);
+			const { bars } = parseProgression(textToPlay);
+			if (bars.length > 0) player.load(bars);
 		} catch (e) {
 			console.error('[Player]', e);
 		}
@@ -976,7 +976,7 @@
 	/* ── Editor layout: 2-column grid ── */
 	.editor-layout {
 		display: grid;
-		grid-template-columns: 1fr 300px;
+		grid-template-columns: 1fr 1fr;
 		gap: var(--space-md);
 		align-items: start;
 	}

@@ -494,6 +494,7 @@ export const keyboardRelease = (notes: string[]): void => {
 
 export class ChordPlayer {
   private synth: Tone.PolySynth | Tone.Sampler | null = null;
+  private _disposeSynth = true;
   private scheduledEvents: number[] = [];
   private _state: PlayerState = 'stopped';
   private _totalDuration = 0;
@@ -534,10 +535,11 @@ export class ChordPlayer {
       const compressor = new Tone.Compressor(-20, 4).connect(reverb);
 
       if (_currentOscPreset === 'piano') {
-        const sampler = createPianoSampler();
-        sampler.volume.value = -10;
+        // Use shared piano sampler (already loading/loaded)
+        const sampler = getPianoSampler();
         sampler.connect(compressor);
         this.synth = sampler;
+        this._disposeSynth = false; // don't dispose shared sampler
       } else {
         const preset = OSC_PRESETS[_currentOscPreset];
         this.synth = new Tone.PolySynth(Tone.Synth, {
@@ -545,6 +547,7 @@ export class ChordPlayer {
           envelope: preset.envelope,
           volume: -10,
         }).connect(compressor);
+        this._disposeSynth = true;
       }
     }
     return this.synth;
@@ -655,8 +658,19 @@ export class ChordPlayer {
   }
 
   async play(): Promise<void> {
-    await Tone.start(); // Required: user gesture unlocks audio context
-    console.log('[ChordPlayer] play: AudioContext state=', Tone.getContext().state, 'scheduled=', this.scheduledEvents.length, 'totalDuration=', this._totalDuration);
+    await Tone.start();
+
+    // Wait for piano sampler to load if needed
+    if (_currentOscPreset === 'piano' && !_pianoSamplerLoaded) {
+      await new Promise<void>((resolve) => {
+        const check = () => {
+          if (_pianoSamplerLoaded) resolve();
+          else setTimeout(check, 100);
+        };
+        check();
+      });
+    }
+
     const transport = Tone.getTransport();
 
     if (this._state === 'paused') {
@@ -669,7 +683,6 @@ export class ChordPlayer {
     transport.stop();
     transport.position = 0;
     transport.start();
-    console.log('[ChordPlayer] transport started, state=', transport.state);
     this.setState('playing');
     this.startProgressTracking();
   }
@@ -737,7 +750,9 @@ export class ChordPlayer {
   dispose(): void {
     this.stop();
     this.clearSchedule();
-    this.synth?.dispose();
+    if (this._disposeSynth && this.synth) {
+      this.synth.dispose();
+    }
     this.synth = null;
   }
 
