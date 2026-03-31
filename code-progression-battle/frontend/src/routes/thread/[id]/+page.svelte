@@ -357,10 +357,6 @@
 		margin: 0 auto;
 		padding: var(--space-md) var(--space-xl);
 		padding-bottom: calc(80px + var(--space-lg));
-		display: flex;
-		flex-direction: column;
-		height: calc(100vh - 80px);
-		box-sizing: border-box;
 	}
 
 	/* Editor layout: 2-column grid */
@@ -368,13 +364,10 @@
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-md);
-		align-items: stretch;
-		flex: 1;
-		min-height: 0;
+		align-items: start;
 	}
 
 	.panel-score, .panel-tools {
-		overflow-y: auto;
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 		background: var(--bg-base);
