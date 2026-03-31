@@ -225,18 +225,16 @@
 <style>
 	.player-dock {
 		position: fixed;
-		bottom: 0;
+		bottom: 8px;
 		left: 50%;
 		transform: translateX(-50%);
-		width: 100%;
+		width: calc(100% - 16px);
 		max-width: 1200px;
 		height: 80px;
 		background: var(--player-bg);
 		backdrop-filter: blur(16px);
-		border-top: 1px solid var(--border-subtle);
-		border-left: 1px solid var(--border-subtle);
-		border-right: 1px solid var(--border-subtle);
-		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
 		display: flex;
 		align-items: stretch;
 		z-index: 50;

@@ -111,7 +111,7 @@
 	};
 
 	onMount(() => {
-		requestAnimationFrame(scrollToC4);
+		setTimeout(scrollToC4, 100);
 	});
 
 	$effect(() => {

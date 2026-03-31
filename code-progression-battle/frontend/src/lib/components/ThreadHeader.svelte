@@ -94,7 +94,7 @@
 		<div class="thread-meta">
 			<!-- Key badge: click to edit -->
 			{#if editingKey}
-				<select class="inline-select" value={editKey} onchange={(e) => { editKey = e.currentTarget.value; saveKey(); }} onblur={saveKey}>
+				<select class="inline-select" bind:value={editKey} onchange={() => { saveKey(); }} onblur={saveKey}>
 					{#each keys as k}
 						<option value={k}>{k}</option>
 					{/each}
