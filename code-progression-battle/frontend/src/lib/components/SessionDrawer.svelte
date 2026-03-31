@@ -114,10 +114,10 @@
 							<span class="ai-text">{parsedAi.comment}</span>
 							{#if parsedAi.scores}
 								<div class="ai-scores">
-									<span class="ai-score" title="テンション">T:{parsedAi.scores.tension}</span>
-									<span class="ai-score" title="創造性">C:{parsedAi.scores.creativity}</span>
-									<span class="ai-score" title="整合性">H:{parsedAi.scores.coherence}</span>
-									<span class="ai-score" title="サプライズ">S:{parsedAi.scores.surprise}</span>
+									<span class="ai-score">緊張感 {parsedAi.scores.tension}/5</span>
+									<span class="ai-score">独創性 {parsedAi.scores.creativity}/5</span>
+									<span class="ai-score">整合性 {parsedAi.scores.coherence}/5</span>
+									<span class="ai-score">意外性 {parsedAi.scores.surprise}/5</span>
 								</div>
 							{/if}
 						</div>

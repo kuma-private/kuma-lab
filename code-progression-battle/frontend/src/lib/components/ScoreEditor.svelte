@@ -206,7 +206,7 @@
 		readonly={readonly}
 		autocomplete="off"
 		spellcheck="false"
-		placeholder="| Am7 | Dm7 | G7 | Cmaj7 |"
+		placeholder="| Am7 | Dm7 | G7 | Cmaj7 |&#10;&#10;💡 選択して右クリック → 部分再生"
 	></textarea>
 </div>
 
