@@ -29,6 +29,7 @@
 
 	// ScoreEditor state
 	let scoreEditorValue = $state('');
+	let pendingInsertText = $state('');
 	let scoreInitialized = $state(false);
 	let scoreDisplayMode = $state<DisplayMode>('chord');
 
@@ -551,7 +552,7 @@
 
 				{#if canAct}
 					<div class="score-toolbar">
-						<button class="score-tool-btn" onclick={() => { scoreEditorValue += ' | '; }} title="小節区切りを追加">
+						<button class="score-tool-btn" onclick={() => { pendingInsertText = '| '; }} title="小節区切りを追加">
 							<span class="tool-label">|</span> 小節
 						</button>
 						<button class="score-tool-btn" onclick={() => { scoreEditorValue += '\n'; }} title="改行を追加">
@@ -586,6 +587,7 @@
 							activeBarIndex={activeBarIndex}
 							displayMode={scoreDisplayMode}
 							musicalKey={thread.key}
+							pendingInsert={pendingInsertText}
 							onchange={handleScoreChange}
 						/>
 					{/if}
@@ -642,9 +644,7 @@
 						</div>
 						<CircleOfFifths currentKey={thread.key} onSelect={(chord) => {
 						if (scoreReadonly) return;
-						scoreEditorValue = scoreEditorValue
-							? scoreEditorValue + ' ' + chord
-							: chord;
+						pendingInsertText = chord;
 					}} />
 					</div>
 

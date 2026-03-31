@@ -11,10 +11,11 @@
 		activeBarIndex?: number;
 		displayMode?: DisplayMode;
 		musicalKey?: string;
+		pendingInsert?: string;
 		onchange?: (value: string) => void;
 	}
 
-	let { value, readonly = false, activeBarIndex = -1, displayMode = 'chord', musicalKey = 'C', onchange }: Props = $props();
+	let { value, readonly = false, activeBarIndex = -1, displayMode = 'chord', musicalKey = 'C', pendingInsert = '', onchange }: Props = $props();
 
 	const ROOT_COLORS: Record<string, string> = {
 		'C': 'var(--chord-c-text)',
@@ -78,6 +79,24 @@
 	let internalValue = $state(value);
 	let editing = $state(false);
 	let textareaEl: HTMLTextAreaElement;
+	let lastCursorPos = $state(-1); // -1 = end
+
+	// Handle pending insert at cursor position
+	let lastPendingInsert = '';
+	$effect(() => {
+		if (pendingInsert && pendingInsert !== lastPendingInsert) {
+			lastPendingInsert = pendingInsert;
+			const pos = lastCursorPos >= 0 ? lastCursorPos : internalValue.length;
+			const before = internalValue.slice(0, pos);
+			const after = internalValue.slice(pos);
+			const space = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n') && !before.endsWith('|') ? ' ' : '';
+			const newVal = before + space + pendingInsert + after;
+			internalValue = newVal;
+			if (textareaEl) textareaEl.value = newVal;
+			onchange?.(newVal);
+			lastCursorPos = pos + space.length + pendingInsert.length;
+		}
+	});
 
 	$effect(() => { internalValue = value; });
 
@@ -102,7 +121,10 @@
 	};
 
 	const handleFocus = () => { editing = true; };
-	const handleBlur = () => { editing = false; };
+	const handleBlur = () => {
+		if (textareaEl) lastCursorPos = textareaEl.selectionStart;
+		editing = false;
+	};
 
 	// Right-click context menu
 	let contextMenu = $state<{ x: number; y: number; text: string } | null>(null);
