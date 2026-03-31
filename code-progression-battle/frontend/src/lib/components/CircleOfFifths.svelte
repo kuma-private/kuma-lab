@@ -377,14 +377,14 @@
 		<!-- Click on segment plays preview sound -->
 	</div>
 
-	<!-- On-mode hint -->
+	<!-- Add button (always visible) -->
 	{#if onMode}
 		<div class="cof-on-hint">
 			ベース音を選択してください
 		</div>
-	{:else if selectedRoot}
+	{:else}
 		<button class="cof-add-btn" onclick={handleAddToScore}>
-			{currentChordName} をスコアに追加
+			{currentChordName || 'C'} をスコアに追加
 		</button>
 	{/if}
 </div>

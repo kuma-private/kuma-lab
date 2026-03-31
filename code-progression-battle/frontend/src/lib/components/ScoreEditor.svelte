@@ -52,7 +52,7 @@
 				const isActive = activeBar >= 0 && insideBar && barCounter === activeBar;
 				return segment.split(/(\s+)/).map(token => {
 					if (!token.trim()) return token;
-					if (token === '%' || token === '_' || token === '=') {
+					if (token === '%' || token === '_' || token === '=' || token === '-') {
 						return `<span class="se-special">${token}</span>`;
 					}
 					try {
