@@ -153,14 +153,12 @@
 		return name;
 	});
 
-	// Left click: select root + insert to editor
-	const handleChordClick = (label: string, isMinor: boolean) => {
+	// Click: select root + play preview sound
+	const handleChordClick = async (label: string, isMinor: boolean) => {
 		if (onMode && selectedRoot) {
 			const bassNote = getRootFromLabel(label);
 			selectedBass = bassNote;
 			onMode = false;
-			const chordName = buildChordName(selectedRoot);
-			onSelect?.(chordName);
 			return;
 		}
 
@@ -172,8 +170,24 @@
 			selectedQuality = '';
 		}
 
+		// Play sound preview
 		const chordName = buildChordName(label);
-		onSelect?.(chordName);
+		try {
+			const mod = await ensureSynth();
+			const parsed = parseChord(chordName);
+			const notes = chordToNotes(parsed);
+			await mod.keyboardAttack(notes);
+			setTimeout(async () => {
+				try { await mod.keyboardRelease(notes); } catch {}
+			}, 400);
+		} catch {}
+	};
+
+	// Button: add to score
+	const handleAddToScore = () => {
+		if (!selectedRoot) return;
+		const chordName = currentChordName;
+		if (chordName) onSelect?.(chordName);
 	};
 
 
@@ -360,16 +374,7 @@
 			</text>
 		</svg>
 
-		<!-- Hover preview button overlay -->
-		{#if hovered && hoveredPreviewPos}
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<button
-				class="cof-preview-btn"
-				style="left: calc({hoveredPreviewPos.x / 400 * 100}% + 10px); top: calc({hoveredPreviewPos.y / 400 * 100}% - 10px);"
-				onclick={handlePreviewClick}
-				title="試聴"
-			>&#9654;</button>
-		{/if}
+		<!-- Click on segment plays preview sound -->
 	</div>
 
 	<!-- On-mode hint -->
@@ -378,7 +383,9 @@
 			ベース音を選択してください
 		</div>
 	{:else if selectedRoot}
-		<div class="cof-hint">クリック: 追加 / &#9654;: 試聴</div>
+		<button class="cof-add-btn" onclick={handleAddToScore}>
+			{currentChordName} をスコアに追加
+		</button>
 	{/if}
 </div>
 
@@ -560,9 +567,22 @@
 		50% { opacity: 0.5; }
 	}
 
-	.cof-hint {
-		font-size: 0.68rem;
-		color: var(--text-muted);
-		text-align: center;
+	.cof-add-btn {
+		display: block;
+		width: 100%;
+		padding: 8px 16px;
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-md);
+		background: rgba(167, 139, 250, 0.15);
+		color: var(--accent-primary);
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.cof-add-btn:hover {
+		background: rgba(167, 139, 250, 0.3);
 	}
 </style>
