@@ -209,6 +209,10 @@ module Repository =
                 let docRef = db.Value.Collection("threads").Document(thread.Id)
                 let histDicts = thread.History |> List.map (fun h -> saveHistoryToDict h :> obj)
                 do! updateFields docRef [
+                    "title", thread.Title :> obj
+                    "key", thread.Key :> obj
+                    "timeSignature", thread.TimeSignature :> obj
+                    "bpm", thread.Bpm :> obj
                     "score", thread.Score :> obj
                     "lastEditedBy", thread.LastEditedBy :> obj
                     "lastEditedAt", Timestamp.FromDateTime(thread.LastEditedAt.ToUniversalTime()) :> obj
