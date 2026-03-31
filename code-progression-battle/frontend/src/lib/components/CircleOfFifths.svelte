@@ -176,50 +176,6 @@
 		onSelect?.(chordName);
 	};
 
-	// Right click: preview sound
-	const handleChordPreview = async (e: MouseEvent, label: string) => {
-		e.preventDefault();
-		selectedRoot = label;
-		selectedBass = null;
-		pressedLabel = label;
-
-		const chordName = buildChordName(label);
-		try {
-			const mod = await ensureSynth();
-			const parsed = parseChord(chordName);
-			const notes = chordToNotes(parsed);
-			await mod.keyboardAttack(notes);
-			setTimeout(async () => {
-				try { await mod.keyboardRelease(notes); } catch {}
-				pressedLabel = null;
-			}, 500);
-		} catch (err) {
-			console.error('[CircleOfFifths] preview error:', err);
-			pressedLabel = null;
-		}
-	};
-
-	// Legacy handler kept for compatibility
-	const handleChordUp = (label: string) => {
-		if (pressedLabel !== label) return;
-		pressedLabel = null;
-		try {
-			const chordName = buildChordName(label);
-			const parsed = parseChord(chordName);
-			const notes = chordToNotes(parsed);
-			synthModule?.keyboardRelease(notes);
-		} catch (err) {
-			console.error('[CircleOfFifths] release error:', err);
-		}
-	};
-
-	const handleDragStart = (e: DragEvent, label: string) => {
-		const chordName = buildChordName(label);
-		e.dataTransfer?.setData('text/plain', chordName);
-		if (e.dataTransfer) {
-			e.dataTransfer.effectAllowed = 'copy';
-		}
-	};
 
 	const buildChordName = (label: string): string => {
 		let name: string;
@@ -257,6 +213,47 @@
 	};
 
 	let hovered = $state<string | null>(null);
+	let svgEl: SVGSVGElement | undefined = $state();
+
+	// Compute preview button position in pixels relative to the SVG container
+	const hoveredPreviewPos = $derived.by(() => {
+		if (!hovered) return null;
+		const majorIdx = MAJOR_ROOTS.indexOf(hovered);
+		const minorIdx = MINOR_ROOTS.indexOf(hovered);
+		if (majorIdx >= 0) {
+			const pos = labelPos(majorIdx, (R_OUTER + R_MID) / 2);
+			return { x: pos.x, y: pos.y };
+		}
+		if (minorIdx >= 0) {
+			const pos = labelPos(minorIdx, (R_MID + R_INNER) / 2);
+			return { x: pos.x, y: pos.y };
+		}
+		return null;
+	});
+
+	const handlePreviewClick = async (e: MouseEvent) => {
+		e.stopPropagation();
+		if (!hovered) return;
+		const label = hovered;
+		selectedRoot = label;
+		selectedBass = null;
+		pressedLabel = label;
+
+		const chordName = buildChordName(label);
+		try {
+			const mod = await ensureSynth();
+			const parsed = parseChord(chordName);
+			const notes = chordToNotes(parsed);
+			await mod.keyboardAttack(notes);
+			setTimeout(async () => {
+				try { await mod.keyboardRelease(notes); } catch {}
+				pressedLabel = null;
+			}, 500);
+		} catch (err) {
+			console.error('[CircleOfFifths] preview error:', err);
+			pressedLabel = null;
+		}
+	};
 </script>
 
 <div class="cof-container">
@@ -276,105 +273,112 @@
 			class:cof-q-btn--active={onMode}
 			onclick={handleOnToggle}
 			disabled={!selectedRoot}
-			title="分数コード（オンコード）"
+			title="分数コード（Am7/G のようにベース音を指定）"
 		>
-			on
+			/
 		</button>
 	</div>
 
-	<!-- SVG Circle -->
-	<svg viewBox="0 0 400 400" class="cof-svg" xmlns="http://www.w3.org/2000/svg">
-		<!-- Outer ring: Major chords -->
-		{#each MAJOR_ROOTS as label, i}
-			{@const root = getRootFromLabel(label)}
-			{@const diatonic = isDiatonic(label)}
-			{@const isSelected = selectedRoot === label}
-			{@const isHovered = hovered === label}
+	<!-- SVG Circle wrapper -->
+	<div class="cof-svg-wrapper">
+		<svg bind:this={svgEl} viewBox="0 0 400 400" class="cof-svg" xmlns="http://www.w3.org/2000/svg">
+			<!-- Outer ring: Major chords -->
+			{#each MAJOR_ROOTS as label, i}
+				{@const root = getRootFromLabel(label)}
+				{@const diatonic = isDiatonic(label)}
+				{@const isSelected = selectedRoot === label}
+				{@const isHovered = hovered === label}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<path
+					d={arcPath(i, R_OUTER, R_MID)}
+					class="cof-segment cof-segment--outer"
+					class:cof-segment--diatonic={diatonic}
+					class:cof-segment--selected={isSelected}
+					class:cof-segment--hovered={isHovered}
+					style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
+					onclick={() => handleChordClick(label, false)}
+					onpointerleave={() => { hovered = null; }}
+					onpointerenter={() => { hovered = label; }}
+					role="button"
+					tabindex="0"
+				/>
+				{@const pos = labelPos(i, (R_OUTER + R_MID) / 2)}
+				<text
+					x={pos.x}
+					y={pos.y}
+					class="cof-label cof-label--outer"
+					class:cof-label--diatonic={diatonic}
+					class:cof-label--selected={isSelected}
+					style={isHovered || isSelected ? `fill: ${ROOT_COLOR_MAP[root] ?? 'var(--text-primary)'}` : ''}
+					dominant-baseline="central"
+					text-anchor="middle"
+					pointer-events="none"
+				>{label}</text>
+			{/each}
+
+			<!-- Inner ring: Minor chords -->
+			{#each MINOR_ROOTS as label, i}
+				{@const root = getRootFromLabel(label)}
+				{@const diatonic = isDiatonic(label)}
+				{@const isSelected = selectedRoot === label}
+				{@const isHovered = hovered === label}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<path
+					d={arcPath(i, R_MID, R_INNER)}
+					class="cof-segment cof-segment--inner"
+					class:cof-segment--diatonic={diatonic}
+					class:cof-segment--selected={isSelected}
+					class:cof-segment--hovered={isHovered}
+					style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
+					onclick={() => handleChordClick(label, true)}
+					onpointerleave={() => { hovered = null; }}
+					onpointerenter={() => { hovered = label; }}
+					role="button"
+					tabindex="0"
+				/>
+				{@const pos = labelPos(i, (R_MID + R_INNER) / 2)}
+				<text
+					x={pos.x}
+					y={pos.y}
+					class="cof-label cof-label--inner"
+					class:cof-label--diatonic={diatonic}
+					class:cof-label--selected={isSelected}
+					style={isHovered || isSelected ? `fill: ${ROOT_COLOR_MAP[root] ?? 'var(--text-primary)'}` : ''}
+					dominant-baseline="central"
+					text-anchor="middle"
+					pointer-events="none"
+				>{label}</text>
+			{/each}
+
+			<!-- Center circle: current selection -->
+			<circle cx={CX} cy={CY} r={R_CENTER} class="cof-center" />
+			<text x={CX} y={CY - 8} class="cof-center-text" dominant-baseline="central" text-anchor="middle">
+				{currentChordName || currentKey}
+			</text>
+			<text x={CX} y={CY + 16} class="cof-center-sub" dominant-baseline="central" text-anchor="middle">
+				Key: {currentKey}
+			</text>
+		</svg>
+
+		<!-- Hover preview button overlay -->
+		{#if hovered && hoveredPreviewPos}
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<path
-				d={arcPath(i, R_OUTER, R_MID)}
-				class="cof-segment cof-segment--outer"
-				class:cof-segment--diatonic={diatonic}
-				class:cof-segment--selected={isSelected}
-				class:cof-segment--hovered={isHovered}
-				style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
-				onclick={() => handleChordClick(label, false)}
-				oncontextmenu={(e: MouseEvent) => handleChordPreview(e, label)}
-				onpointerleave={() => { hovered = null; }}
-				onpointerenter={() => { hovered = label; }}
-				draggable="true"
-				ondragstart={(e: DragEvent) => handleDragStart(e, label)}
-				role="button"
-				tabindex="0"
-			/>
-			{@const pos = labelPos(i, (R_OUTER + R_MID) / 2)}
-			<text
-				x={pos.x}
-				y={pos.y}
-				class="cof-label cof-label--outer"
-				class:cof-label--diatonic={diatonic}
-				class:cof-label--selected={isSelected}
-				style={isHovered || isSelected ? `fill: ${ROOT_COLOR_MAP[root] ?? 'var(--text-primary)'}` : ''}
-				dominant-baseline="central"
-				text-anchor="middle"
-				pointer-events="none"
-			>{label}</text>
-		{/each}
+			<button
+				class="cof-preview-btn"
+				style="left: calc({hoveredPreviewPos.x / 400 * 100}% + 10px); top: calc({hoveredPreviewPos.y / 400 * 100}% - 10px);"
+				onclick={handlePreviewClick}
+				title="試聴"
+			>&#9654;</button>
+		{/if}
+	</div>
 
-		<!-- Inner ring: Minor chords -->
-		{#each MINOR_ROOTS as label, i}
-			{@const root = getRootFromLabel(label)}
-			{@const diatonic = isDiatonic(label)}
-			{@const isSelected = selectedRoot === label}
-			{@const isHovered = hovered === label}
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<path
-				d={arcPath(i, R_MID, R_INNER)}
-				class="cof-segment cof-segment--inner"
-				class:cof-segment--diatonic={diatonic}
-				class:cof-segment--selected={isSelected}
-				class:cof-segment--hovered={isHovered}
-				style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
-				onclick={() => handleChordClick(label, true)}
-				oncontextmenu={(e: MouseEvent) => handleChordPreview(e, label)}
-				onpointerleave={() => { hovered = null; }}
-				onpointerenter={() => { hovered = label; }}
-				draggable="true"
-				ondragstart={(e: DragEvent) => handleDragStart(e, label)}
-				role="button"
-				tabindex="0"
-			/>
-			{@const pos = labelPos(i, (R_MID + R_INNER) / 2)}
-			<text
-				x={pos.x}
-				y={pos.y}
-				class="cof-label cof-label--inner"
-				class:cof-label--diatonic={diatonic}
-				class:cof-label--selected={isSelected}
-				style={isHovered || isSelected ? `fill: ${ROOT_COLOR_MAP[root] ?? 'var(--text-primary)'}` : ''}
-				dominant-baseline="central"
-				text-anchor="middle"
-				pointer-events="none"
-			>{label}</text>
-		{/each}
-
-		<!-- Center circle: current selection -->
-		<circle cx={CX} cy={CY} r={R_CENTER} class="cof-center" />
-		<text x={CX} y={CY - 8} class="cof-center-text" dominant-baseline="central" text-anchor="middle">
-			{currentChordName || currentKey}
-		</text>
-		<text x={CX} y={CY + 16} class="cof-center-sub" dominant-baseline="central" text-anchor="middle">
-			Key: {currentKey}
-		</text>
-	</svg>
-
-	<!-- Drag hint / on-mode hint -->
+	<!-- On-mode hint -->
 	{#if onMode}
 		<div class="cof-on-hint">
 			ベース音を選択してください
 		</div>
 	{:else if selectedRoot}
-		<div class="cof-hint">左クリック: 追加 / 右クリック: 試聴</div>
+		<div class="cof-hint">クリック: 追加 / &#9654;: 試聴</div>
 	{/if}
 </div>
 
@@ -420,10 +424,42 @@
 		border-color: var(--accent-primary);
 	}
 
-	.cof-svg {
+	.cof-svg-wrapper {
+		position: relative;
 		width: 100%;
 		max-width: 280px;
+	}
+
+	.cof-svg {
+		width: 100%;
 		height: auto;
+		display: block;
+	}
+
+	.cof-preview-btn {
+		position: absolute;
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		border: 1px solid var(--border-default);
+		background: var(--bg-elevated);
+		color: var(--accent-primary);
+		font-size: 9px;
+		line-height: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		z-index: 10;
+		padding: 0;
+		transition: transform 0.1s, background 0.1s;
+		box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+	}
+
+	.cof-preview-btn:hover {
+		transform: scale(1.2);
+		background: var(--accent-primary);
+		color: var(--bg-base);
 	}
 
 	.cof-segment {

@@ -35,7 +35,7 @@
 	const escapeHtml = (s: string): string =>
 		s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-	const colorize = (text: string, activeBar: number, mode: DisplayMode, key: string): string => {
+	const colorize = (text: string, activeBar: number, mode: DisplayMode, key: string, insertedText: string): string => {
 		let barCounter = 0;
 		return text.split('\n').map(line => {
 			if (line.trim().startsWith('#')) {
@@ -59,14 +59,15 @@
 						const root = extractRoot(token);
 						const color = ROOT_COLORS[root] || 'var(--text-primary)';
 						const activeClass = isActive ? ' se-active' : '';
+						const insertClass = insertedText && token === insertedText ? ' se-just-inserted' : '';
 						if (mode === 'degree') {
 							const degree = chordToDegree(token, key);
-							return `<span class="se-degree${activeClass}">${escapeHtml(degree)}</span>`;
+							return `<span class="se-degree${activeClass}${insertClass}">${escapeHtml(degree)}</span>`;
 						}
 						const rootLen = root.length;
 						const rootPart = token.slice(0, rootLen);
 						const qualityPart = token.slice(rootLen);
-						return `<span class="${activeClass}" style="color:${color}"><strong>${escapeHtml(rootPart)}</strong><span class="se-quality">${escapeHtml(qualityPart)}</span></span>`;
+						return `<span class="${activeClass}${insertClass}" style="color:${color}"><strong>${escapeHtml(rootPart)}</strong><span class="se-quality">${escapeHtml(qualityPart)}</span></span>`;
 					} catch {
 						return escapeHtml(token);
 					}
@@ -77,9 +78,9 @@
 
 	// State
 	let internalValue = $state(value);
-	let editing = $state(false);
 	let textareaEl: HTMLTextAreaElement;
 	let lastCursorPos = $state(-1); // -1 = end
+	let lastInsertedText = $state('');
 
 	// Handle pending insert at cursor position
 	// pendingInsert format: "text::timestamp" to allow repeated same-text inserts
@@ -98,6 +99,10 @@
 		if (textareaEl) textareaEl.value = newVal;
 		onchange?.(newVal);
 		lastCursorPos = pos + space.length + text.length;
+
+		// Flash highlight
+		lastInsertedText = text;
+		setTimeout(() => { lastInsertedText = ''; }, 500);
 	});
 
 	$effect(() => { internalValue = value; });
@@ -114,7 +119,7 @@
 		}
 	});
 
-	const highlighted = $derived(colorize(internalValue, activeBarIndex, displayMode, musicalKey));
+	const highlighted = $derived(colorize(internalValue, activeBarIndex, displayMode, musicalKey, lastInsertedText));
 
 	const handleInput = (e: Event) => {
 		const target = e.target as HTMLTextAreaElement;
@@ -122,17 +127,15 @@
 		onchange?.(target.value);
 	};
 
-	const handleFocus = () => { editing = true; };
 	const handleBlur = () => {
 		if (textareaEl) lastCursorPos = textareaEl.selectionStart;
-		editing = false;
 	};
 
 	// Right-click context menu
 	let contextMenu = $state<{ x: number; y: number; text: string } | null>(null);
 
 	const handleContextMenu = (e: MouseEvent) => {
-		if (!editing || !textareaEl) return;
+		if (!textareaEl) return;
 		const selected = textareaEl.value.substring(textareaEl.selectionStart, textareaEl.selectionEnd).trim();
 		if (!selected) return;
 		e.preventDefault();
@@ -166,28 +169,6 @@
 			console.error('[ScoreEditor] preview error:', err);
 		}
 	};
-
-	// Drag & drop
-	const handleDragOver = (e: DragEvent) => {
-		e.preventDefault();
-		if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-	};
-
-	const handleDrop = (e: DragEvent) => {
-		e.preventDefault();
-		const chord = e.dataTransfer?.getData('text/plain')?.trim();
-		if (!chord || readonly) return;
-		if (!textareaEl) return;
-		const pos = textareaEl.selectionStart ?? internalValue.length;
-		const before = internalValue.slice(0, pos);
-		const after = internalValue.slice(pos);
-		const spaceBefore = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n') && !before.endsWith('|') ? ' ' : '';
-		const spaceAfter = after.length > 0 && !after.startsWith(' ') && !after.startsWith('\n') && !after.startsWith('|') ? ' ' : '';
-		const newVal = before + spaceBefore + chord + spaceAfter + after;
-		internalValue = newVal;
-		textareaEl.value = newVal;
-		onchange?.(newVal);
-	};
 </script>
 
 <!-- Context menu -->
@@ -206,60 +187,63 @@
 {/if}
 
 <div class="score-editor">
-	{#if editing && !readonly && displayMode === 'chord'}
-		<!-- Editing mode: plain textarea -->
-		<textarea
-			bind:this={textareaEl}
-			class="se-plain"
-			value={internalValue}
-			oninput={handleInput}
-			onfocus={handleFocus}
-			onblur={handleBlur}
-			oncontextmenu={handleContextMenu}
-			ondblclick={handleDblClick}
-			ondragover={handleDragOver}
-			ondrop={handleDrop}
-			autocomplete="off"
-			spellcheck="false"
-			placeholder="| Am7 | Dm7 | G7 | Cmaj7 |"
-		></textarea>
-	{:else}
-		<!-- Display mode: colorized HTML -->
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="se-display"
-			class:se-display--editable={!readonly && displayMode === 'chord'}
-			onclick={() => { if (!readonly && displayMode === 'chord') editing = true; }}
-			role={!readonly && displayMode === 'chord' ? 'textbox' : undefined}
-			tabindex={!readonly && displayMode === 'chord' ? 0 : undefined}
-			onfocus={() => { if (!readonly && displayMode === 'chord') editing = true; }}
-		>{@html highlighted}&nbsp;</div>
-		<!-- Hidden textarea for value sync -->
-		<textarea bind:this={textareaEl} class="se-hidden" value={internalValue} tabindex="-1"></textarea>
-	{/if}
+	<!-- Preview: always visible, colorized HTML -->
+	<div class="se-preview">{@html highlighted}&nbsp;</div>
+
+	<!-- Editor: always visible textarea -->
+	<textarea
+		bind:this={textareaEl}
+		class="se-textarea"
+		value={internalValue}
+		oninput={handleInput}
+		onblur={handleBlur}
+		oncontextmenu={handleContextMenu}
+		ondblclick={handleDblClick}
+		readonly={readonly}
+		autocomplete="off"
+		spellcheck="false"
+		placeholder="| Am7 | Dm7 | G7 | Cmaj7 |"
+	></textarea>
 </div>
 
 <style>
 	.score-editor {
 		position: relative;
 		width: 100%;
-		min-height: 150px;
+		display: flex;
+		flex-direction: column;
 	}
 
-	/* Plain textarea for editing */
-	.se-plain {
-		width: 100%;
-		min-height: 150px;
+	/* Colorized preview (always visible, read-only) */
+	.se-preview {
 		font-family: var(--font-mono);
 		font-size: 1rem;
 		font-weight: 500;
-		line-height: 2;
+		line-height: 1.8;
+		padding: var(--space-md);
+		background: var(--bg-base);
+		border: 1px solid transparent;
+		border-radius: var(--radius-md) var(--radius-md) 0 0;
+		min-height: 60px;
+		white-space: pre-wrap;
+		word-wrap: break-word;
+		box-sizing: border-box;
+	}
+
+	/* Textarea editor (always visible) */
+	.se-textarea {
+		width: 100%;
+		min-height: 100px;
+		font-family: var(--font-mono);
+		font-size: 1rem;
+		font-weight: 500;
+		line-height: 1.6;
 		padding: var(--space-md);
 		background: var(--bg-base);
 		color: var(--text-primary);
-		border: 1px solid var(--accent-primary);
-		border-radius: var(--radius-md);
+		border: 1px solid var(--border-default);
+		border-top: 1px solid var(--border-subtle);
+		border-radius: 0 0 var(--radius-md) var(--radius-md);
 		caret-color: var(--accent-primary);
 		outline: none;
 		resize: vertical;
@@ -268,41 +252,17 @@
 		word-wrap: break-word;
 	}
 
-	.se-plain::placeholder {
+	.se-textarea:focus {
+		border-color: var(--accent-primary);
+	}
+
+	.se-textarea::placeholder {
 		color: var(--text-muted);
 	}
 
-	/* Colorized display */
-	.se-display {
-		font-family: var(--font-mono);
-		font-size: 1rem;
-		font-weight: 500;
-		line-height: 2;
-		padding: var(--space-md);
-		background: var(--bg-base);
-		border: 1px solid transparent;
-		border-radius: var(--radius-md);
-		min-height: 150px;
-		white-space: pre-wrap;
-		word-wrap: break-word;
-		box-sizing: border-box;
-		transition: border-color 0.2s;
-	}
-
-	.se-display--editable {
-		cursor: text;
-	}
-
-	.se-display--editable:hover {
-		border-color: var(--border-default);
-	}
-
-	.se-hidden {
-		position: absolute;
-		opacity: 0;
-		pointer-events: none;
-		width: 0;
-		height: 0;
+	.se-textarea[readonly] {
+		opacity: 0.6;
+		cursor: default;
 	}
 
 	:global(.se-bar) {
@@ -335,6 +295,20 @@
 		background: rgba(167, 139, 250, 0.3);
 		border-radius: 4px;
 		padding: 1px 2px;
+	}
+
+	:global(.se-just-inserted) {
+		animation: chord-flash 0.5s ease-out;
+	}
+
+	@keyframes chord-flash {
+		0% {
+			background: rgba(167, 139, 250, 0.5);
+			border-radius: 4px;
+		}
+		100% {
+			background: transparent;
+		}
 	}
 
 	/* Context menu */

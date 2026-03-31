@@ -564,8 +564,8 @@
 								lines.pop();
 								scoreEditorValue = lines.join('\n');
 							}
-						}} title="最後の行を削除">
-							行削除
+						}} title="最終行を削除">
+							最終行を削除
 						</button>
 					</div>
 				{/if}
