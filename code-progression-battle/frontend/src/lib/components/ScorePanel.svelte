@@ -299,6 +299,9 @@
 
 	.score-area {
 		padding: var(--space-sm) var(--space-md);
+		flex: 1;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.empty-score {

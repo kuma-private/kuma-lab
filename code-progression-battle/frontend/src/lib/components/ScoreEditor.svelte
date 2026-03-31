@@ -220,6 +220,7 @@
 		width: 100%;
 		display: flex;
 		flex-direction: column;
+		flex: 1;
 	}
 
 	/* Colorized preview (always visible, read-only) */
@@ -241,7 +242,8 @@
 	/* Textarea editor (always visible) */
 	.se-textarea {
 		width: 100%;
-		min-height: 100px;
+		min-height: 120px;
+		flex: 1;
 		font-family: var(--font-mono);
 		font-size: 1rem;
 		font-weight: 500;

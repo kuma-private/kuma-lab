@@ -355,8 +355,12 @@
 	.page {
 		max-width: 1200px;
 		margin: 0 auto;
-		padding: var(--space-md) var(--space-xl);
-		padding-bottom: calc(80px + var(--space-lg));
+		padding: var(--space-sm) var(--space-xl);
+		padding-bottom: calc(80px + var(--space-md));
+		display: flex;
+		flex-direction: column;
+		min-height: calc(100vh - 80px);
+		box-sizing: border-box;
 	}
 
 	/* Editor layout: 2-column grid */
@@ -364,13 +368,17 @@
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-md);
-		align-items: start;
+		flex: 1;
+		min-height: 0;
 	}
 
 	.panel-score, .panel-tools {
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 		background: var(--bg-base);
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
 	}
 
 	@media (max-width: 900px) {
