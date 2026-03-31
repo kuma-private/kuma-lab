@@ -552,10 +552,10 @@
 
 				{#if canAct}
 					<div class="score-toolbar">
-						<button class="score-tool-btn" onclick={() => { pendingInsertText = '| '; }} title="小節区切りを追加">
+						<button class="score-tool-btn" onclick={() => { pendingInsertText = '| ::' + Date.now(); }} title="小節区切りを追加">
 							<span class="tool-label">|</span> 小節
 						</button>
-						<button class="score-tool-btn" onclick={() => { scoreEditorValue += '\n'; }} title="改行を追加">
+						<button class="score-tool-btn" onclick={() => { pendingInsertText = '\n::' + Date.now(); }} title="改行を追加">
 							改行
 						</button>
 						<button class="score-tool-btn score-tool-btn--danger" onclick={() => {
@@ -644,7 +644,7 @@
 						</div>
 						<CircleOfFifths currentKey={thread.key} onSelect={(chord) => {
 						if (scoreReadonly) return;
-						pendingInsertText = chord;
+						pendingInsertText = chord + '::' + Date.now();
 					}} />
 					</div>
 

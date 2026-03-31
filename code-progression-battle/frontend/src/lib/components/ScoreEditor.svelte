@@ -82,20 +82,22 @@
 	let lastCursorPos = $state(-1); // -1 = end
 
 	// Handle pending insert at cursor position
-	let lastPendingInsert = '';
+	// pendingInsert format: "text::timestamp" to allow repeated same-text inserts
 	$effect(() => {
-		if (pendingInsert && pendingInsert !== lastPendingInsert) {
-			lastPendingInsert = pendingInsert;
-			const pos = lastCursorPos >= 0 ? lastCursorPos : internalValue.length;
-			const before = internalValue.slice(0, pos);
-			const after = internalValue.slice(pos);
-			const space = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n') && !before.endsWith('|') ? ' ' : '';
-			const newVal = before + space + pendingInsert + after;
-			internalValue = newVal;
-			if (textareaEl) textareaEl.value = newVal;
-			onchange?.(newVal);
-			lastCursorPos = pos + space.length + pendingInsert.length;
-		}
+		if (!pendingInsert) return;
+		const sepIdx = pendingInsert.lastIndexOf('::');
+		const text = sepIdx >= 0 ? pendingInsert.slice(0, sepIdx) : pendingInsert;
+		if (!text) return;
+
+		const pos = lastCursorPos >= 0 ? lastCursorPos : internalValue.length;
+		const before = internalValue.slice(0, pos);
+		const after = internalValue.slice(pos);
+		const space = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n') && !before.endsWith('|') ? ' ' : '';
+		const newVal = before + space + text + after;
+		internalValue = newVal;
+		if (textareaEl) textareaEl.value = newVal;
+		onchange?.(newVal);
+		lastCursorPos = pos + space.length + text.length;
 	});
 
 	$effect(() => { internalValue = value; });
