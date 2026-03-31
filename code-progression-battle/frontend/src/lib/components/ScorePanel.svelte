@@ -167,6 +167,9 @@
 	}
 
 	.panel-main {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
 	}
 
 	.panel-header {

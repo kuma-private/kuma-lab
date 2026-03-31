@@ -377,6 +377,16 @@
 		border-radius: var(--radius-lg);
 		background: var(--bg-base);
 		overflow-y: auto;
+	}
+
+	/* Make ScorePanel fill the panel height */
+	.panel-score {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.panel-score > :global(*) {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
 	}

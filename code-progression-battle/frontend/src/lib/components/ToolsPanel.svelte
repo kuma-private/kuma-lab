@@ -19,7 +19,7 @@
 		onPatternInsert,
 	}: Props = $props();
 
-	let patternOpen = $state(false);
+	let patternOpen = $state(true);
 
 	const togglePattern = () => {
 		patternOpen = !patternOpen;
