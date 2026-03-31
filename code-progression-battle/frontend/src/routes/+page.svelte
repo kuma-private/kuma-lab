@@ -19,14 +19,14 @@
 </script>
 
 <svelte:head>
-	<title>Code Progression Battle</title>
+	<title>Tamekoma Night</title>
 </svelte:head>
 
 <div class="page">
 	<header class="header">
 		<div class="header-left">
-			<h1 class="logo">Code Progression Battle</h1>
-			<p class="subtitle">コード進行を一緒に作ろう</p>
+			<h1 class="logo">Tamekoma Night</h1>
+			<p class="subtitle">溜め込まないで、コードを放て。</p>
 		</div>
 		<div class="header-right">
 			{#if store.loggedIn}

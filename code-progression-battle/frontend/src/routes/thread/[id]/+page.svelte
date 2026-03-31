@@ -261,7 +261,7 @@
 </script>
 
 <svelte:head>
-	<title>{store.currentThread?.title || 'Thread'} - Code Progression Battle</title>
+	<title>{store.currentThread?.title || 'Thread'} - Tamekoma Night</title>
 </svelte:head>
 
 <div class="page">

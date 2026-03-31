@@ -7,7 +7,7 @@
 </script>
 
 <svelte:head>
-	<title>Code Progression Battle</title>
+	<title>Tamekoma Night</title>
 </svelte:head>
 
 {@render children()}
