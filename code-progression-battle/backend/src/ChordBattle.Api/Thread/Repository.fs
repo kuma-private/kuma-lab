@@ -132,7 +132,7 @@ module Repository =
               LastEditedAt =
                   match doc.TryGetValue<Timestamp>("lastEditedAt") with
                   | true, v -> v.ToDateTime()
-                  | _ -> DateTime.MinValue
+                  | _ -> DateTime.UtcNow
               Members = members
               History = history }
 

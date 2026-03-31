@@ -70,10 +70,10 @@ const indexToNote = (idx: number, useFlats: boolean): string => {
 
 const parseKeyString = (key: string): { root: string; isMinor: boolean } => {
   const trimmed = key.trim();
-  const isMinor = /minor/i.test(trimmed) || /m$/i.test(trimmed.replace(/\s*(major|minor)$/i, ''));
-  // Extract root: take everything before " Major", " Minor", " major", " minor"
-  const rootStr = trimmed.replace(/\s*(major|minor)$/i, '').trim();
-  return { root: rootStr, isMinor: isMinor || /minor/i.test(trimmed) };
+  const isMinor = /\bminor\b/i.test(trimmed);
+  // Extract root: take everything before " Major", " Minor", or other mode names
+  const rootStr = trimmed.replace(/\s*(major|minor|dorian|mixolydian|lydian|phrygian|locrian|aeolian|ionian)$/i, '').trim();
+  return { root: rootStr, isMinor };
 };
 
 // ── Public API ─────────────────────────────────────────

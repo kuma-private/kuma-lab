@@ -90,7 +90,6 @@
 		if (!pi || pi === lastProcessedInsert) return;
 		lastProcessedInsert = pi;
 
-		// Use untrack to avoid re-triggering this effect
 		const currentVal = internalValue;
 		const sepIdx = pi.lastIndexOf('::');
 		const text = sepIdx >= 0 ? pi.slice(0, sepIdx) : pi;
@@ -102,15 +101,12 @@
 		const space = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n') && !before.endsWith('|') ? ' ' : '';
 		const newVal = before + space + text + after;
 
-		// Update without triggering circular effects
-		queueMicrotask(() => {
-			internalValue = newVal;
-			if (textareaEl) textareaEl.value = newVal;
-			onchange?.(newVal);
-			lastCursorPos = pos + space.length + text.length;
-			lastInsertedText = text;
-			setTimeout(() => { lastInsertedText = ''; }, 500);
-		});
+		internalValue = newVal;
+		if (textareaEl) textareaEl.value = newVal;
+		onchange?.(newVal);
+		lastCursorPos = pos + space.length + text.length;
+		lastInsertedText = text;
+		setTimeout(() => { lastInsertedText = ''; }, 500);
 	});
 
 	$effect(() => { internalValue = value; });

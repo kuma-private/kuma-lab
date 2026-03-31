@@ -65,9 +65,9 @@ export const createThread = async (data: { title: string }): Promise<{ id: strin
 export const saveScore = async (
 	threadId: string,
 	data: { score: string; comment: string }
-): Promise<{ ok: boolean }> => {
-	const res = await apiFetch(`/api/threads/${threadId}/save`, {
-		method: 'POST',
+): Promise<Thread> => {
+	const res = await apiFetch(`/api/threads/${threadId}`, {
+		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(data)
 	});
@@ -77,7 +77,7 @@ export const saveScore = async (
 export const updateSettings = async (
 	threadId: string,
 	data: { key?: string; timeSignature?: string; bpm?: number }
-): Promise<{ ok: boolean }> => {
+): Promise<Thread> => {
 	const res = await apiFetch(`/api/threads/${threadId}/settings`, {
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
@@ -86,7 +86,7 @@ export const updateSettings = async (
 	return res.json();
 };
 
-export const requestReview = async (threadId: string): Promise<{ ok: boolean }> => {
+export const requestReview = async (threadId: string): Promise<{ comment: string; scores: string }> => {
 	const res = await apiFetch(`/api/threads/${threadId}/review`, { method: 'POST' });
 	return res.json();
 };

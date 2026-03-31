@@ -13,7 +13,6 @@
 	const handleInsert = (pattern: ChordPattern) => {
 		const chords = getPatternChords(pattern, keyName);
 		onInsert(chords);
-		open = false;
 	};
 
 	const handlePreview = async (idx: number) => {

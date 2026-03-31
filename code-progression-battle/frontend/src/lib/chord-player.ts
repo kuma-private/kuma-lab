@@ -551,7 +551,9 @@ export class ChordPlayer {
   setOscPreset(preset: OscPreset): void {
     setGlobalOscPreset(preset);
     if (this.synth) {
-      this.synth.dispose();
+      if (this._disposeSynth) {
+        this.synth.dispose();
+      }
       this.synth = null;
     }
   }

@@ -61,7 +61,17 @@ module ThreadHandlers =
 
     let createThread (repo: IThreadRepository) (ctx: HttpContext) : Task =
         task {
-            let! req = ctx.Request.ReadFromJsonAsync<CreateThreadRequest>()
+            let! req =
+                try
+                    ctx.Request.ReadFromJsonAsync<CreateThreadRequest>()
+                with _ ->
+                    ValueTask<CreateThreadRequest>(Unchecked.defaultof<CreateThreadRequest>)
+
+            if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.title, null) then
+                ctx.Response.StatusCode <- 400
+                do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
+            else
+
             let (userId, userName) = getUserInfo ctx
 
             let thread =
@@ -106,7 +116,16 @@ module ThreadHandlers =
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
             | Some _ ->
                 let (userId, userName) = getUserInfo ctx
-                let! req = ctx.Request.ReadFromJsonAsync<SaveScoreRequest>()
+                let! req =
+                    try
+                        ctx.Request.ReadFromJsonAsync<SaveScoreRequest>()
+                    with _ ->
+                        ValueTask<SaveScoreRequest>(Unchecked.defaultof<SaveScoreRequest>)
+
+                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.score, null) then
+                    ctx.Response.StatusCode <- 400
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
+                else
 
                 let history =
                     { UserId = userId
@@ -135,7 +154,17 @@ module ThreadHandlers =
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
             | Some _ ->
-                let! req = ctx.Request.ReadFromJsonAsync<UpdateSettingsRequest>()
+                let! req =
+                    try
+                        ctx.Request.ReadFromJsonAsync<UpdateSettingsRequest>()
+                    with _ ->
+                        ValueTask<UpdateSettingsRequest>(Unchecked.defaultof<UpdateSettingsRequest>)
+
+                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.key, null) then
+                    ctx.Response.StatusCode <- 400
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
+                    return ()
+
                 let! result = repo.UpdateSettings threadId req.key req.timeSignature req.bpm
 
                 match result with
@@ -164,7 +193,7 @@ module ThreadHandlers =
                     let httpClient = getHttpClient ctx
                     let scoreLines = t.Score.Split('\n') |> Array.toList
                     let! result =
-                        AnthropicClient.reviewTurn httpClient config.AnthropicApiKey t.Key t.TimeSignature "save" 1 t.Score scoreLines
+                        AnthropicClient.reviewTurn httpClient config.AnthropicApiKey t.Key t.TimeSignature t.Score scoreLines
                         |> Async.StartAsTask
 
                     match result with

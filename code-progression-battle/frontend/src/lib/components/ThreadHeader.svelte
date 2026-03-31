@@ -106,13 +106,13 @@
 			<!-- Time signature badge: click to edit -->
 			{#if editingTimeSig}
 				<div class="inline-edit-row">
-					<select class="inline-select inline-select--sm" value={editTimeSigTop} onchange={(e) => { editTimeSigTop = Number(e.currentTarget.value); }}>
+					<select class="inline-select inline-select--sm" bind:value={editTimeSigTop} onchange={() => { saveTimeSig(); }}>
 						{#each timeSigOptions as n}
 							<option value={n}>{n}</option>
 						{/each}
 					</select>
 					<span class="ts-slash">/</span>
-					<select class="inline-select inline-select--sm" value={editTimeSigBottom} onchange={(e) => { editTimeSigBottom = Number(e.currentTarget.value); }} onblur={saveTimeSig}>
+					<select class="inline-select inline-select--sm" bind:value={editTimeSigBottom} onchange={() => { saveTimeSig(); }} onblur={saveTimeSig}>
 						<option value={4}>4</option>
 						<option value={8}>8</option>
 					</select>

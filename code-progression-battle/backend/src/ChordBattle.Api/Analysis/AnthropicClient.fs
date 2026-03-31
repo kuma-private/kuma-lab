@@ -99,10 +99,8 @@ module AnthropicClient =
         (apiKey: string)
         (key: string)
         (timeSignature: string)
-        (action: string)
-        (lineNumber: int)
-        (chords: string)
-        (allLines: string list)
+        (score: string)
+        (scoreLines: string list)
         : Async<Result<ReviewResult, string>> =
 
         let systemPrompt =
@@ -125,14 +123,13 @@ module AnthropicClient =
             + "JSONのみ出力してください。"
 
         let scoreText =
-            allLines
+            scoreLines
             |> List.mapi (fun i line -> $"  {i + 1}: {line}")
             |> String.concat "\n"
 
         let userMessage =
             $"キー: {key}\n拍子: {timeSignature}\n"
-            + $"今回のアクション: {action} (行{lineNumber})\n"
-            + $"追加/変更されたコード: {chords}\n\n"
+            + $"コード進行: {score}\n\n"
             + $"スコア全体:\n{scoreText}"
 
         async {
