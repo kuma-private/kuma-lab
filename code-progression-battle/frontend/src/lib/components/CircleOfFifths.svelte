@@ -137,7 +137,7 @@
 		return { x: CX + radius * Math.cos(angle), y: CY + radius * Math.sin(angle) };
 	};
 
-	const currentChordName = $derived(() => {
+	const currentChordName = $derived.by(() => {
 		if (!selectedRoot) return '';
 		let name: string;
 		// If root already has 'm' suffix and quality starts with 'm', avoid doubling
@@ -358,7 +358,7 @@
 		<!-- Center circle: current selection -->
 		<circle cx={CX} cy={CY} r={R_CENTER} class="cof-center" />
 		<text x={CX} y={CY - 8} class="cof-center-text" dominant-baseline="central" text-anchor="middle">
-			{currentChordName() || currentKey}
+			{currentChordName || currentKey}
 		</text>
 		<text x={CX} y={CY + 16} class="cof-center-sub" dominant-baseline="central" text-anchor="middle">
 			Key: {currentKey}
