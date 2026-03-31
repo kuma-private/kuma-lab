@@ -1,6 +1,30 @@
 <script lang="ts">
 	import type { SaveHistory } from '$lib/api';
 
+	type AiScores = { tension: number; creativity: number; coherence: number; surprise: number };
+
+	const parseAiComment = (aiComment: string, aiScores: string): { comment: string; scores: AiScores | null } => {
+		try {
+			// Try to extract JSON from markdown code block or raw JSON
+			const raw = aiComment;
+			const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/);
+			const jsonStr = jsonMatch ? jsonMatch[1] : raw;
+			const parsed = JSON.parse(jsonStr);
+			const scores = parsed.scores && typeof parsed.scores.tension === 'number' ? parsed.scores : null;
+			return { comment: parsed.comment || raw, scores };
+		} catch {
+			// Try parsing aiScores separately
+			let scores: AiScores | null = null;
+			if (aiScores) {
+				try {
+					const s = JSON.parse(aiScores);
+					if (typeof s.tension === 'number') scores = s;
+				} catch {}
+			}
+			return { comment: aiComment, scores };
+		}
+	};
+
 	interface Props {
 		history: SaveHistory[];
 		open: boolean;
@@ -83,29 +107,17 @@
 					<div class="post-comment">{item.comment}</div>
 				{/if}
 				{#if item.aiComment}
-					{@const parsedAi = (() => {
-						try {
-							// Try to extract JSON from markdown code block
-							const raw = item.aiComment;
-							const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/);
-							const jsonStr = jsonMatch ? jsonMatch[1] : raw;
-							const parsed = JSON.parse(jsonStr);
-							return { comment: parsed.comment || raw, scores: parsed.scores || null };
-						} catch {
-							return { comment: item.aiComment, scores: null };
-						}
-					})()}
+					{@const parsedAi = parseAiComment(item.aiComment, item.aiScores)}
 					<div class="ai-comment">
 						<span class="ai-icon">AI</span>
 						<div class="ai-body">
 							<span class="ai-text">{parsedAi.comment}</span>
-							{@const scores = parsedAi.scores || (() => { try { return JSON.parse(item.aiScores); } catch { return null; } })()}
-							{#if scores && typeof scores.tension === 'number'}
+							{#if parsedAi.scores}
 								<div class="ai-scores">
-									<span class="ai-score" title="テンション">T:{scores.tension}</span>
-									<span class="ai-score" title="創造性">C:{scores.creativity}</span>
-									<span class="ai-score" title="整合性">H:{scores.coherence}</span>
-									<span class="ai-score" title="サプライズ">S:{scores.surprise}</span>
+									<span class="ai-score" title="テンション">T:{parsedAi.scores.tension}</span>
+									<span class="ai-score" title="創造性">C:{parsedAi.scores.creativity}</span>
+									<span class="ai-score" title="整合性">H:{parsedAi.scores.coherence}</span>
+									<span class="ai-score" title="サプライズ">S:{parsedAi.scores.surprise}</span>
 								</div>
 							{/if}
 						</div>
