@@ -91,11 +91,15 @@ export function parseChord(raw: string): ParsedChord {
 
 // ── Token parsing ──────────────────────────────────────
 
-function parseToken(token: string): BarEntry {
+function parseToken(token: string): BarEntry | null {
   if (token === '%') return { type: 'repeat' };
-  if (token === '_') return { type: 'rest' };
+  if (token === '_' || token === '-') return { type: 'rest' };
   if (token === '=') return { type: 'sustain' };
-  return { type: 'chord', chord: parseChord(token) };
+  try {
+    return { type: 'chord', chord: parseChord(token) };
+  } catch {
+    return null; // Skip unparseable tokens
+  }
 }
 
 // ── Full progression parsing ───────────────────────────
@@ -140,7 +144,7 @@ export function parseProgression(input: string): ParseResult {
     if (!trimmed) continue;
 
     const tokens = trimmed.split(/\s+/).filter(Boolean);
-    const entries: BarEntry[] = tokens.map(parseToken);
+    const entries: BarEntry[] = tokens.map(parseToken).filter((e): e is BarEntry => e !== null);
 
     bars.push({ barNumber, entries });
     barNumber++;

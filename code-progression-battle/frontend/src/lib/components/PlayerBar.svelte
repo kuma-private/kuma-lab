@@ -239,8 +239,8 @@
 
 	/* Left section: player controls */
 	.player-controls-section {
-		width: 340px;
-		flex-shrink: 0;
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		justify-content: center;

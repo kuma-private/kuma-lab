@@ -84,25 +84,33 @@
 
 	// Handle pending insert at cursor position
 	// pendingInsert format: "text::timestamp" to allow repeated same-text inserts
+	let lastProcessedInsert = '';
 	$effect(() => {
-		if (!pendingInsert) return;
-		const sepIdx = pendingInsert.lastIndexOf('::');
-		const text = sepIdx >= 0 ? pendingInsert.slice(0, sepIdx) : pendingInsert;
+		const pi = pendingInsert;
+		if (!pi || pi === lastProcessedInsert) return;
+		lastProcessedInsert = pi;
+
+		// Use untrack to avoid re-triggering this effect
+		const currentVal = internalValue;
+		const sepIdx = pi.lastIndexOf('::');
+		const text = sepIdx >= 0 ? pi.slice(0, sepIdx) : pi;
 		if (!text) return;
 
-		const pos = lastCursorPos >= 0 ? lastCursorPos : internalValue.length;
-		const before = internalValue.slice(0, pos);
-		const after = internalValue.slice(pos);
+		const pos = lastCursorPos >= 0 ? lastCursorPos : currentVal.length;
+		const before = currentVal.slice(0, pos);
+		const after = currentVal.slice(pos);
 		const space = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n') && !before.endsWith('|') ? ' ' : '';
 		const newVal = before + space + text + after;
-		internalValue = newVal;
-		if (textareaEl) textareaEl.value = newVal;
-		onchange?.(newVal);
-		lastCursorPos = pos + space.length + text.length;
 
-		// Flash highlight
-		lastInsertedText = text;
-		setTimeout(() => { lastInsertedText = ''; }, 500);
+		// Update without triggering circular effects
+		queueMicrotask(() => {
+			internalValue = newVal;
+			if (textareaEl) textareaEl.value = newVal;
+			onchange?.(newVal);
+			lastCursorPos = pos + space.length + text.length;
+			lastInsertedText = text;
+			setTimeout(() => { lastInsertedText = ''; }, 500);
+		});
 	});
 
 	$effect(() => { internalValue = value; });
