@@ -366,7 +366,7 @@
 	/* Editor layout: 2-column grid */
 	.editor-layout {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 2fr 1fr;
 		gap: var(--space-md);
 		flex: 1;
 		min-height: 0;
