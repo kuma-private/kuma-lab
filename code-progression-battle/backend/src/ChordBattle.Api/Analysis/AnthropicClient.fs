@@ -26,11 +26,11 @@ module AnthropicClient =
         | Some block -> Ok block.Text
         | None -> Error "No text content in Anthropic response"
 
-    let private callApi (httpClient: HttpClient) (apiKey: string) (systemPrompt: string) (userMessage: string) (maxTokens: int) : Async<Result<string, string>> =
+    let private callApi (httpClient: HttpClient) (apiKey: string) (model: string) (systemPrompt: string) (userMessage: string) (maxTokens: int) : Async<Result<string, string>> =
         async {
             try
                 let requestBody =
-                    {| model = "claude-sonnet-4-20250514"
+                    {| model = model
                        max_tokens = maxTokens
                        system = systemPrompt
                        messages = [| {| role = "user"; content = userMessage |} |] |}
@@ -94,6 +94,56 @@ module AnthropicClient =
         { Comment: string
           ScoresJson: string }
 
+    [<CLIMutable>]
+    type TransformResponse =
+        { [<JsonPropertyName("comment")>]
+          Comment: string
+          [<JsonPropertyName("chords")>]
+          Chords: string }
+
+    let transformChords
+        (httpClient: HttpClient)
+        (apiKey: string)
+        (key: string)
+        (timeSignature: string)
+        (fullScore: string)
+        (selectedChords: string)
+        (instruction: string)
+        : Async<Result<{| comment: string; chords: string |}, string>> =
+
+        let systemPrompt =
+            "あなたは音楽理論に精通したコード進行のアレンジャーです。\n"
+            + "ユーザーが選択したコード進行を、指示に従って変更してください。\n\n"
+            + "JSONで回答してください:\n"
+            + "{\n"
+            + "  \"comment\": \"変更内容の説明（日本語、1-2文）\",\n"
+            + "  \"chords\": \"変更後のコード進行（rechord形式）\"\n"
+            + "}\n\n"
+            + "ルール:\n"
+            + "- 元のコード数（小節数）を維持すること\n"
+            + "- rechord形式で出力: | Am7 | Dm7 | G7 | Cmaj7 |\n"
+            + "- JSONのみ出力、余分なテキストは不要"
+
+        let userMessage =
+            $"キー: {key}\n拍子: {timeSignature}\n\n"
+            + $"スコア全体:\n{fullScore}\n\n"
+            + $"変更対象:\n{selectedChords}\n\n"
+            + $"指示:\n{instruction}"
+
+        async {
+            let! result = callApi httpClient apiKey "claude-opus-4-20250514" systemPrompt userMessage 300
+            match result with
+            | Error e -> return Error e
+            | Ok text ->
+                try
+                    let cleanText =
+                        text.Trim().Replace("```json", "").Replace("```", "").Trim()
+                    let parsed = JsonSerializer.Deserialize<TransformResponse>(cleanText)
+                    return Ok {| comment = parsed.Comment; chords = parsed.Chords |}
+                with ex ->
+                    return Error $"Failed to parse transform response: {ex.Message}"
+        }
+
     let reviewTurn
         (httpClient: HttpClient)
         (apiKey: string)
@@ -133,7 +183,7 @@ module AnthropicClient =
             + $"スコア全体:\n{scoreText}"
 
         async {
-            let! result = callApi httpClient apiKey systemPrompt userMessage 300
+            let! result = callApi httpClient apiKey "claude-sonnet-4-20250514" systemPrompt userMessage 300
             match result with
             | Error e -> return Error e
             | Ok text ->

@@ -33,3 +33,10 @@ module Models =
     type SaveScoreRequest = { score: string; comment: string }
 
     type UpdateSettingsRequest = { key: string; timeSignature: string; bpm: int }
+
+    type TransformRequest =
+        { selectedChords: string
+          instruction: string
+          key: string
+          timeSignature: string
+          fullScore: string }

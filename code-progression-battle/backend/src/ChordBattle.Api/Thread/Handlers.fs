@@ -213,6 +213,37 @@ module ThreadHandlers =
                         do! ctx.Response.WriteAsJsonAsync({| error = $"AI review failed: {e}" |})
         }
 
+    let transformChords (config: AppConfig) (threadId: string) (ctx: HttpContext) : Task =
+        task {
+            if String.IsNullOrEmpty(config.AnthropicApiKey) then
+                ctx.Response.StatusCode <- 400
+                do! ctx.Response.WriteAsJsonAsync({| error = "AI transform is not configured" |})
+            else
+
+            let! req =
+                try
+                    ctx.Request.ReadFromJsonAsync<TransformRequest>()
+                with _ ->
+                    ValueTask<TransformRequest>(Unchecked.defaultof<TransformRequest>)
+
+            if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.selectedChords, null) || obj.ReferenceEquals(req.instruction, null) then
+                ctx.Response.StatusCode <- 400
+                do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
+            else
+
+            let httpClient = getHttpClient ctx
+            let! result =
+                AnthropicClient.transformChords httpClient config.AnthropicApiKey req.key req.timeSignature req.fullScore req.selectedChords req.instruction
+                |> Async.StartAsTask
+
+            match result with
+            | Ok r ->
+                do! ctx.Response.WriteAsJsonAsync({| comment = r.comment; chords = r.chords |})
+            | Error e ->
+                ctx.Response.StatusCode <- 500
+                do! ctx.Response.WriteAsJsonAsync({| error = $"AI transform failed: {e}" |})
+        }
+
     let getHistory (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)

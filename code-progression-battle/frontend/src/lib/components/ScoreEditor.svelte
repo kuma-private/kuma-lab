@@ -12,10 +12,14 @@
 		displayMode?: DisplayMode;
 		musicalKey?: string;
 		pendingInsert?: string;
+		threadId?: string;
+		fullScore?: string;
+		musicalKeyFull?: string;
+		timeSignature?: string;
 		onchange?: (value: string) => void;
 	}
 
-	let { value, readonly = false, activeBarIndex = -1, displayMode = 'chord', musicalKey = 'C', pendingInsert = '', onchange }: Props = $props();
+	let { value, readonly = false, activeBarIndex = -1, displayMode = 'chord', musicalKey = 'C', pendingInsert = '', threadId = '', fullScore = '', musicalKeyFull = 'C Major', timeSignature = '4/4', onchange }: Props = $props();
 
 	const ROOT_COLORS: Record<string, string> = {
 		'C': 'var(--chord-c-text)',
@@ -160,6 +164,63 @@
 
 	const closeContextMenu = () => { contextMenu = null; };
 
+	// AI Transform state
+	let aiTransform = $state<{ selectedText: string; selectionStart: number; selectionEnd: number } | null>(null);
+	let aiInstruction = $state('');
+	let aiLoading = $state(false);
+	let aiComment = $state('');
+
+	const handleOpenAiTransform = () => {
+		if (!contextMenu || !textareaEl) return;
+		aiTransform = {
+			selectedText: contextMenu.text,
+			selectionStart: textareaEl.selectionStart,
+			selectionEnd: textareaEl.selectionEnd
+		};
+		aiInstruction = '';
+		contextMenu = null;
+	};
+
+	const handleCancelAiTransform = () => {
+		aiTransform = null;
+		aiInstruction = '';
+	};
+
+	const handleSubmitAiTransform = async () => {
+		if (!aiTransform || !aiInstruction.trim() || !threadId) return;
+		aiLoading = true;
+		try {
+			const { transformChords } = await import('$lib/api');
+			const result = await transformChords(threadId, {
+				selectedChords: aiTransform.selectedText,
+				instruction: aiInstruction.trim(),
+				key: musicalKeyFull,
+				timeSignature: timeSignature,
+				fullScore: fullScore || internalValue
+			});
+			// Replace selected text with AI result
+			const before = internalValue.slice(0, aiTransform.selectionStart);
+			const after = internalValue.slice(aiTransform.selectionEnd);
+			const newVal = before + result.chords + after;
+			internalValue = newVal;
+			if (textareaEl) textareaEl.value = newVal;
+			onchange?.(newVal);
+			aiTransform = null;
+			aiInstruction = '';
+			// Show comment briefly
+			if (result.comment) {
+				aiComment = result.comment;
+				setTimeout(() => { aiComment = ''; }, 3000);
+			}
+		} catch (err) {
+			console.error('[ScoreEditor] AI transform error:', err);
+			aiComment = `エラー: ${err instanceof Error ? err.message : String(err)}`;
+			setTimeout(() => { aiComment = ''; }, 3000);
+		} finally {
+			aiLoading = false;
+		}
+	};
+
 	// Double-click chord preview
 	const handleDblClick = async () => {
 		if (!textareaEl) return;
@@ -187,7 +248,19 @@
 			</svg>
 			選択範囲を再生
 		</button>
+		{#if threadId}
+			<button class="ctx-item" onclick={handleOpenAiTransform}>
+				<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+					<path d="M8 1v4M8 11v4M1 8h4M11 8h4M3 3l2.5 2.5M10.5 10.5L13 13M13 3l-2.5 2.5M5.5 10.5L3 13" />
+				</svg>
+				AIで変更...
+			</button>
+		{/if}
 	</div>
+{/if}
+
+{#if aiComment}
+	<div class="ai-toast">{aiComment}</div>
 {/if}
 
 <div class="score-editor">
@@ -209,6 +282,36 @@
 		placeholder="| Am7 | Dm7 | G7 | Cmaj7 |&#10;&#10;💡 選択して右クリック → 部分再生"
 	></textarea>
 </div>
+
+{#if aiTransform}
+	<div class="ai-transform-panel">
+		<div class="ai-transform-header">AI変更</div>
+		<div class="ai-transform-selected">選択: <code>{aiTransform.selectedText}</code></div>
+		<div class="ai-transform-input">
+			<textarea
+				class="ai-instruction-input"
+				bind:value={aiInstruction}
+				placeholder="指示を入力... 例: もっとジャジーに"
+				rows="2"
+				disabled={aiLoading}
+				onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitAiTransform(); } }}
+			></textarea>
+			<div class="ai-transform-actions">
+				<button class="ai-btn ai-btn-submit" onclick={handleSubmitAiTransform} disabled={aiLoading || !aiInstruction.trim()}>
+					{#if aiLoading}
+						<span class="ai-spinner"></span>
+						変更中...
+					{:else}
+						変更
+					{/if}
+				</button>
+				<button class="ai-btn ai-btn-cancel" onclick={handleCancelAiTransform} disabled={aiLoading}>
+					キャンセル
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.score-editor {
@@ -353,5 +456,138 @@
 
 	.ctx-item:hover {
 		background: var(--bg-hover);
+	}
+
+	/* AI Toast */
+	.ai-toast {
+		padding: 8px 12px;
+		background: rgba(167, 139, 250, 0.15);
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-md);
+		color: var(--text-primary);
+		font-size: 0.8rem;
+		margin-bottom: 6px;
+		animation: toast-fade 3s ease-out forwards;
+	}
+
+	@keyframes toast-fade {
+		0%, 80% { opacity: 1; }
+		100% { opacity: 0; }
+	}
+
+	/* AI Transform Panel */
+	.ai-transform-panel {
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-md);
+		background: var(--bg-surface);
+		padding: 10px 12px;
+		margin-top: 6px;
+	}
+
+	.ai-transform-header {
+		font-size: 0.75rem;
+		font-weight: 700;
+		color: var(--accent-primary);
+		margin-bottom: 6px;
+	}
+
+	.ai-transform-selected {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		margin-bottom: 8px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.ai-transform-selected code {
+		background: var(--bg-base);
+		padding: 1px 4px;
+		border-radius: 3px;
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+	}
+
+	.ai-transform-input {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.ai-instruction-input {
+		width: 100%;
+		font-size: 0.8rem;
+		padding: 6px 8px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background: var(--bg-base);
+		color: var(--text-primary);
+		resize: none;
+		box-sizing: border-box;
+		font-family: inherit;
+	}
+
+	.ai-instruction-input:focus {
+		outline: none;
+		border-color: var(--accent-primary);
+	}
+
+	.ai-instruction-input::placeholder {
+		color: var(--text-muted);
+	}
+
+	.ai-transform-actions {
+		display: flex;
+		gap: 6px;
+	}
+
+	.ai-btn {
+		padding: 4px 12px;
+		border-radius: var(--radius-sm);
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+		border: none;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		transition: all 0.15s;
+	}
+
+	.ai-btn:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.ai-btn-submit {
+		background: var(--accent-primary);
+		color: #fff;
+	}
+
+	.ai-btn-submit:hover:not(:disabled) {
+		background: var(--accent-secondary);
+	}
+
+	.ai-btn-cancel {
+		background: transparent;
+		color: var(--text-secondary);
+		border: 1px solid var(--border-default);
+	}
+
+	.ai-btn-cancel:hover:not(:disabled) {
+		background: var(--bg-hover);
+	}
+
+	.ai-spinner {
+		width: 10px;
+		height: 10px;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top-color: #fff;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
 	}
 </style>

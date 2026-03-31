@@ -115,6 +115,10 @@ module Program =
             (requireLogin (withRateLimit (ThreadHandlers.reviewScore repo config id))) ctx))
         |> ignore
 
+        app.MapPost("/api/threads/{id}/transform", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (withRateLimit (ThreadHandlers.transformChords config id))) ctx))
+        |> ignore
+
         app.MapGet("/api/threads/{id}/history", Func<string, HttpContext, Task>(fun id ctx ->
             (requireLogin (ThreadHandlers.getHistory repo id)) ctx))
         |> ignore

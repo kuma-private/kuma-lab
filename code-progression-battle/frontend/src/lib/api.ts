@@ -96,6 +96,18 @@ export const getHistory = async (threadId: string): Promise<SaveHistory[]> => {
 	return res.json();
 };
 
+export const transformChords = async (
+	threadId: string,
+	data: { selectedChords: string; instruction: string; key: string; timeSignature: string; fullScore: string }
+): Promise<{ comment: string; chords: string }> => {
+	const res = await apiFetch(`/api/threads/${threadId}/transform`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};
+
 export const exportThread = async (threadId: string): Promise<string> => {
 	const res = await apiFetch(`/api/threads/${threadId}/export`);
 	return res.text();

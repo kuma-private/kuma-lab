@@ -110,6 +110,10 @@
 			displayMode={scoreDisplayMode}
 			musicalKey={thread.key}
 			pendingInsert={pendingInsertText}
+			threadId={thread.id}
+			fullScore={scoreEditorValue}
+			musicalKeyFull={thread.key}
+			timeSignature={thread.timeSignature}
 			onchange={onScoreChange}
 		/>
 	</div>
