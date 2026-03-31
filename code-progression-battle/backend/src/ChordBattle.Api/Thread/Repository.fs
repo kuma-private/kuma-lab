@@ -77,31 +77,27 @@ module Repository =
                 FirestoreDb.Create(projectId)
             )
 
+        let private tryGetString (dict: System.Collections.Generic.IDictionary<string, obj>) (key: string) =
+            match dict.TryGetValue(key) with
+            | true, v when v <> null -> v :?> string
+            | _ -> ""
+
         let private toSaveHistory (dict: System.Collections.Generic.IDictionary<string, obj>) : SaveHistory =
-            { UserId = dict.["userId"] :?> string
-              UserName = dict.["userName"] :?> string
-              Score = dict.["score"] :?> string
-              Comment =
-                  match dict.TryGetValue("comment") with
-                  | true, v when v <> null -> v :?> string
-                  | _ -> ""
-              AiComment =
-                  match dict.TryGetValue("aiComment") with
-                  | true, v when v <> null -> v :?> string
-                  | _ -> ""
-              AiScores =
-                  match dict.TryGetValue("aiScores") with
-                  | true, v when v <> null -> v :?> string
-                  | _ -> ""
+            { UserId = tryGetString dict "userId"
+              UserName = tryGetString dict "userName"
+              Score = let s = tryGetString dict "score" in if s <> "" then s else tryGetString dict "chords"
+              Comment = tryGetString dict "comment"
+              AiComment = tryGetString dict "aiComment"
+              AiScores = tryGetString dict "aiScores"
               CreatedAt =
-                  match dict.["createdAt"] with
-                  | :? Timestamp as ts -> ts.ToDateTime()
+                  match dict.TryGetValue("createdAt") with
+                  | true, (:? Timestamp as ts) -> ts.ToDateTime()
                   | _ -> DateTime.UtcNow }
 
         let private toThread (doc: DocumentSnapshot) : Thread =
             let history =
-                match doc.GetValue<obj>("history") with
-                | :? System.Collections.IList as list ->
+                match doc.TryGetValue<obj>("history") with
+                | true, (:? System.Collections.IList as list) ->
                     list
                     |> Seq.cast<System.Collections.Generic.IDictionary<string, obj>>
                     |> Seq.map toSaveHistory
@@ -109,8 +105,8 @@ module Repository =
                 | _ -> []
 
             let members =
-                match doc.GetValue<obj>("members") with
-                | :? System.Collections.IList as list ->
+                match doc.TryGetValue<obj>("members") with
+                | true, (:? System.Collections.IList as list) ->
                     list
                     |> Seq.cast<obj>
                     |> Seq.map (fun o -> o :?> string)
