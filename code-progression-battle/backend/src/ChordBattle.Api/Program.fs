@@ -12,10 +12,7 @@ open ChordBattle.Api.Middleware
 
 module Program =
 
-    let private devMode =
-        match Environment.GetEnvironmentVariable("DEV_MODE") with
-        | "true" | "1" -> true
-        | _ -> false
+    let private devMode = Config.devMode
 
     let private requireLogin (innerHandler: HttpContext -> Task) (ctx: HttpContext) : Task =
         task {

@@ -251,7 +251,7 @@ function entryToNotes(entry: BarEntry, lastChordNotes: string[] | null): string[
       try {
         return chordToNotes(entry.chord);
       } catch (e) {
-        console.error(`[ChordPlayer] ${e instanceof Error ? e.message : e}`);
+        // Unknown chord quality – skip this entry
         return null;
       }
     case 'sustain':
@@ -428,7 +428,6 @@ const createPianoSampler = (): Tone.Sampler => {
     release: 1,
     onload: () => {
       _pianoSamplerLoaded = true;
-      console.log('[ChordPlayer] Piano sampler loaded');
     },
   });
 };
@@ -501,7 +500,6 @@ export class ChordPlayer {
   private _config: PlayerConfig;
   private _callbacks: PlayerCallbacks;
   private progressInterval: ReturnType<typeof setInterval> | null = null;
-  private startOffset = 0;
   private _loop = false;
   private _currentChord: string | null = null;
   private _bars: ParsedBar[] = [];
@@ -568,7 +566,6 @@ export class ChordPlayer {
     this._currentChord = null;
 
     const schedule = buildSchedule(bars, this._config);
-    console.log('[ChordPlayer] load: bars=', bars.length, 'scheduled notes=', schedule.length);
     const transport = Tone.getTransport();
     transport.bpm.value = this._config.bpm;
     transport.timeSignature = this._config.timeSignature.beats;

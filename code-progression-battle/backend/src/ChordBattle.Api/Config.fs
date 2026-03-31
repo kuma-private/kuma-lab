@@ -13,6 +13,11 @@ type AppConfig =
 
 module Config =
 
+    let devMode =
+        match Environment.GetEnvironmentVariable("DEV_MODE") with
+        | "true" | "1" -> true
+        | _ -> false
+
     let load () : AppConfig =
         let env key =
             match Environment.GetEnvironmentVariable(key) with
@@ -23,11 +28,6 @@ module Config =
             match Environment.GetEnvironmentVariable(key) with
             | null | "" -> defaultValue
             | v -> v
-
-        let devMode =
-            match Environment.GetEnvironmentVariable("DEV_MODE") with
-            | "true" | "1" -> true
-            | _ -> false
 
         if devMode then
             { GoogleClientId = envOr "GOOGLE_CLIENT_ID" "dev-client-id"

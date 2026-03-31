@@ -285,77 +285,48 @@ module Repository =
                 return thread
             }
 
-        let joinThread (threadId: string) (opponentId: string) (opponentName: string) : Task<Thread option> =
+        let private updateThread (threadId: string) (transform: Thread -> Thread) : Task<Thread option> =
             task {
                 let! existing = getById threadId
                 match existing with
                 | None -> return None
                 | Some thread ->
-                    let updated =
-                        { thread with
-                            OpponentId = opponentId
-                            OpponentName = opponentName
-                            Status = "active" }
-                    let! result = update updated
+                    let! result = update (transform thread)
                     return Some result
             }
+
+        let joinThread (threadId: string) (opponentId: string) (opponentName: string) : Task<Thread option> =
+            updateThread threadId (fun thread ->
+                { thread with
+                    OpponentId = opponentId
+                    OpponentName = opponentName
+                    Status = "active" })
 
         let executeTurn (threadId: string) (action: TurnAction) (updatedLines: Line list) (nextTurn: string) : Task<Thread option> =
-            task {
-                let! existing = getById threadId
-                match existing with
-                | None -> return None
-                | Some thread ->
-                    let updated =
-                        { thread with
-                            Lines = updatedLines
-                            History = thread.History @ [ action ]
-                            CurrentTurn = nextTurn
-                            TurnCount = thread.TurnCount + 1 }
-                    let! result = update updated
-                    return Some result
-            }
+            updateThread threadId (fun thread ->
+                { thread with
+                    Lines = updatedLines
+                    History = thread.History @ [ action ]
+                    CurrentTurn = nextTurn
+                    TurnCount = thread.TurnCount + 1 })
 
         let proposeFinish (threadId: string) (userId: string) (nextTurn: string) : Task<Thread option> =
-            task {
-                let! existing = getById threadId
-                match existing with
-                | None -> return None
-                | Some thread ->
-                    let updated =
-                        { thread with
-                            Status = "finish_proposed"
-                            FinishProposedBy = userId
-                            CurrentTurn = nextTurn }
-                    let! result = update updated
-                    return Some result
-            }
+            updateThread threadId (fun thread ->
+                { thread with
+                    Status = "finish_proposed"
+                    FinishProposedBy = userId
+                    CurrentTurn = nextTurn })
 
         let acceptFinish (threadId: string) : Task<Thread option> =
-            task {
-                let! existing = getById threadId
-                match existing with
-                | None -> return None
-                | Some thread ->
-                    let updated = { thread with Status = "completed" }
-                    let! result = update updated
-                    return Some result
-            }
+            updateThread threadId (fun thread ->
+                { thread with Status = "completed" })
 
         let rejectFinish (threadId: string) (rejecterTurn: string) : Task<Thread option> =
-            task {
-                let! existing = getById threadId
-                match existing with
-                | None -> return None
-                | Some thread ->
-                    let updated =
-                        { thread with
-                            Status = "active"
-                            FinishProposedBy = ""
-                            CurrentTurn = rejecterTurn }
-                    let! result = update updated
-                    return Some result
-            }
+            updateThread threadId (fun thread ->
+                { thread with
+                    Status = "active"
+                    FinishProposedBy = ""
+                    CurrentTurn = rejecterTurn })
 
     type IThreadRepository =
         { GetAll: unit -> Task<Thread list>

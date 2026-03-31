@@ -14,10 +14,7 @@ open ChordBattle.Api.Analysis
 
 module ThreadHandlers =
 
-    let private devMode =
-        match Environment.GetEnvironmentVariable("DEV_MODE") with
-        | "true" | "1" -> true
-        | _ -> false
+    let private devMode = Config.devMode
 
     let private getUserInfo (ctx: HttpContext) =
         if devMode && (ctx.User = null || ctx.User.Identity = null || not ctx.User.Identity.IsAuthenticated) then
@@ -211,6 +208,45 @@ module ThreadHandlers =
                     | None -> return updatedThread
         }
 
+    let private commitTurn
+        (repo: IThreadRepository) (config: AppConfig) (ctx: HttpContext)
+        (threadId: string) (t: Thread) (userId: string) (userName: string)
+        (action: string) (lineNumber: int) (chords: string) (previousChords: string)
+        (comment: string) (updatedLines: Line list) (nextTurn: string)
+        : Task<Result<Thread, string>> =
+        task {
+            let! struct (aiComment, aiScores) = tryReviewTurn ctx config.AnthropicApiKey t action lineNumber chords updatedLines
+            let turnAction =
+                { TurnNumber = t.TurnCount + 1
+                  UserId = userId
+                  UserName = userName
+                  Action = action
+                  LineNumber = lineNumber
+                  Chords = chords
+                  PreviousChords = previousChords
+                  Comment = comment
+                  AiComment = aiComment
+                  AiScores = aiScores
+                  CreatedAt = DateTime.UtcNow }
+
+            let! result = repo.ExecuteTurn threadId turnAction updatedLines nextTurn
+            match result with
+            | Some updated ->
+                let! finalThread = executeCpuTurn repo config ctx threadId updated
+                return Ok finalThread
+            | None ->
+                return Error "Failed to execute turn"
+        }
+
+    let private writeTurnResult (ctx: HttpContext) (result: Result<Thread, string>) : Task =
+        task {
+            match result with
+            | Ok thread -> do! ctx.Response.WriteAsJsonAsync(thread)
+            | Error msg ->
+                ctx.Response.StatusCode <- 500
+                do! ctx.Response.WriteAsJsonAsync({| error = msg |})
+        }
+
     let executeTurn (repo: IThreadRepository) (config: AppConfig) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
@@ -247,28 +283,8 @@ module ThreadHandlers =
                                       AddedByName = userName
                                       LastEditedBy = userId }
                                 let updatedLines = t.Lines @ [ newLine ]
-                                let! struct (aiComment, aiScores) = tryReviewTurn ctx config.AnthropicApiKey t "add" newLineNumber req.chords updatedLines
-                                let action =
-                                    { TurnNumber = t.TurnCount + 1
-                                      UserId = userId
-                                      UserName = userName
-                                      Action = "add"
-                                      LineNumber = newLineNumber
-                                      Chords = req.chords
-                                      PreviousChords = ""
-                                      Comment = req.comment
-                                      AiComment = aiComment
-                                      AiScores = aiScores
-                                      CreatedAt = DateTime.UtcNow }
-
-                                let! result = repo.ExecuteTurn threadId action updatedLines nextTurn
-                                match result with
-                                | Some updated ->
-                                    let! finalThread = executeCpuTurn repo config ctx threadId updated
-                                    do! ctx.Response.WriteAsJsonAsync(finalThread)
-                                | None ->
-                                    ctx.Response.StatusCode <- 500
-                                    do! ctx.Response.WriteAsJsonAsync({| error = "Failed to execute turn" |})
+                                let! result = commitTurn repo config ctx threadId t userId userName "add" newLineNumber req.chords "" req.comment updatedLines nextTurn
+                                do! writeTurnResult ctx result
 
                         | "edit" ->
                             if req.lineNumber < 1 || req.lineNumber > t.Lines.Length then
@@ -285,28 +301,8 @@ module ThreadHandlers =
                                         if i = req.lineNumber - 1 then
                                             { line with Chords = req.chords; LastEditedBy = userId }
                                         else line)
-                                let! struct (aiComment, aiScores) = tryReviewTurn ctx config.AnthropicApiKey t "edit" req.lineNumber req.chords updatedLines
-                                let action =
-                                    { TurnNumber = t.TurnCount + 1
-                                      UserId = userId
-                                      UserName = userName
-                                      Action = "edit"
-                                      LineNumber = req.lineNumber
-                                      Chords = req.chords
-                                      PreviousChords = targetLine.Chords
-                                      Comment = req.comment
-                                      AiComment = aiComment
-                                      AiScores = aiScores
-                                      CreatedAt = DateTime.UtcNow }
-
-                                let! result = repo.ExecuteTurn threadId action updatedLines nextTurn
-                                match result with
-                                | Some updated ->
-                                    let! finalThread = executeCpuTurn repo config ctx threadId updated
-                                    do! ctx.Response.WriteAsJsonAsync(finalThread)
-                                | None ->
-                                    ctx.Response.StatusCode <- 500
-                                    do! ctx.Response.WriteAsJsonAsync({| error = "Failed to execute turn" |})
+                                let! result = commitTurn repo config ctx threadId t userId userName "edit" req.lineNumber req.chords targetLine.Chords req.comment updatedLines nextTurn
+                                do! writeTurnResult ctx result
 
                         | "delete" ->
                             if req.lineNumber < 1 || req.lineNumber > t.Lines.Length then
@@ -318,28 +314,8 @@ module ThreadHandlers =
                                     t.Lines
                                     |> List.filter (fun line -> line.LineNumber <> req.lineNumber)
                                     |> List.mapi (fun i line -> { line with LineNumber = i + 1 })
-                                let! struct (aiComment, aiScores) = tryReviewTurn ctx config.AnthropicApiKey t "delete" req.lineNumber "" updatedLines
-                                let action =
-                                    { TurnNumber = t.TurnCount + 1
-                                      UserId = userId
-                                      UserName = userName
-                                      Action = "delete"
-                                      LineNumber = req.lineNumber
-                                      Chords = ""
-                                      PreviousChords = targetLine.Chords
-                                      Comment = req.comment
-                                      AiComment = aiComment
-                                      AiScores = aiScores
-                                      CreatedAt = DateTime.UtcNow }
-
-                                let! result = repo.ExecuteTurn threadId action updatedLines nextTurn
-                                match result with
-                                | Some updated ->
-                                    let! finalThread = executeCpuTurn repo config ctx threadId updated
-                                    do! ctx.Response.WriteAsJsonAsync(finalThread)
-                                | None ->
-                                    ctx.Response.StatusCode <- 500
-                                    do! ctx.Response.WriteAsJsonAsync({| error = "Failed to execute turn" |})
+                                let! result = commitTurn repo config ctx threadId t userId userName "delete" req.lineNumber "" targetLine.Chords req.comment updatedLines nextTurn
+                                do! writeTurnResult ctx result
 
                         | _ ->
                             ctx.Response.StatusCode <- 400
