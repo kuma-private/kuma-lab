@@ -83,20 +83,30 @@
 					<div class="post-comment">{item.comment}</div>
 				{/if}
 				{#if item.aiComment}
+					{@const parsedAi = (() => {
+						try {
+							// Try to extract JSON from markdown code block
+							const raw = item.aiComment;
+							const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/);
+							const jsonStr = jsonMatch ? jsonMatch[1] : raw;
+							const parsed = JSON.parse(jsonStr);
+							return { comment: parsed.comment || raw, scores: parsed.scores || null };
+						} catch {
+							return { comment: item.aiComment, scores: null };
+						}
+					})()}
 					<div class="ai-comment">
 						<span class="ai-icon">AI</span>
 						<div class="ai-body">
-							<span class="ai-text">{item.aiComment}</span>
-							{#if item.aiScores}
-								{@const scores = (() => { try { return JSON.parse(item.aiScores); } catch { return null; } })()}
-								{#if scores && typeof scores.tension === 'number'}
-									<div class="ai-scores">
-										<span class="ai-score" title="テンション">T:{scores.tension}</span>
-										<span class="ai-score" title="創造性">C:{scores.creativity}</span>
-										<span class="ai-score" title="整合性">H:{scores.coherence}</span>
-										<span class="ai-score" title="サプライズ">S:{scores.surprise}</span>
-									</div>
-								{/if}
+							<span class="ai-text">{parsedAi.comment}</span>
+							{@const scores = parsedAi.scores || (() => { try { return JSON.parse(item.aiScores); } catch { return null; } })()}
+							{#if scores && typeof scores.tension === 'number'}
+								<div class="ai-scores">
+									<span class="ai-score" title="テンション">T:{scores.tension}</span>
+									<span class="ai-score" title="創造性">C:{scores.creativity}</span>
+									<span class="ai-score" title="整合性">H:{scores.coherence}</span>
+									<span class="ai-score" title="サプライズ">S:{scores.surprise}</span>
+								</div>
 							{/if}
 						</div>
 					</div>

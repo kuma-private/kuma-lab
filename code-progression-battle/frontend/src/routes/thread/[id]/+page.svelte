@@ -161,6 +161,15 @@
 			commentInput = '';
 			player?.dispose();
 			player = null;
+			// Auto-trigger AI review after save
+			reviewing = true;
+			try {
+				await store.requestReview(threadId);
+				// Reload history to show AI comment
+				historyItems = await store.loadHistory(threadId);
+			} finally {
+				reviewing = false;
+			}
 		} finally {
 			submitting = false;
 		}
