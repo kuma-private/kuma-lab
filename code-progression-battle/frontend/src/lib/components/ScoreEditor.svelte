@@ -232,7 +232,7 @@
 		background: var(--bg-base);
 		border: 1px solid transparent;
 		border-radius: var(--radius-md) var(--radius-md) 0 0;
-		min-height: 60px;
+		min-height: 30px;
 		white-space: pre-wrap;
 		word-wrap: break-word;
 		box-sizing: border-box;

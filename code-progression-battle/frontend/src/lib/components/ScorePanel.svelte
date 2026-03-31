@@ -167,7 +167,6 @@
 	}
 
 	.panel-main {
-		min-height: 300px;
 	}
 
 	.panel-header {
@@ -299,7 +298,7 @@
 	}
 
 	.score-area {
-		padding: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
 	}
 
 	.empty-score {
