@@ -549,6 +549,26 @@
 					</div>
 				</div>
 
+				{#if canAct}
+					<div class="score-toolbar">
+						<button class="score-tool-btn" onclick={() => { scoreEditorValue += ' | '; }} title="小節区切りを追加">
+							<span class="tool-label">|</span> 小節
+						</button>
+						<button class="score-tool-btn" onclick={() => { scoreEditorValue += '\n'; }} title="改行を追加">
+							改行
+						</button>
+						<button class="score-tool-btn score-tool-btn--danger" onclick={() => {
+							const lines = scoreEditorValue.split('\n');
+							if (lines.length > 0) {
+								lines.pop();
+								scoreEditorValue = lines.join('\n');
+							}
+						}} title="最後の行を削除">
+							行削除
+						</button>
+					</div>
+				{/if}
+
 				<div class="score-area">
 					{#if thread.lines.length === 0 && scoreReadonly}
 						<div class="empty-score">
@@ -1119,6 +1139,43 @@
 	}
 
 	/* Score area */
+	.score-toolbar {
+		display: flex;
+		gap: 4px;
+		padding: var(--space-xs) var(--space-md);
+		border-bottom: 1px solid var(--border-subtle);
+	}
+
+	.score-tool-btn {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 3px 10px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-secondary);
+		font-size: 0.72rem;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.score-tool-btn:hover {
+		background: var(--bg-hover);
+		color: var(--text-primary);
+	}
+
+	.score-tool-btn--danger:hover {
+		border-color: var(--error);
+		color: var(--error);
+	}
+
+	.tool-label {
+		font-family: var(--font-mono);
+		font-weight: 700;
+		font-size: 0.85rem;
+	}
+
 	.score-area {
 		padding: var(--space-md);
 	}

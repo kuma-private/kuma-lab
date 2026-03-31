@@ -16,7 +16,6 @@
 
 	let { value, readonly = false, activeBarIndex = -1, displayMode = 'chord', musicalKey = 'C', onchange }: Props = $props();
 
-	// Color map for root notes
 	const ROOT_COLORS: Record<string, string> = {
 		'C': 'var(--chord-c-text)',
 		'C#': 'var(--chord-cs-text)', 'Db': 'var(--chord-cs-text)',
@@ -32,28 +31,25 @@
 		'B': 'var(--chord-b-text)',
 	};
 
-	const colorize = (text: string, activeBar: number, mode: DisplayMode, key: string): string => {
-		// Track bar index across all lines: bars are segments between | delimiters
-		let barCounter = 0;
+	const escapeHtml = (s: string): string =>
+		s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+	const colorize = (text: string, activeBar: number, mode: DisplayMode, key: string): string => {
+		let barCounter = 0;
 		return text.split('\n').map(line => {
 			if (line.trim().startsWith('#')) {
 				return `<span class="se-comment">${escapeHtml(line)}</span>`;
 			}
 			const parts = line.split(/(\|)/);
-			// Count how many | are in this line to know how many bars
 			let insideBar = false;
 			return parts.map(segment => {
 				if (segment === '|') {
-					if (insideBar) {
-						// Closing a bar
-						barCounter++;
-					}
+					if (insideBar) barCounter++;
 					insideBar = true;
 					return '<span class="se-bar">|</span>';
 				}
 				const isActive = activeBar >= 0 && insideBar && barCounter === activeBar;
-				const tokenized = segment.split(/(\s+)/).map(token => {
+				return segment.split(/(\s+)/).map(token => {
 					if (!token.trim()) return token;
 					if (token === '%' || token === '_' || token === '=') {
 						return `<span class="se-special">${token}</span>`;
@@ -62,12 +58,10 @@
 						const root = extractRoot(token);
 						const color = ROOT_COLORS[root] || 'var(--text-primary)';
 						const activeClass = isActive ? ' se-active' : '';
-
 						if (mode === 'degree') {
 							const degree = chordToDegree(token, key);
 							return `<span class="se-degree${activeClass}">${escapeHtml(degree)}</span>`;
 						}
-
 						const rootLen = root.length;
 						const rootPart = token.slice(0, rootLen);
 						const qualityPart = token.slice(rootLen);
@@ -76,43 +70,30 @@
 						return escapeHtml(token);
 					}
 				}).join('');
-				return tokenized;
 			}).join('');
 		}).join('\n');
 	};
 
-	const escapeHtml = (s: string): string => {
-		return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-	};
-
-	let highlighted = $derived(colorize(internalValue, activeBarIndex, displayMode, musicalKey));
-
-	// Internal value synced with prop, used for textarea binding
+	// State
 	let internalValue = $state(value);
-
-	// Sync from parent prop → internal
-	$effect(() => {
-		internalValue = value;
-	});
-
+	let editing = $state(false);
 	let textareaEl: HTMLTextAreaElement;
 
-	// Override browser form restoration on mount (browser restores after onMount)
+	$effect(() => { internalValue = value; });
+
 	onMount(() => {
 		requestAnimationFrame(() => {
-			if (textareaEl) {
-				textareaEl.value = value;
-				internalValue = value;
-			}
+			if (textareaEl) { textareaEl.value = value; internalValue = value; }
 		});
 	});
 
-	// Force DOM sync when internalValue changes programmatically
 	$effect(() => {
 		if (textareaEl && textareaEl.value !== internalValue) {
 			textareaEl.value = internalValue;
 		}
 	});
+
+	const highlighted = $derived(colorize(internalValue, activeBarIndex, displayMode, musicalKey));
 
 	const handleInput = (e: Event) => {
 		const target = e.target as HTMLTextAreaElement;
@@ -120,14 +101,16 @@
 		onchange?.(target.value);
 	};
 
-	// ── Context menu (right-click for selection playback) ──
+	const handleFocus = () => { editing = true; };
+	const handleBlur = () => { editing = false; };
+
+	// Right-click context menu
 	let contextMenu = $state<{ x: number; y: number; text: string } | null>(null);
 
 	const handleContextMenu = (e: MouseEvent) => {
-		const textarea = e.target as HTMLTextAreaElement;
-		const selected = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd).trim();
-		if (!selected) return; // no selection, use default browser menu
-
+		if (!editing || !textareaEl) return;
+		const selected = textareaEl.value.substring(textareaEl.selectionStart, textareaEl.selectionEnd).trim();
+		if (!selected) return;
 		e.preventDefault();
 		contextMenu = { x: e.clientX, y: e.clientY, text: selected };
 	};
@@ -146,46 +129,12 @@
 
 	const closeContextMenu = () => { contextMenu = null; };
 
-	// ── Double-click chord preview ──
-	// ── Drag & drop from CircleOfFifths ──
-	const handleDragOver = (e: DragEvent) => {
-		e.preventDefault();
-		if (e.dataTransfer) {
-			e.dataTransfer.dropEffect = 'copy';
-		}
-	};
-
-	const handleDrop = (e: DragEvent) => {
-		e.preventDefault();
-		const chord = e.dataTransfer?.getData('text/plain')?.trim();
-		if (!chord || readonly) return;
-
-		const textarea = textareaEl;
-		if (!textarea) return;
-		const pos = textarea.selectionStart ?? internalValue.length;
-		const before = internalValue.slice(0, pos);
-		const after = internalValue.slice(pos);
-		const spaceBefore = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n') && !before.endsWith('|') ? ' ' : '';
-		const spaceAfter = after.length > 0 && !after.startsWith(' ') && !after.startsWith('\n') && !after.startsWith('|') ? ' ' : '';
-		const newVal = before + spaceBefore + chord + spaceAfter + after;
-		internalValue = newVal;
-		textarea.value = newVal;
-		onchange?.(newVal);
-	};
-
-	// ── Double-click chord preview ──
-	const handleDblClick = async (e: MouseEvent) => {
-		const textarea = e.target as HTMLTextAreaElement;
-		const selected = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd).trim();
+	// Double-click chord preview
+	const handleDblClick = async () => {
+		if (!textareaEl) return;
+		const selected = textareaEl.value.substring(textareaEl.selectionStart, textareaEl.selectionEnd).trim();
 		if (!selected) return;
-
-		// Check if the selected word looks like a chord
-		try {
-			extractRoot(selected);
-		} catch {
-			return; // not a chord
-		}
-
+		try { extractRoot(selected); } catch { return; }
 		try {
 			const { playChordPreview } = await import('$lib/chord-player');
 			await playChordPreview(selected);
@@ -193,8 +142,31 @@
 			console.error('[ScoreEditor] preview error:', err);
 		}
 	};
+
+	// Drag & drop
+	const handleDragOver = (e: DragEvent) => {
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+	};
+
+	const handleDrop = (e: DragEvent) => {
+		e.preventDefault();
+		const chord = e.dataTransfer?.getData('text/plain')?.trim();
+		if (!chord || readonly) return;
+		if (!textareaEl) return;
+		const pos = textareaEl.selectionStart ?? internalValue.length;
+		const before = internalValue.slice(0, pos);
+		const after = internalValue.slice(pos);
+		const spaceBefore = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n') && !before.endsWith('|') ? ' ' : '';
+		const spaceAfter = after.length > 0 && !after.startsWith(' ') && !after.startsWith('\n') && !after.startsWith('|') ? ' ' : '';
+		const newVal = before + spaceBefore + chord + spaceAfter + after;
+		internalValue = newVal;
+		textareaEl.value = newVal;
+		onchange?.(newVal);
+	};
 </script>
 
+<!-- Context menu -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 {#if contextMenu}
@@ -210,102 +182,108 @@
 {/if}
 
 <div class="score-editor">
-	<div class="se-container">
-		<!-- Highlighted overlay -->
-		<div class="se-highlight" aria-hidden="true">{@html highlighted}&nbsp;</div>
-		<!-- Actual textarea -->
+	{#if editing && !readonly && displayMode === 'chord'}
+		<!-- Editing mode: plain textarea -->
 		<textarea
 			bind:this={textareaEl}
-			class="se-textarea"
-			class:se-textarea--degree={displayMode === 'degree'}
+			class="se-plain"
 			value={internalValue}
 			oninput={handleInput}
-			autocomplete="off"
+			onfocus={handleFocus}
+			onblur={handleBlur}
 			oncontextmenu={handleContextMenu}
 			ondblclick={handleDblClick}
 			ondragover={handleDragOver}
 			ondrop={handleDrop}
-			readonly={readonly || displayMode === 'degree'}
+			autocomplete="off"
 			spellcheck="false"
-			placeholder="# Chords will appear here&#10;G | D | Em | B7 |&#10;C | G | Am7 | D7 |"
+			placeholder="| Am7 | Dm7 | G7 | Cmaj7 |"
 		></textarea>
-	</div>
+	{:else}
+		<!-- Display mode: colorized HTML -->
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="se-display"
+			class:se-display--editable={!readonly && displayMode === 'chord'}
+			onclick={() => { if (!readonly && displayMode === 'chord') editing = true; }}
+			role={!readonly && displayMode === 'chord' ? 'textbox' : undefined}
+			tabindex={!readonly && displayMode === 'chord' ? 0 : undefined}
+			onfocus={() => { if (!readonly && displayMode === 'chord') editing = true; }}
+		>{@html highlighted}&nbsp;</div>
+		<!-- Hidden textarea for value sync -->
+		<textarea bind:this={textareaEl} class="se-hidden" value={internalValue} tabindex="-1"></textarea>
+	{/if}
 </div>
 
 <style>
 	.score-editor {
 		position: relative;
 		width: 100%;
+		min-height: 150px;
 	}
 
-	.se-container {
-		position: relative;
-		min-height: 200px;
-		background: var(--bg-base);
-		border: 1px solid transparent;
-		transition: border-color 0.2s;
-	}
-
-	.se-container:focus-within {
-		border-color: var(--accent-primary);
-	}
-
-	.se-highlight,
-	.se-textarea {
+	/* Plain textarea for editing */
+	.se-plain {
+		width: 100%;
+		min-height: 150px;
 		font-family: var(--font-mono);
 		font-size: 1rem;
 		font-weight: 500;
 		line-height: 2;
-		letter-spacing: 0;
-		word-spacing: normal;
 		padding: var(--space-md);
-		white-space: pre-wrap;
-		word-wrap: break-word;
-		overflow-wrap: break-word;
-		box-sizing: border-box;
-		border: none;
-	}
-
-	.se-highlight {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		color: transparent;
-		z-index: 1;
-	}
-
-	.se-textarea {
-		position: relative;
-		width: 100%;
-		min-height: 200px;
-		background: transparent;
-		color: rgba(232, 232, 240, 0.05);
+		background: var(--bg-base);
+		color: var(--text-primary);
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-md);
 		caret-color: var(--accent-primary);
 		outline: none;
 		resize: vertical;
-		z-index: 2;
+		box-sizing: border-box;
+		white-space: pre-wrap;
+		word-wrap: break-word;
 	}
 
-	.se-textarea--degree {
-		color: transparent !important;
-	}
-
-	.se-textarea::selection {
-		background: rgba(167, 139, 250, 0.3);
-	}
-
-	.se-textarea::placeholder {
+	.se-plain::placeholder {
 		color: var(--text-muted);
 	}
 
-	.se-textarea[readonly] {
-		cursor: default;
+	/* Colorized display */
+	.se-display {
+		font-family: var(--font-mono);
+		font-size: 1rem;
+		font-weight: 500;
+		line-height: 2;
+		padding: var(--space-md);
+		background: var(--bg-base);
+		border: 1px solid transparent;
+		border-radius: var(--radius-md);
+		min-height: 150px;
+		white-space: pre-wrap;
+		word-wrap: break-word;
+		box-sizing: border-box;
+		transition: border-color 0.2s;
+	}
+
+	.se-display--editable {
+		cursor: text;
+	}
+
+	.se-display--editable:hover {
+		border-color: var(--border-default);
+	}
+
+	.se-hidden {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+		width: 0;
+		height: 0;
 	}
 
 	:global(.se-bar) {
 		color: var(--border-strong);
 		font-weight: 500;
-		margin: 0 2px;
 	}
 
 	:global(.se-special) {
@@ -333,7 +311,6 @@
 		background: rgba(167, 139, 250, 0.3);
 		border-radius: 4px;
 		padding: 1px 2px;
-		transition: background 0.15s;
 	}
 
 	/* Context menu */

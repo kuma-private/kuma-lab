@@ -153,31 +153,19 @@
 		return name;
 	});
 
-	const handleChordDown = async (label: string, isMinor: boolean) => {
-		// If "on" mode is active and we already have a root, this click sets the bass note
+	// Left click: select root + insert to editor
+	const handleChordClick = (label: string, isMinor: boolean) => {
 		if (onMode && selectedRoot) {
 			const bassNote = getRootFromLabel(label);
 			selectedBass = bassNote;
 			onMode = false;
-			pressedLabel = label;
-
 			const chordName = buildChordName(selectedRoot);
 			onSelect?.(chordName);
-
-			try {
-				const mod = await ensureSynth();
-				const parsed = parseChord(chordName);
-				const notes = chordToNotes(parsed);
-				await mod.keyboardAttack(notes);
-			} catch (err) {
-				console.error('[CircleOfFifths] attack error:', err);
-			}
 			return;
 		}
 
 		selectedRoot = label;
 		selectedBass = null;
-		pressedLabel = label;
 		if (isMinor && selectedQuality === '') {
 			// Keep as minor
 		} else if (isMinor && selectedQuality === 'm') {
@@ -186,17 +174,32 @@
 
 		const chordName = buildChordName(label);
 		onSelect?.(chordName);
+	};
 
+	// Right click: preview sound
+	const handleChordPreview = async (e: MouseEvent, label: string) => {
+		e.preventDefault();
+		selectedRoot = label;
+		selectedBass = null;
+		pressedLabel = label;
+
+		const chordName = buildChordName(label);
 		try {
 			const mod = await ensureSynth();
 			const parsed = parseChord(chordName);
 			const notes = chordToNotes(parsed);
 			await mod.keyboardAttack(notes);
+			setTimeout(async () => {
+				try { await mod.keyboardRelease(notes); } catch {}
+				pressedLabel = null;
+			}, 500);
 		} catch (err) {
-			console.error('[CircleOfFifths] attack error:', err);
+			console.error('[CircleOfFifths] preview error:', err);
+			pressedLabel = null;
 		}
 	};
 
+	// Legacy handler kept for compatibility
 	const handleChordUp = (label: string) => {
 		if (pressedLabel !== label) return;
 		pressedLabel = null;
@@ -295,9 +298,9 @@
 				class:cof-segment--selected={isSelected}
 				class:cof-segment--hovered={isHovered}
 				style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
-				onpointerdown={() => handleChordDown(label, false)}
-				onpointerup={() => handleChordUp(label)}
-				onpointerleave={() => { hovered = null; handleChordUp(label); }}
+				onclick={() => handleChordClick(label, false)}
+				oncontextmenu={(e: MouseEvent) => handleChordPreview(e, label)}
+				onpointerleave={() => { hovered = null; }}
 				onpointerenter={() => { hovered = label; }}
 				draggable="true"
 				ondragstart={(e: DragEvent) => handleDragStart(e, label)}
@@ -332,9 +335,9 @@
 				class:cof-segment--selected={isSelected}
 				class:cof-segment--hovered={isHovered}
 				style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
-				onpointerdown={() => handleChordDown(label, true)}
-				onpointerup={() => handleChordUp(label)}
-				onpointerleave={() => { hovered = null; handleChordUp(label); }}
+				onclick={() => handleChordClick(label, true)}
+				oncontextmenu={(e: MouseEvent) => handleChordPreview(e, label)}
+				onpointerleave={() => { hovered = null; }}
 				onpointerenter={() => { hovered = label; }}
 				draggable="true"
 				ondragstart={(e: DragEvent) => handleDragStart(e, label)}
@@ -371,9 +374,7 @@
 			ベース音を選択してください
 		</div>
 	{:else if selectedRoot}
-		<button class="cof-insert-btn" onclick={() => { onSelect?.(currentChordName); }}>
-			{currentChordName} をエディタに追加
-		</button>
+		<div class="cof-hint">左クリック: 追加 / 右クリック: 試聴</div>
 	{/if}
 </div>
 
@@ -523,20 +524,9 @@
 		50% { opacity: 0.5; }
 	}
 
-	.cof-insert-btn {
-		font-family: var(--font-mono);
-		font-size: 0.78rem;
-		font-weight: 600;
-		padding: 6px 16px;
-		border: 1px solid var(--accent-primary);
-		border-radius: var(--radius-md);
-		background: rgba(167, 139, 250, 0.15);
-		color: var(--accent-primary);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.cof-insert-btn:hover {
-		background: rgba(167, 139, 250, 0.3);
+	.cof-hint {
+		font-size: 0.68rem;
+		color: var(--text-muted);
+		text-align: center;
 	}
 </style>
