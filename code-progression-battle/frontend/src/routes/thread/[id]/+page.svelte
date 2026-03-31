@@ -355,8 +355,12 @@
 	.page {
 		max-width: 1200px;
 		margin: 0 auto;
-		padding: var(--space-lg) var(--space-xl);
-		padding-bottom: calc(80px + var(--space-2xl));
+		padding: var(--space-md) var(--space-xl);
+		padding-bottom: calc(80px + var(--space-lg));
+		display: flex;
+		flex-direction: column;
+		height: calc(100vh - 80px);
+		box-sizing: border-box;
 	}
 
 	/* Editor layout: 2-column grid */
@@ -364,12 +368,16 @@
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-md);
-		height: calc(100vh - 160px - 80px - var(--space-2xl));
+		align-items: stretch;
+		flex: 1;
+		min-height: 0;
 	}
 
 	.panel-score, .panel-tools {
 		overflow-y: auto;
-		height: 100%;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--bg-base);
 	}
 
 	@media (max-width: 900px) {

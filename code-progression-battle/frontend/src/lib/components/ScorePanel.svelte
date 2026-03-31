@@ -103,26 +103,15 @@
 	</div>
 
 	<div class="score-area">
-		{#if !scoreEditorValue.trim()}
-			<div class="empty-score">
-				<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.2">
-					<path d="M9 18V5l12-2v13" />
-					<circle cx="6" cy="18" r="3" />
-					<circle cx="18" cy="16" r="3" />
-				</svg>
-				<p>スコアはまだ空です。最初のコードを追加しよう!</p>
-			</div>
-		{:else}
-			<ScoreEditor
-				value={scoreEditorValue}
-				readonly={false}
-				{activeBarIndex}
-				displayMode={scoreDisplayMode}
-				musicalKey={thread.key}
-				pendingInsert={pendingInsertText}
-				onchange={onScoreChange}
-			/>
-		{/if}
+		<ScoreEditor
+			value={scoreEditorValue}
+			readonly={false}
+			{activeBarIndex}
+			displayMode={scoreDisplayMode}
+			musicalKey={thread.key}
+			pendingInsert={pendingInsertText}
+			onchange={onScoreChange}
+		/>
 	</div>
 
 	<div class="save-area">
