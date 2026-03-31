@@ -158,17 +158,19 @@
 	const handleDrop = (e: DragEvent) => {
 		e.preventDefault();
 		const chord = e.dataTransfer?.getData('text/plain')?.trim();
-		if (!chord) return;
+		if (!chord || readonly) return;
 
-		const textarea = e.target as HTMLTextAreaElement;
-		const pos = textarea.selectionStart ?? value.length;
-		const before = value.slice(0, pos);
-		const after = value.slice(pos);
-		// Insert chord with space padding
+		const textarea = textareaEl;
+		if (!textarea) return;
+		const pos = textarea.selectionStart ?? internalValue.length;
+		const before = internalValue.slice(0, pos);
+		const after = internalValue.slice(pos);
 		const spaceBefore = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n') && !before.endsWith('|') ? ' ' : '';
 		const spaceAfter = after.length > 0 && !after.startsWith(' ') && !after.startsWith('\n') && !after.startsWith('|') ? ' ' : '';
-		const newValue = before + spaceBefore + chord + spaceAfter + after;
-		onchange?.(newValue);
+		const newVal = before + spaceBefore + chord + spaceAfter + after;
+		internalValue = newVal;
+		textarea.value = newVal;
+		onchange?.(newVal);
 	};
 
 	// ── Double-click chord preview ──

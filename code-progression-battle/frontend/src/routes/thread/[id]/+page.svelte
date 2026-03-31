@@ -620,7 +620,12 @@
 							</svg>
 							<span>五度圏</span>
 						</div>
-						<CircleOfFifths currentKey={thread.key} />
+						<CircleOfFifths currentKey={thread.key} onSelect={(chord) => {
+						if (scoreReadonly) return;
+						scoreEditorValue = scoreEditorValue
+							? scoreEditorValue + ' ' + chord
+							: chord;
+					}} />
 					</div>
 
 					<div class="tool-section tool-section--collapsible">

@@ -371,9 +371,9 @@
 			ベース音を選択してください
 		</div>
 	{:else if selectedRoot}
-		<div class="cof-drag-hint">
-			ドラッグしてエディタに挿入
-		</div>
+		<button class="cof-insert-btn" onclick={() => { onSelect?.(currentChordName); }}>
+			{currentChordName} をエディタに追加
+		</button>
 	{/if}
 </div>
 
@@ -523,10 +523,20 @@
 		50% { opacity: 0.5; }
 	}
 
-	.cof-drag-hint {
+	.cof-insert-btn {
 		font-family: var(--font-mono);
-		font-size: 0.72rem;
-		color: var(--text-muted);
-		font-style: italic;
+		font-size: 0.78rem;
+		font-weight: 600;
+		padding: 6px 16px;
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-md);
+		background: rgba(167, 139, 250, 0.15);
+		color: var(--accent-primary);
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.cof-insert-btn:hover {
+		background: rgba(167, 139, 250, 0.3);
 	}
 </style>
