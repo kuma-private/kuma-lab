@@ -179,7 +179,15 @@
 
 	// Settings update
 	const handleUpdateSettings = async (data: { key?: string; timeSignature?: string; bpm?: number }) => {
-		await store.updateSettings(threadId, data);
+		const thread = store.currentThread;
+		if (!thread) return;
+		// Always send all fields (backend requires all)
+		const fullData = {
+			key: data.key ?? thread.key,
+			timeSignature: data.timeSignature ?? thread.timeSignature,
+			bpm: data.bpm ?? thread.bpm,
+		};
+		await store.updateSettings(threadId, fullData);
 	};
 
 	// AI Review: extract from latest history

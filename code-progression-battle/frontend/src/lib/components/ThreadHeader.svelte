@@ -52,13 +52,24 @@
 	};
 
 	const startEditBpm = () => {
-		editBpm = thread.bpm;
 		editingBpm = true;
+		// Set initial value after DOM renders
+		requestAnimationFrame(() => {
+			if (bpmInputEl) {
+				bpmInputEl.value = String(thread.bpm);
+				bpmInputEl.focus();
+				bpmInputEl.select();
+			}
+		});
 	};
 
+	let bpmInputEl: HTMLInputElement;
+
 	const saveBpm = () => {
+		// Read from input ref before it gets removed
+		const val = bpmInputEl ? Number(bpmInputEl.value) : editBpm;
+		const clamped = Math.max(40, Math.min(300, val || thread.bpm));
 		editingBpm = false;
-		const clamped = Math.max(40, Math.min(300, editBpm));
 		if (clamped !== thread.bpm) {
 			onUpdateSettings({ bpm: clamped });
 		}
@@ -126,13 +137,11 @@
 			{#if editingBpm}
 				<div class="inline-edit-row">
 					<input
+						bind:this={bpmInputEl}
 						class="inline-input"
 						type="number"
 						min="40"
 						max="300"
-						value={editBpm}
-						oninput={(e) => { editBpm = Number(e.currentTarget.value); }}
-						onblur={saveBpm}
 						onkeydown={(e) => { if (e.key === 'Enter') saveBpm(); }}
 					/>
 					<button class="inline-save-btn" onclick={saveBpm}>OK</button>
