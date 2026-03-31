@@ -79,6 +79,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+		max-height: 200px;
+		overflow-y: auto;
 	}
 
 	.pattern-item {
