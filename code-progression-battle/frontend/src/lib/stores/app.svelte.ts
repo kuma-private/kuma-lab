@@ -1,9 +1,9 @@
 import * as api from '$lib/api';
-import type { Thread, ThreadSummary, UserInfo } from '$lib/api';
+import type { Thread, SaveHistory, UserInfo } from '$lib/api';
 
-export function createAppStore() {
+export const createAppStore = () => {
 	let user = $state<UserInfo | null>(null);
-	let threads = $state<ThreadSummary[]>([]);
+	let threads = $state<Thread[]>([]);
 	let currentThread = $state<Thread | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
@@ -16,17 +16,7 @@ export function createAppStore() {
 		get error() { return error; },
 		get loggedIn() { return user !== null; },
 
-		get isMyTurn() {
-			if (!user || !currentThread) return false;
-			return currentThread.currentTurn === user.sub;
-		},
-
-		get isPlayer() {
-			if (!user || !currentThread) return false;
-			return currentThread.createdBy === user.sub || currentThread.opponentId === user.sub;
-		},
-
-		async checkLogin() {
+		checkLogin: async () => {
 			try {
 				user = await api.getMe();
 			} catch {
@@ -34,7 +24,7 @@ export function createAppStore() {
 			}
 		},
 
-		async loadThreads() {
+		loadThreads: async () => {
 			loading = true;
 			error = null;
 			try {
@@ -46,7 +36,7 @@ export function createAppStore() {
 			}
 		},
 
-		async loadThread(id: string) {
+		loadThread: async (id: string) => {
 			loading = true;
 			error = null;
 			try {
@@ -62,7 +52,7 @@ export function createAppStore() {
 			}
 		},
 
-		async createThread(data: { title: string; key: string; timeSignature: string; bpm: number; opponentEmail: string }) {
+		createThread: async (data: { title: string }) => {
 			loading = true;
 			error = null;
 			try {
@@ -75,58 +65,48 @@ export function createAppStore() {
 			}
 		},
 
-		async joinThread(threadId: string) {
+		saveScore: async (threadId: string, data: { score: string; comment: string }) => {
 			error = null;
 			try {
-				await api.joinThread(threadId);
-				await this.loadThread(threadId);
+				await api.saveScore(threadId, data);
+				currentThread = await api.getThread(threadId);
 			} catch (e) {
-				error = e instanceof Error ? e.message : 'Failed to join';
+				error = e instanceof Error ? e.message : 'Failed to save score';
 			}
 		},
 
-		async submitTurn(threadId: string, action: string, lineNumber: number, chords: string, comment: string) {
+		updateSettings: async (threadId: string, data: { key?: string; timeSignature?: string; bpm?: number }) => {
 			error = null;
 			try {
-				await api.submitTurn(threadId, { action, lineNumber, chords, comment });
-				await this.loadThread(threadId);
+				await api.updateSettings(threadId, data);
+				currentThread = await api.getThread(threadId);
 			} catch (e) {
-				error = e instanceof Error ? e.message : 'Failed to submit turn';
+				error = e instanceof Error ? e.message : 'Failed to update settings';
 			}
 		},
 
-		async proposeFinish(threadId: string) {
+		requestReview: async (threadId: string) => {
 			error = null;
 			try {
-				await api.proposeFinish(threadId);
-				await this.loadThread(threadId);
+				await api.requestReview(threadId);
+				currentThread = await api.getThread(threadId);
 			} catch (e) {
-				error = e instanceof Error ? e.message : 'Failed to propose finish';
+				error = e instanceof Error ? e.message : 'Failed to request review';
 			}
 		},
 
-		async acceptFinish(threadId: string) {
+		loadHistory: async (threadId: string): Promise<SaveHistory[]> => {
 			error = null;
 			try {
-				await api.acceptFinish(threadId);
-				await this.loadThread(threadId);
+				return await api.getHistory(threadId);
 			} catch (e) {
-				error = e instanceof Error ? e.message : 'Failed to accept';
+				error = e instanceof Error ? e.message : 'Failed to load history';
+				return [];
 			}
 		},
 
-		async rejectFinish(threadId: string) {
-			error = null;
-			try {
-				await api.rejectFinish(threadId);
-				await this.loadThread(threadId);
-			} catch (e) {
-				error = e instanceof Error ? e.message : 'Failed to reject';
-			}
-		},
-
-		clearError() {
+		clearError: () => {
 			error = null;
 		}
 	};
-}
+};

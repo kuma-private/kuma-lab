@@ -3,43 +3,83 @@
 
 	interface Props {
 		thread: Thread;
-		logCount: number;
-		statusLabel: string;
-		statusType: string;
-		isMyTurnGlow: boolean;
-		canAct: boolean;
-		isPlayer: boolean;
-		isOpponentFinishProposal: boolean;
-		opponentName: string;
 		drawerOpen: boolean;
 		error: string | null;
 		onOpenLog: () => void;
-		onProposeFinish: () => void;
 		onExport: () => void;
-		onJoin: () => void;
-		onAcceptFinish: () => void;
-		onRejectFinish: () => void;
+		onUpdateSettings: (data: { key?: string; timeSignature?: string; bpm?: number }) => void;
 	}
 
 	let {
 		thread,
-		logCount,
-		statusLabel,
-		statusType,
-		isMyTurnGlow,
-		canAct,
-		isPlayer,
-		isOpponentFinishProposal,
-		opponentName,
 		drawerOpen,
 		error,
 		onOpenLog,
-		onProposeFinish,
 		onExport,
-		onJoin,
-		onAcceptFinish,
-		onRejectFinish,
+		onUpdateSettings,
 	}: Props = $props();
+
+	// Inline edit states
+	let editingKey = $state(false);
+	let editingBpm = $state(false);
+	let editingTimeSig = $state(false);
+
+	let editKey = $state('');
+	let editBpm = $state(0);
+	let editTimeSigTop = $state(4);
+	let editTimeSigBottom = $state(4);
+
+	const keys = ['C Major', 'C Minor', 'C# Major', 'C# Minor', 'Db Major', 'Db Minor',
+		'D Major', 'D Minor', 'D# Major', 'D# Minor', 'Eb Major', 'Eb Minor',
+		'E Major', 'E Minor', 'F Major', 'F Minor', 'F# Major', 'F# Minor',
+		'Gb Major', 'Gb Minor', 'G Major', 'G Minor', 'G# Major', 'G# Minor',
+		'Ab Major', 'Ab Minor', 'A Major', 'A Minor', 'A# Major', 'A# Minor',
+		'Bb Major', 'Bb Minor', 'B Major', 'B Minor',
+		'C Dorian', 'D Dorian', 'E Dorian', 'F Dorian', 'G Dorian', 'A Dorian', 'B Dorian',
+		'C Mixolydian', 'D Mixolydian', 'E Mixolydian', 'F Mixolydian', 'G Mixolydian', 'A Mixolydian', 'B Mixolydian'];
+	const timeSigOptions = [2, 3, 4, 5, 6, 7];
+
+	const startEditKey = () => {
+		editKey = thread.key;
+		editingKey = true;
+	};
+
+	const saveKey = () => {
+		editingKey = false;
+		if (editKey !== thread.key) {
+			onUpdateSettings({ key: editKey });
+		}
+	};
+
+	const startEditBpm = () => {
+		editBpm = thread.bpm;
+		editingBpm = true;
+	};
+
+	const saveBpm = () => {
+		editingBpm = false;
+		const clamped = Math.max(40, Math.min(300, editBpm));
+		if (clamped !== thread.bpm) {
+			onUpdateSettings({ bpm: clamped });
+		}
+	};
+
+	const startEditTimeSig = () => {
+		const parts = thread.timeSignature.split('/').map(Number);
+		editTimeSigTop = parts[0] || 4;
+		editTimeSigBottom = parts[1] || 4;
+		editingTimeSig = true;
+	};
+
+	const saveTimeSig = () => {
+		editingTimeSig = false;
+		const newTs = `${editTimeSigTop}/${editTimeSigBottom}`;
+		if (newTs !== thread.timeSignature) {
+			onUpdateSettings({ timeSignature: newTs });
+		}
+	};
+
+	const memberCount = $derived(thread.members?.length ?? 0);
 </script>
 
 <header class="thread-header">
@@ -52,63 +92,70 @@
 	<div class="thread-info">
 		<h1 class="thread-title">{thread.title}</h1>
 		<div class="thread-meta">
-			<span class="badge">Key: {thread.key}</span>
-			<span class="badge">{thread.timeSignature}</span>
-			<span class="badge">BPM {thread.bpm}</span>
-			<span class="badge badge-turn">Turn {thread.turnCount}</span>
+			<!-- Key badge: click to edit -->
+			{#if editingKey}
+				<select class="inline-select" value={editKey} onchange={(e) => { editKey = e.currentTarget.value; }} onblur={saveKey}>
+					{#each keys as k}
+						<option value={k}>{k}</option>
+					{/each}
+				</select>
+			{:else}
+				<button class="badge badge-editable" onclick={startEditKey} title="クリックして変更">Key: {thread.key}</button>
+			{/if}
+
+			<!-- Time signature badge: click to edit -->
+			{#if editingTimeSig}
+				<div class="inline-edit-row">
+					<select class="inline-select inline-select--sm" value={editTimeSigTop} onchange={(e) => { editTimeSigTop = Number(e.currentTarget.value); }}>
+						{#each timeSigOptions as n}
+							<option value={n}>{n}</option>
+						{/each}
+					</select>
+					<span class="ts-slash">/</span>
+					<select class="inline-select inline-select--sm" value={editTimeSigBottom} onchange={(e) => { editTimeSigBottom = Number(e.currentTarget.value); }} onblur={saveTimeSig}>
+						<option value={4}>4</option>
+						<option value={8}>8</option>
+					</select>
+					<button class="inline-save-btn" onclick={saveTimeSig}>OK</button>
+				</div>
+			{:else}
+				<button class="badge badge-editable" onclick={startEditTimeSig} title="クリックして変更">{thread.timeSignature}</button>
+			{/if}
+
+			<!-- BPM badge: click to edit -->
+			{#if editingBpm}
+				<div class="inline-edit-row">
+					<input
+						class="inline-input"
+						type="number"
+						min="40"
+						max="300"
+						value={editBpm}
+						oninput={(e) => { editBpm = Number(e.currentTarget.value); }}
+						onblur={saveBpm}
+						onkeydown={(e) => { if (e.key === 'Enter') saveBpm(); }}
+					/>
+					<button class="inline-save-btn" onclick={saveBpm}>OK</button>
+				</div>
+			{:else}
+				<button class="badge badge-editable" onclick={startEditBpm} title="クリックして変更">BPM {thread.bpm}</button>
+			{/if}
+
+			{#if memberCount > 0}
+				<span class="badge badge-members">{memberCount}人参加中</span>
+			{/if}
 		</div>
 	</div>
 	<div class="header-actions">
-		<button class="btn-log" onclick={onOpenLog} title="セッションログ">
+		<button class="btn-log" onclick={onOpenLog} title="保存履歴">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
 			</svg>
-			ログ
-			{#if logCount > 0}
-				<span class="log-badge">{logCount}</span>
-			{/if}
+			履歴
 		</button>
-		{#if canAct}
-			<button class="btn-propose" onclick={onProposeFinish} title="Propose to finish">
-				完成を提案
-			</button>
-		{/if}
 		<button class="btn btn-ghost" onclick={onExport}>エクスポート</button>
 	</div>
 </header>
-
-<!-- Status bar -->
-<div class="status-bar status-{statusType}" class:status-glow={isMyTurnGlow}>
-	<div class="status-left">
-		{#if isMyTurnGlow}
-			<svg class="status-note" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-				<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-			</svg>
-		{/if}
-		<span class="status-label">{statusLabel}</span>
-	</div>
-	<span class="status-players">
-		{thread.createdByName} vs {thread.opponentName || '???'}
-	</span>
-</div>
-
-<!-- Join button for invited player -->
-{#if thread.status === 'waiting' && !isPlayer}
-	<div class="join-section">
-		<button class="btn btn-primary" onclick={onJoin}>このセッションに参加!</button>
-	</div>
-{/if}
-
-<!-- Finish proposal response (inline when drawer closed) -->
-{#if isOpponentFinishProposal && isPlayer && !drawerOpen}
-	<div class="finish-response">
-		<span class="finish-text">@{opponentName} がスコアの完成を提案しています。終了しますか?</span>
-		<div class="finish-buttons">
-			<button class="btn btn-primary btn-sm" onclick={onAcceptFinish}>承認</button>
-			<button class="btn btn-secondary btn-sm" onclick={onRejectFinish}>却下</button>
-		</div>
-	</div>
-{/if}
 
 {#if error}
 	<div class="error-banner">{error}</div>
@@ -153,10 +200,79 @@
 		flex-wrap: wrap;
 	}
 
-	.badge-turn {
+	.badge-editable {
+		cursor: pointer;
+		transition: all 0.15s;
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		padding: 2px 10px;
+		font-size: 0.78rem;
+		font-weight: 500;
+		color: var(--text-secondary);
+		font-family: var(--font-mono);
+	}
+
+	.badge-editable:hover {
+		border-color: var(--accent-primary);
+		color: var(--accent-primary);
+		background: rgba(167, 139, 250, 0.08);
+	}
+
+	.badge-members {
+		background: rgba(52, 211, 153, 0.1);
+		border: 1px solid rgba(52, 211, 153, 0.3);
+		border-radius: var(--radius-sm);
+		padding: 2px 10px;
+		font-size: 0.72rem;
+		color: var(--success);
+	}
+
+	.inline-edit-row {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.inline-select {
+		padding: 2px 6px;
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-sm);
+		background: var(--bg-base);
+		color: var(--text-primary);
+		font-size: 0.78rem;
+		font-family: var(--font-mono);
+	}
+
+	.inline-select--sm {
+		width: 50px;
+	}
+
+	.ts-slash {
+		color: var(--text-muted);
+		font-size: 0.85rem;
+	}
+
+	.inline-input {
+		width: 70px;
+		padding: 2px 6px;
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-sm);
+		background: var(--bg-base);
+		color: var(--text-primary);
+		font-size: 0.78rem;
+		font-family: var(--font-mono);
+	}
+
+	.inline-save-btn {
+		padding: 2px 8px;
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-sm);
 		background: var(--accent-primary);
 		color: #fff;
-		border-color: var(--accent-primary);
+		font-size: 0.7rem;
+		font-weight: 600;
+		cursor: pointer;
 	}
 
 	.header-actions {
@@ -187,131 +303,6 @@
 		border-color: var(--accent-primary);
 		color: var(--accent-primary);
 		background: rgba(167, 139, 250, 0.1);
-	}
-
-	.log-badge {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 18px;
-		height: 18px;
-		padding: 0 5px;
-		border-radius: 9px;
-		background: var(--accent-primary);
-		color: #fff;
-		font-size: 0.65rem;
-		font-weight: 700;
-		line-height: 1;
-	}
-
-	.btn-propose {
-		padding: 4px 12px;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		background: transparent;
-		color: var(--text-muted);
-		font-size: 0.75rem;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.btn-propose:hover {
-		border-color: var(--accent-warm);
-		color: var(--accent-warm);
-	}
-
-	/* Status bar */
-	.status-bar {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: var(--space-md) var(--space-lg);
-		border-radius: var(--radius-md);
-		margin-bottom: var(--space-lg);
-		font-size: 0.85rem;
-		transition: all 0.3s ease;
-	}
-
-	.status-left {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.status-myturn {
-		background: rgba(167, 139, 250, 0.15);
-		border: 1px solid var(--accent-primary);
-		color: var(--accent-primary);
-	}
-
-	.status-glow {
-		box-shadow: 0 0 20px rgba(167, 139, 250, 0.3), 0 0 40px rgba(167, 139, 250, 0.1);
-		animation: glow-pulse 2s ease-in-out infinite;
-	}
-
-	@keyframes glow-pulse {
-		0%, 100% { box-shadow: 0 0 20px rgba(167, 139, 250, 0.3), 0 0 40px rgba(167, 139, 250, 0.1); }
-		50% { box-shadow: 0 0 30px rgba(167, 139, 250, 0.5), 0 0 60px rgba(167, 139, 250, 0.2); }
-	}
-
-	.status-note {
-		animation: note-bounce 1.5s ease-in-out infinite;
-		flex-shrink: 0;
-	}
-
-	@keyframes note-bounce {
-		0%, 100% { transform: translateY(0) rotate(0deg); }
-		25% { transform: translateY(-2px) rotate(-5deg); }
-		75% { transform: translateY(1px) rotate(3deg); }
-	}
-
-	.status-waiting {
-		background: rgba(96, 165, 250, 0.1);
-		border: 1px solid var(--border-default);
-		color: var(--text-secondary);
-	}
-
-	.status-completed {
-		background: linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(167, 139, 250, 0.08));
-		border: 1px solid var(--success);
-		color: var(--success);
-	}
-
-	.status-label { font-weight: 600; }
-	.status-players { font-size: 0.8rem; color: var(--text-muted); }
-
-	.join-section {
-		text-align: center;
-		padding: var(--space-lg);
-	}
-
-	/* Finish response (inline) */
-	.finish-response {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-lg);
-		padding: var(--space-md) var(--space-lg);
-		border-radius: var(--radius-md);
-		margin-bottom: var(--space-lg);
-		background: rgba(251, 191, 36, 0.1);
-		border: 1px solid rgba(251, 191, 36, 0.3);
-	}
-
-	.finish-text {
-		color: var(--accent-warm);
-		font-weight: 500;
-		font-size: 0.85rem;
-	}
-
-	.finish-buttons {
-		display: flex;
-		gap: var(--space-xs);
-	}
-
-	.btn-sm {
-		padding: 4px 12px;
-		font-size: 0.8rem;
 	}
 
 	.error-banner {

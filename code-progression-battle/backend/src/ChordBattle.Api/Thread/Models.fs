@@ -4,21 +4,10 @@ open System
 
 module Models =
 
-    type Line =
-        { LineNumber: int
-          Chords: string
-          AddedBy: string
-          AddedByName: string
-          LastEditedBy: string }
-
-    type TurnAction =
-        { TurnNumber: int
-          UserId: string
+    type SaveHistory =
+        { UserId: string
           UserName: string
-          Action: string
-          LineNumber: int
-          Chords: string
-          PreviousChords: string
+          Score: string
           Comment: string
           AiComment: string
           AiScores: string
@@ -32,26 +21,15 @@ module Models =
           Bpm: int
           CreatedBy: string
           CreatedByName: string
-          OpponentId: string
-          OpponentName: string
-          OpponentEmail: string
           CreatedAt: DateTime
-          Status: string
-          CurrentTurn: string
-          TurnCount: int
-          FinishProposedBy: string
-          Lines: Line list
-          History: TurnAction list }
+          Score: string
+          LastEditedBy: string
+          LastEditedAt: DateTime
+          Members: string list
+          History: SaveHistory list }
 
-    type CreateThreadRequest =
-        { title: string
-          key: string
-          timeSignature: string
-          bpm: int
-          opponentEmail: string }
+    type CreateThreadRequest = { title: string }
 
-    type TurnRequest =
-        { action: string
-          lineNumber: int
-          chords: string
-          comment: string }
+    type SaveScoreRequest = { score: string; comment: string }
+
+    type UpdateSettingsRequest = { key: string; timeSignature: string; bpm: int }

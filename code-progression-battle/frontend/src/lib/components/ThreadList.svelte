@@ -1,12 +1,16 @@
 <script lang="ts">
-	import type { ThreadSummary } from '$lib/api';
+	import type { Thread } from '$lib/api';
 
-	let { threads }: { threads: ThreadSummary[] } = $props();
+	let { threads }: { threads: Thread[] } = $props();
 
-	function formatDate(iso: string): string {
-		const d = new Date(iso);
-		return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
-	}
+	const formatDate = (iso: string): string => {
+		try {
+			const d = new Date(iso);
+			return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+		} catch {
+			return '';
+		}
+	};
 </script>
 
 {#if threads.length === 0}
@@ -19,14 +23,14 @@
 			<a href="/thread/{thread.id}" class="card thread-card">
 				<div class="thread-header">
 					<h2 class="thread-title">{thread.title}</h2>
-					<span class="thread-date">{formatDate(thread.createdAt)}</span>
+					<span class="thread-date">{formatDate(thread.lastEditedAt)}</span>
 				</div>
 				<div class="thread-meta">
 					<span class="badge">Key: {thread.key}</span>
 					<span class="badge">{thread.timeSignature}</span>
 					<span class="badge">BPM {thread.bpm}</span>
 					<span class="thread-info">
-						@{thread.createdByName} &middot; {thread.postCount} posts
+						@{thread.createdByName} &middot; {thread.members?.length ?? 0}人
 					</span>
 				</div>
 			</a>

@@ -148,28 +148,3 @@ module AnthropicClient =
                     return Ok { Comment = text; ScoresJson = "" }
         }
 
-    let generateChords
-        (httpClient: HttpClient)
-        (apiKey: string)
-        (key: string)
-        (timeSignature: string)
-        (bpm: int)
-        (allLines: string list)
-        : Async<Result<string, string>> =
-
-        let systemPrompt =
-            "あなたは音楽制作のパートナーです。コード進行バトルで、相手のコード進行に続くコード進行を1行生成してください。\n"
-            + "rechord形式で出力: | Am7 | Dm7 | G7 | Cmaj7 |\n"
-            + "1行のみ（4小節程度）。前のコード進行との音楽的なつながりを意識。\n"
-            + "時にはテンションや転調で意外性を出す。コード名だけ出力（説明不要）。"
-
-        let scoreText =
-            allLines
-            |> List.mapi (fun i line -> $"  {i + 1}: {line}")
-            |> String.concat "\n"
-
-        let userMessage =
-            $"キー: {key}, 拍子: {timeSignature}, BPM: {bpm}\n"
-            + $"現在のスコア:\n{scoreText}"
-
-        callApi httpClient apiKey systemPrompt userMessage 100

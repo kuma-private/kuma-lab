@@ -96,31 +96,27 @@ module Program =
         app.MapGet("/api/threads", Func<HttpContext, Task>(requireLogin (ThreadHandlers.listThreads repo)))
         |> ignore
 
-        app.MapPost("/api/threads", Func<HttpContext, Task>(requireLogin (withRateLimit (ThreadHandlers.createThread repo config))))
+        app.MapPost("/api/threads", Func<HttpContext, Task>(requireLogin (withRateLimit (ThreadHandlers.createThread repo))))
         |> ignore
 
         app.MapGet("/api/threads/{id}", Func<string, HttpContext, Task>(fun id ctx ->
             (requireLogin (ThreadHandlers.getThread repo id)) ctx))
         |> ignore
 
-        app.MapPost("/api/threads/{id}/join", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.joinThread repo id)) ctx))
+        app.MapPut("/api/threads/{id}", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (withRateLimit (ThreadHandlers.saveScore repo id))) ctx))
         |> ignore
 
-        app.MapPost("/api/threads/{id}/turn", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (withRateLimit (ThreadHandlers.executeTurn repo config id))) ctx))
+        app.MapPut("/api/threads/{id}/settings", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (ThreadHandlers.updateSettings repo id)) ctx))
         |> ignore
 
-        app.MapPost("/api/threads/{id}/propose-finish", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.proposeFinish repo id)) ctx))
+        app.MapPost("/api/threads/{id}/review", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (withRateLimit (ThreadHandlers.reviewScore repo config id))) ctx))
         |> ignore
 
-        app.MapPost("/api/threads/{id}/accept-finish", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.acceptFinish repo id)) ctx))
-        |> ignore
-
-        app.MapPost("/api/threads/{id}/reject-finish", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.rejectFinish repo id)) ctx))
+        app.MapGet("/api/threads/{id}/history", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (ThreadHandlers.getHistory repo id)) ctx))
         |> ignore
 
         app.MapGet("/api/threads/{id}/export", Func<string, HttpContext, Task>(fun id ctx ->

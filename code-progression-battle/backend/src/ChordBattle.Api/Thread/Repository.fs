@@ -38,68 +38,30 @@ module Repository =
                 return thread
             }
 
-        let joinThread (threadId: string) (opponentId: string) (opponentName: string) : Task<Thread option> =
+        let saveScore (threadId: string) (score: string) (history: SaveHistory) : Task<Thread option> =
             task {
                 match threads.TryGetValue(threadId) with
                 | true, thread ->
                     let updated =
                         { thread with
-                            OpponentId = opponentId
-                            OpponentName = opponentName
-                            Status = "active" }
+                            Score = score
+                            LastEditedBy = history.UserId
+                            LastEditedAt = history.CreatedAt
+                            History = thread.History @ [ history ] }
                     threads.[threadId] <- updated
                     return Some updated
                 | false, _ -> return None
             }
 
-        let executeTurn (threadId: string) (action: TurnAction) (updatedLines: Line list) (nextTurn: string) : Task<Thread option> =
+        let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) : Task<Thread option> =
             task {
                 match threads.TryGetValue(threadId) with
                 | true, thread ->
                     let updated =
                         { thread with
-                            Lines = updatedLines
-                            History = thread.History @ [ action ]
-                            CurrentTurn = nextTurn
-                            TurnCount = thread.TurnCount + 1 }
-                    threads.[threadId] <- updated
-                    return Some updated
-                | false, _ -> return None
-            }
-
-        let proposeFinish (threadId: string) (userId: string) (nextTurn: string) : Task<Thread option> =
-            task {
-                match threads.TryGetValue(threadId) with
-                | true, thread ->
-                    let updated =
-                        { thread with
-                            Status = "finish_proposed"
-                            FinishProposedBy = userId
-                            CurrentTurn = nextTurn }
-                    threads.[threadId] <- updated
-                    return Some updated
-                | false, _ -> return None
-            }
-
-        let acceptFinish (threadId: string) : Task<Thread option> =
-            task {
-                match threads.TryGetValue(threadId) with
-                | true, thread ->
-                    let updated = { thread with Status = "completed" }
-                    threads.[threadId] <- updated
-                    return Some updated
-                | false, _ -> return None
-            }
-
-        let rejectFinish (threadId: string) (rejecterTurn: string) : Task<Thread option> =
-            task {
-                match threads.TryGetValue(threadId) with
-                | true, thread ->
-                    let updated =
-                        { thread with
-                            Status = "active"
-                            FinishProposedBy = ""
-                            CurrentTurn = rejecterTurn }
+                            Key = key
+                            TimeSignature = timeSignature
+                            Bpm = bpm }
                     threads.[threadId] <- updated
                     return Some updated
                 | false, _ -> return None
@@ -115,22 +77,14 @@ module Repository =
                 FirestoreDb.Create(projectId)
             )
 
-        let private toLine (dict: System.Collections.Generic.IDictionary<string, obj>) : Line =
-            { LineNumber = dict.["lineNumber"] :?> int64 |> int
-              Chords = dict.["chords"] :?> string
-              AddedBy = dict.["addedBy"] :?> string
-              AddedByName = dict.["addedByName"] :?> string
-              LastEditedBy = dict.["lastEditedBy"] :?> string }
-
-        let private toTurnAction (dict: System.Collections.Generic.IDictionary<string, obj>) : TurnAction =
-            { TurnNumber = dict.["turnNumber"] :?> int64 |> int
-              UserId = dict.["userId"] :?> string
+        let private toSaveHistory (dict: System.Collections.Generic.IDictionary<string, obj>) : SaveHistory =
+            { UserId = dict.["userId"] :?> string
               UserName = dict.["userName"] :?> string
-              Action = dict.["action"] :?> string
-              LineNumber = dict.["lineNumber"] :?> int64 |> int
-              Chords = dict.["chords"] :?> string
-              PreviousChords = dict.["previousChords"] :?> string
-              Comment = dict.["comment"] :?> string
+              Score = dict.["score"] :?> string
+              Comment =
+                  match dict.TryGetValue("comment") with
+                  | true, v when v <> null -> v :?> string
+                  | _ -> ""
               AiComment =
                   match dict.TryGetValue("aiComment") with
                   | true, v when v <> null -> v :?> string
@@ -145,21 +99,21 @@ module Repository =
                   | _ -> DateTime.UtcNow }
 
         let private toThread (doc: DocumentSnapshot) : Thread =
-            let lines =
-                match doc.GetValue<obj>("lines") with
-                | :? System.Collections.IList as list ->
-                    list
-                    |> Seq.cast<System.Collections.Generic.IDictionary<string, obj>>
-                    |> Seq.map toLine
-                    |> Seq.toList
-                | _ -> []
-
             let history =
                 match doc.GetValue<obj>("history") with
                 | :? System.Collections.IList as list ->
                     list
                     |> Seq.cast<System.Collections.Generic.IDictionary<string, obj>>
-                    |> Seq.map toTurnAction
+                    |> Seq.map toSaveHistory
+                    |> Seq.toList
+                | _ -> []
+
+            let members =
+                match doc.GetValue<obj>("members") with
+                | :? System.Collections.IList as list ->
+                    list
+                    |> Seq.cast<obj>
+                    |> Seq.map (fun o -> o :?> string)
                     |> Seq.toList
                 | _ -> []
 
@@ -170,15 +124,20 @@ module Repository =
               Bpm = doc.GetValue<int>("bpm")
               CreatedBy = doc.GetValue<string>("createdBy")
               CreatedByName = doc.GetValue<string>("createdByName")
-              OpponentId = doc.GetValue<string>("opponentId")
-              OpponentName = doc.GetValue<string>("opponentName")
-              OpponentEmail = doc.GetValue<string>("opponentEmail")
               CreatedAt = doc.GetValue<Timestamp>("createdAt").ToDateTime()
-              Status = doc.GetValue<string>("status")
-              CurrentTurn = doc.GetValue<string>("currentTurn")
-              TurnCount = doc.GetValue<int>("turnCount")
-              FinishProposedBy = doc.GetValue<string>("finishProposedBy")
-              Lines = lines
+              Score =
+                  match doc.TryGetValue<string>("score") with
+                  | true, v -> v
+                  | _ -> ""
+              LastEditedBy =
+                  match doc.TryGetValue<string>("lastEditedBy") with
+                  | true, v -> v
+                  | _ -> ""
+              LastEditedAt =
+                  match doc.TryGetValue<Timestamp>("lastEditedAt") with
+                  | true, v -> v.ToDateTime()
+                  | _ -> DateTime.MinValue
+              Members = members
               History = history }
 
         let getAll () : Task<Thread list> =
@@ -216,15 +175,11 @@ module Repository =
                               "bpm", thread.Bpm :> obj
                               "createdBy", thread.CreatedBy :> obj
                               "createdByName", thread.CreatedByName :> obj
-                              "opponentId", thread.OpponentId :> obj
-                              "opponentName", thread.OpponentName :> obj
-                              "opponentEmail", thread.OpponentEmail :> obj
                               "createdAt", Timestamp.FromDateTime(thread.CreatedAt.ToUniversalTime()) :> obj
-                              "status", thread.Status :> obj
-                              "currentTurn", thread.CurrentTurn :> obj
-                              "turnCount", thread.TurnCount :> obj
-                              "finishProposedBy", thread.FinishProposedBy :> obj
-                              "lines", System.Collections.Generic.List<obj>() :> obj
+                              "score", thread.Score :> obj
+                              "lastEditedBy", thread.LastEditedBy :> obj
+                              "lastEditedAt", Timestamp.FromDateTime(thread.LastEditedAt.ToUniversalTime()) :> obj
+                              "members", System.Collections.Generic.List<obj>(thread.Members |> List.map (fun m -> m :> obj)) :> obj
                               "history", System.Collections.Generic.List<obj>() :> obj ]
                     )
 
@@ -232,30 +187,16 @@ module Repository =
                 return thread
             }
 
-        let private lineToDict (line: Line) : System.Collections.Generic.Dictionary<string, obj> =
+        let private saveHistoryToDict (h: SaveHistory) : System.Collections.Generic.Dictionary<string, obj> =
             System.Collections.Generic.Dictionary<string, obj>(
                 dict
-                    [ "lineNumber", line.LineNumber :> obj
-                      "chords", line.Chords :> obj
-                      "addedBy", line.AddedBy :> obj
-                      "addedByName", line.AddedByName :> obj
-                      "lastEditedBy", line.LastEditedBy :> obj ]
-            )
-
-        let private turnActionToDict (a: TurnAction) : System.Collections.Generic.Dictionary<string, obj> =
-            System.Collections.Generic.Dictionary<string, obj>(
-                dict
-                    [ "turnNumber", a.TurnNumber :> obj
-                      "userId", a.UserId :> obj
-                      "userName", a.UserName :> obj
-                      "action", a.Action :> obj
-                      "lineNumber", a.LineNumber :> obj
-                      "chords", a.Chords :> obj
-                      "previousChords", a.PreviousChords :> obj
-                      "comment", a.Comment :> obj
-                      "aiComment", a.AiComment :> obj
-                      "aiScores", a.AiScores :> obj
-                      "createdAt", Timestamp.FromDateTime(a.CreatedAt.ToUniversalTime()) :> obj ]
+                    [ "userId", h.UserId :> obj
+                      "userName", h.UserName :> obj
+                      "score", h.Score :> obj
+                      "comment", h.Comment :> obj
+                      "aiComment", h.AiComment :> obj
+                      "aiScores", h.AiScores :> obj
+                      "createdAt", Timestamp.FromDateTime(h.CreatedAt.ToUniversalTime()) :> obj ]
             )
 
         let private updateFields (docRef: DocumentReference) (updates: (string * obj) list) =
@@ -270,17 +211,13 @@ module Repository =
         let update (thread: Thread) : Task<Thread> =
             task {
                 let docRef = db.Value.Collection("threads").Document(thread.Id)
-                let lineDicts = thread.Lines |> List.map (fun l -> lineToDict l :> obj)
-                let histDicts = thread.History |> List.map (fun a -> turnActionToDict a :> obj)
+                let histDicts = thread.History |> List.map (fun h -> saveHistoryToDict h :> obj)
                 do! updateFields docRef [
-                    "lines", (System.Collections.Generic.List<obj>(lineDicts) :> obj)
+                    "score", thread.Score :> obj
+                    "lastEditedBy", thread.LastEditedBy :> obj
+                    "lastEditedAt", Timestamp.FromDateTime(thread.LastEditedAt.ToUniversalTime()) :> obj
+                    "members", System.Collections.Generic.List<obj>(thread.Members |> List.map (fun m -> m :> obj)) :> obj
                     "history", (System.Collections.Generic.List<obj>(histDicts) :> obj)
-                    "status", thread.Status :> obj
-                    "currentTurn", thread.CurrentTurn :> obj
-                    "turnCount", thread.TurnCount :> obj
-                    "finishProposedBy", thread.FinishProposedBy :> obj
-                    "opponentId", thread.OpponentId :> obj
-                    "opponentName", thread.OpponentName :> obj
                 ]
                 return thread
             }
@@ -295,49 +232,28 @@ module Repository =
                     return Some result
             }
 
-        let joinThread (threadId: string) (opponentId: string) (opponentName: string) : Task<Thread option> =
+        let saveScore (threadId: string) (score: string) (history: SaveHistory) : Task<Thread option> =
             updateThread threadId (fun thread ->
                 { thread with
-                    OpponentId = opponentId
-                    OpponentName = opponentName
-                    Status = "active" })
+                    Score = score
+                    LastEditedBy = history.UserId
+                    LastEditedAt = history.CreatedAt
+                    History = thread.History @ [ history ] })
 
-        let executeTurn (threadId: string) (action: TurnAction) (updatedLines: Line list) (nextTurn: string) : Task<Thread option> =
+        let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) : Task<Thread option> =
             updateThread threadId (fun thread ->
                 { thread with
-                    Lines = updatedLines
-                    History = thread.History @ [ action ]
-                    CurrentTurn = nextTurn
-                    TurnCount = thread.TurnCount + 1 })
-
-        let proposeFinish (threadId: string) (userId: string) (nextTurn: string) : Task<Thread option> =
-            updateThread threadId (fun thread ->
-                { thread with
-                    Status = "finish_proposed"
-                    FinishProposedBy = userId
-                    CurrentTurn = nextTurn })
-
-        let acceptFinish (threadId: string) : Task<Thread option> =
-            updateThread threadId (fun thread ->
-                { thread with Status = "completed" })
-
-        let rejectFinish (threadId: string) (rejecterTurn: string) : Task<Thread option> =
-            updateThread threadId (fun thread ->
-                { thread with
-                    Status = "active"
-                    FinishProposedBy = ""
-                    CurrentTurn = rejecterTurn })
+                    Key = key
+                    TimeSignature = timeSignature
+                    Bpm = bpm })
 
     type IThreadRepository =
         { GetAll: unit -> Task<Thread list>
           GetById: string -> Task<Thread option>
           Create: Thread -> Task<Thread>
           Update: Thread -> Task<Thread>
-          JoinThread: string -> string -> string -> Task<Thread option>
-          ExecuteTurn: string -> TurnAction -> Line list -> string -> Task<Thread option>
-          ProposeFinish: string -> string -> string -> Task<Thread option>
-          AcceptFinish: string -> Task<Thread option>
-          RejectFinish: string -> string -> Task<Thread option> }
+          SaveScore: string -> string -> SaveHistory -> Task<Thread option>
+          UpdateSettings: string -> string -> string -> int -> Task<Thread option> }
 
     let create (firestoreProjectId: string) : IThreadRepository =
         if String.IsNullOrEmpty(firestoreProjectId) then
@@ -345,18 +261,12 @@ module Repository =
               GetById = InMemory.getById
               Create = InMemory.create
               Update = InMemory.update
-              JoinThread = InMemory.joinThread
-              ExecuteTurn = InMemory.executeTurn
-              ProposeFinish = InMemory.proposeFinish
-              AcceptFinish = InMemory.acceptFinish
-              RejectFinish = InMemory.rejectFinish }
+              SaveScore = InMemory.saveScore
+              UpdateSettings = InMemory.updateSettings }
         else
             { GetAll = Firestore.getAll
               GetById = Firestore.getById
               Create = Firestore.create
               Update = Firestore.update
-              JoinThread = Firestore.joinThread
-              ExecuteTurn = Firestore.executeTurn
-              ProposeFinish = Firestore.proposeFinish
-              AcceptFinish = Firestore.acceptFinish
-              RejectFinish = Firestore.rejectFinish }
+              SaveScore = Firestore.saveScore
+              UpdateSettings = Firestore.updateSettings }

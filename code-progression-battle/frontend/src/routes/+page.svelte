@@ -2,15 +2,20 @@
 	import { onMount } from 'svelte';
 	import { createAppStore } from '$lib/stores/app.svelte';
 	import ThreadList from '$lib/components/ThreadList.svelte';
-	import CreateThreadModal from '$lib/components/CreateThreadModal.svelte';
 
 	const store = createAppStore();
-	let showCreateModal = $state(false);
 
 	onMount(() => {
 		store.checkLogin();
 		store.loadThreads();
 	});
+
+	const handleNewSession = async () => {
+		const result = await store.createThread({ title: '新しいセッション' });
+		if (result) {
+			window.location.href = `/thread/${result.id}`;
+		}
+	};
 </script>
 
 <svelte:head>
@@ -34,7 +39,7 @@
 
 	<main class="main">
 		<div class="toolbar">
-			<button class="btn btn-primary" onclick={() => (showCreateModal = true)}>
+			<button class="btn btn-primary" onclick={handleNewSession}>
 				+ 新しいセッション
 			</button>
 		</div>
@@ -50,19 +55,6 @@
 		{/if}
 	</main>
 </div>
-
-{#if showCreateModal}
-	<CreateThreadModal
-		onClose={() => (showCreateModal = false)}
-		onCreate={async (data) => {
-			const result = await store.createThread(data);
-			if (result) {
-				showCreateModal = false;
-				window.location.href = `/thread/${result.id}`;
-			}
-		}}
-	/>
-{/if}
 
 <style>
 	.page {

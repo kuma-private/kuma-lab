@@ -1,39 +1,3 @@
-export interface Line {
-	lineNumber: number;
-	chords: string;
-	addedBy: string;
-	addedByName: string;
-	lastEditedBy: string;
-}
-
-export interface TurnAction {
-	turnNumber: number;
-	userId: string;
-	userName: string;
-	action: 'add' | 'edit' | 'delete';
-	lineNumber: number;
-	chords: string;
-	previousChords: string;
-	comment: string;
-	aiComment: string;
-	aiScores: string;
-	createdAt: string;
-}
-
-export interface ThreadSummary {
-	id: string;
-	title: string;
-	key: string;
-	timeSignature: string;
-	bpm: number;
-	createdByName: string;
-	createdAt: string;
-	status: string;
-	currentTurn: string;
-	lineCount: number;
-	turnCount: number;
-}
-
 export interface Thread {
 	id: string;
 	title: string;
@@ -42,16 +6,20 @@ export interface Thread {
 	bpm: number;
 	createdBy: string;
 	createdByName: string;
-	opponentId: string;
-	opponentName: string;
-	opponentEmail: string;
+	score: string;
+	lastEditedBy: string;
+	lastEditedAt: string;
+	members: string[];
+}
+
+export interface SaveHistory {
+	userId: string;
+	userName: string;
+	score: string;
+	comment: string;
+	aiComment: string;
+	aiScores: string;
 	createdAt: string;
-	status: string;
-	currentTurn: string;
-	turnCount: number;
-	finishProposedBy: string;
-	lines: Line[];
-	history: TurnAction[];
 }
 
 export interface UserInfo {
@@ -60,7 +28,7 @@ export interface UserInfo {
 	sub: string;
 }
 
-async function apiFetch(url: string, options?: RequestInit) {
+const apiFetch = async (url: string, options?: RequestInit) => {
 	const res = await fetch(url, { credentials: 'include', ...options });
 	if (res.status === 401) throw new Error('LOGIN_REQUIRED');
 	if (!res.ok) {
@@ -68,71 +36,67 @@ async function apiFetch(url: string, options?: RequestInit) {
 		throw new Error(data.error || `Error ${res.status}`);
 	}
 	return res;
-}
+};
 
-export async function getMe(): Promise<UserInfo> {
+export const getMe = async (): Promise<UserInfo> => {
 	const res = await apiFetch('/auth/me');
 	return res.json();
-}
+};
 
-export async function getThreads(): Promise<ThreadSummary[]> {
+export const getThreads = async (): Promise<Thread[]> => {
 	const res = await apiFetch('/api/threads');
 	return res.json();
-}
+};
 
-export async function getThread(id: string): Promise<Thread> {
+export const getThread = async (id: string): Promise<Thread> => {
 	const res = await apiFetch(`/api/threads/${id}`);
 	return res.json();
-}
+};
 
-export async function createThread(data: {
-	title: string;
-	key: string;
-	timeSignature: string;
-	bpm: number;
-	opponentEmail: string;
-}): Promise<{ id: string }> {
+export const createThread = async (data: { title: string }): Promise<{ id: string }> => {
 	const res = await apiFetch('/api/threads', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(data)
 	});
 	return res.json();
-}
+};
 
-export async function joinThread(threadId: string): Promise<{ ok: boolean }> {
-	const res = await apiFetch(`/api/threads/${threadId}/join`, { method: 'POST' });
-	return res.json();
-}
-
-export async function submitTurn(
+export const saveScore = async (
 	threadId: string,
-	data: { action: string; lineNumber: number; chords: string; comment: string }
-): Promise<{ ok: boolean }> {
-	const res = await apiFetch(`/api/threads/${threadId}/turn`, {
+	data: { score: string; comment: string }
+): Promise<{ ok: boolean }> => {
+	const res = await apiFetch(`/api/threads/${threadId}/save`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(data)
 	});
 	return res.json();
-}
+};
 
-export async function proposeFinish(threadId: string): Promise<{ ok: boolean }> {
-	const res = await apiFetch(`/api/threads/${threadId}/propose-finish`, { method: 'POST' });
+export const updateSettings = async (
+	threadId: string,
+	data: { key?: string; timeSignature?: string; bpm?: number }
+): Promise<{ ok: boolean }> => {
+	const res = await apiFetch(`/api/threads/${threadId}/settings`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
 	return res.json();
-}
+};
 
-export async function acceptFinish(threadId: string): Promise<{ ok: boolean }> {
-	const res = await apiFetch(`/api/threads/${threadId}/accept-finish`, { method: 'POST' });
+export const requestReview = async (threadId: string): Promise<{ ok: boolean }> => {
+	const res = await apiFetch(`/api/threads/${threadId}/review`, { method: 'POST' });
 	return res.json();
-}
+};
 
-export async function rejectFinish(threadId: string): Promise<{ ok: boolean }> {
-	const res = await apiFetch(`/api/threads/${threadId}/reject-finish`, { method: 'POST' });
+export const getHistory = async (threadId: string): Promise<SaveHistory[]> => {
+	const res = await apiFetch(`/api/threads/${threadId}/history`);
 	return res.json();
-}
+};
 
-export async function exportThread(threadId: string): Promise<string> {
+export const exportThread = async (threadId: string): Promise<string> => {
 	const res = await apiFetch(`/api/threads/${threadId}/export`);
 	return res.text();
-}
+};

@@ -18,7 +18,7 @@ module ThreadHandlers =
 
     let private getUserInfo (ctx: HttpContext) =
         if devMode && (ctx.User = null || ctx.User.Identity = null || not ctx.User.Identity.IsAuthenticated) then
-            ("dev-user", "Dev User", "dev@example.com")
+            ("dev-user", "Dev User")
         else
             let userId =
                 ctx.User.FindFirst(ClaimTypes.NameIdentifier)
@@ -32,51 +32,11 @@ module ThreadHandlers =
                 |> Option.map (fun c -> c.Value)
                 |> Option.defaultValue "Anonymous"
 
-            let email =
-                ctx.User.FindFirst(ClaimTypes.Email)
-                |> Option.ofObj
-                |> Option.map (fun c -> c.Value)
-                |> Option.defaultValue ""
-
-            (userId, userName, email)
-
-    let private getOpponentId (thread: Thread) (userId: string) =
-        if userId = thread.CreatedBy then thread.OpponentId
-        else thread.CreatedBy
+            (userId, userName)
 
     let private getHttpClient (ctx: HttpContext) =
         let factory = ctx.RequestServices.GetRequiredService<IHttpClientFactory>()
         factory.CreateClient("Anthropic")
-
-    let private tryReviewTurn (ctx: HttpContext) (apiKey: string) (thread: Thread) (action: string) (lineNumber: int) (chords: string) (allLines: Line list) : Task<struct (string * string)> =
-        task {
-            if String.IsNullOrEmpty(apiKey) then
-                return struct ("", "")
-            else
-                let httpClient = getHttpClient ctx
-                let lineTexts = allLines |> List.map (fun l -> l.Chords)
-                let! result =
-                    AnthropicClient.reviewTurn httpClient apiKey thread.Key thread.TimeSignature action lineNumber chords lineTexts
-                    |> Async.StartAsTask
-                match result with
-                | Ok r -> return struct (r.Comment, r.ScoresJson)
-                | Error _ -> return struct ("", "")
-        }
-
-    let private tryGenerateChords (ctx: HttpContext) (apiKey: string) (thread: Thread) (allLines: Line list) : Task<string option> =
-        task {
-            if String.IsNullOrEmpty(apiKey) then
-                return None
-            else
-                let httpClient = getHttpClient ctx
-                let lineTexts = allLines |> List.map (fun l -> l.Chords)
-                let! result =
-                    AnthropicClient.generateChords httpClient apiKey thread.Key thread.TimeSignature thread.Bpm lineTexts
-                    |> Async.StartAsTask
-                match result with
-                | Ok chords -> return Some chords
-                | Error _ -> return None
-        }
 
     let listThreads (repo: IThreadRepository) (ctx: HttpContext) : Task =
         task {
@@ -91,39 +51,32 @@ module ThreadHandlers =
                        timeSignature = t.TimeSignature
                        bpm = t.Bpm
                        createdByName = t.CreatedByName
-                       opponentName = t.OpponentName
                        createdAt = t.CreatedAt
-                       status = t.Status
-                       currentTurn = t.CurrentTurn
-                       lineCount = t.Lines.Length |})
+                       lastEditedBy = t.LastEditedBy
+                       lastEditedAt = t.LastEditedAt
+                       memberCount = t.Members.Length |})
 
             do! ctx.Response.WriteAsJsonAsync(result)
         }
 
-    let createThread (repo: IThreadRepository) (config: AppConfig) (ctx: HttpContext) : Task =
+    let createThread (repo: IThreadRepository) (ctx: HttpContext) : Task =
         task {
             let! req = ctx.Request.ReadFromJsonAsync<CreateThreadRequest>()
-            let (userId, userName, _email) = getUserInfo ctx
-
-            let isCpu = req.opponentEmail = "cpu"
+            let (userId, userName) = getUserInfo ctx
 
             let thread =
                 { Id = Guid.NewGuid().ToString("N")
                   Title = req.title
-                  Key = req.key
-                  TimeSignature = req.timeSignature
-                  Bpm = req.bpm
+                  Key = "C Major"
+                  TimeSignature = "4/4"
+                  Bpm = 120
                   CreatedBy = userId
                   CreatedByName = userName
-                  OpponentId = if isCpu then "cpu" else ""
-                  OpponentName = if isCpu then "Claude AI" else ""
-                  OpponentEmail = req.opponentEmail
                   CreatedAt = DateTime.UtcNow
-                  Status = if isCpu then "active" else "waiting"
-                  CurrentTurn = userId
-                  TurnCount = 0
-                  FinishProposedBy = ""
-                  Lines = []
+                  Score = ""
+                  LastEditedBy = userId
+                  LastEditedAt = DateTime.UtcNow
+                  Members = [ userId ]
                   History = [] }
 
             let! created = repo.Create(thread)
@@ -143,7 +96,56 @@ module ThreadHandlers =
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
         }
 
-    let joinThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
+    let saveScore (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+
+            match thread with
+            | None ->
+                ctx.Response.StatusCode <- 404
+                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some _ ->
+                let (userId, userName) = getUserInfo ctx
+                let! req = ctx.Request.ReadFromJsonAsync<SaveScoreRequest>()
+
+                let history =
+                    { UserId = userId
+                      UserName = userName
+                      Score = req.score
+                      Comment = req.comment
+                      AiComment = ""
+                      AiScores = ""
+                      CreatedAt = DateTime.UtcNow }
+
+                let! result = repo.SaveScore threadId req.score history
+
+                match result with
+                | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
+                | None ->
+                    ctx.Response.StatusCode <- 500
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Failed to save score" |})
+        }
+
+    let updateSettings (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+
+            match thread with
+            | None ->
+                ctx.Response.StatusCode <- 404
+                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some _ ->
+                let! req = ctx.Request.ReadFromJsonAsync<UpdateSettingsRequest>()
+                let! result = repo.UpdateSettings threadId req.key req.timeSignature req.bpm
+
+                match result with
+                | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
+                | None ->
+                    ctx.Response.StatusCode <- 500
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Failed to update settings" |})
+        }
+
+    let reviewScore (repo: IThreadRepository) (config: AppConfig) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
 
@@ -152,259 +154,45 @@ module ThreadHandlers =
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
             | Some t ->
-                if t.Status <> "waiting" then
+                if String.IsNullOrEmpty(config.AnthropicApiKey) then
                     ctx.Response.StatusCode <- 400
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Thread is not waiting for opponent" |})
+                    do! ctx.Response.WriteAsJsonAsync({| error = "AI review is not configured" |})
+                elif t.History.Length = 0 then
+                    ctx.Response.StatusCode <- 400
+                    do! ctx.Response.WriteAsJsonAsync({| error = "No history to review" |})
                 else
-                    let (userId, userName, email) = getUserInfo ctx
+                    let httpClient = getHttpClient ctx
+                    let scoreLines = t.Score.Split('\n') |> Array.toList
+                    let! result =
+                        AnthropicClient.reviewTurn httpClient config.AnthropicApiKey t.Key t.TimeSignature "save" 1 t.Score scoreLines
+                        |> Async.StartAsTask
 
-                    if not devMode && email <> t.OpponentEmail then
-                        ctx.Response.StatusCode <- 403
-                        do! ctx.Response.WriteAsJsonAsync({| error = "Email does not match invitation" |})
-                    else
-                        let! result = repo.JoinThread threadId userId userName
-
-                        match result with
-                        | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
-                        | None ->
-                            ctx.Response.StatusCode <- 500
-                            do! ctx.Response.WriteAsJsonAsync({| error = "Failed to join thread" |})
+                    match result with
+                    | Ok r ->
+                        // Update the latest history entry with AI comment
+                        let updatedHistory =
+                            t.History
+                            |> List.mapi (fun i h ->
+                                if i = t.History.Length - 1 then
+                                    { h with AiComment = r.Comment; AiScores = r.ScoresJson }
+                                else h)
+                        let updatedThread = { t with History = updatedHistory }
+                        let! _ = repo.Update(updatedThread)
+                        do! ctx.Response.WriteAsJsonAsync({| comment = r.Comment; scores = r.ScoresJson |})
+                    | Error e ->
+                        ctx.Response.StatusCode <- 500
+                        do! ctx.Response.WriteAsJsonAsync({| error = $"AI review failed: {e}" |})
         }
 
-    let private executeCpuTurn (repo: IThreadRepository) (config: AppConfig) (ctx: HttpContext) (threadId: string) (updatedThread: Thread) : Task<Thread> =
-        task {
-            if updatedThread.CurrentTurn <> "cpu" || String.IsNullOrEmpty(config.AnthropicApiKey) then
-                return updatedThread
-            else
-                let! generatedChords = tryGenerateChords ctx config.AnthropicApiKey updatedThread updatedThread.Lines
-                match generatedChords with
-                | None -> return updatedThread
-                | Some chords ->
-                    let cpuLineNumber = updatedThread.Lines.Length + 1
-                    let cpuLine =
-                        { LineNumber = cpuLineNumber
-                          Chords = chords
-                          AddedBy = "cpu"
-                          AddedByName = "Claude AI"
-                          LastEditedBy = "cpu" }
-                    let cpuLines = updatedThread.Lines @ [ cpuLine ]
-                    let! struct (cpuAiComment, cpuAiScores) = tryReviewTurn ctx config.AnthropicApiKey updatedThread "add" cpuLineNumber chords cpuLines
-                    let cpuAction =
-                        { TurnNumber = updatedThread.TurnCount + 1
-                          UserId = "cpu"
-                          UserName = "Claude AI"
-                          Action = "add"
-                          LineNumber = cpuLineNumber
-                          Chords = chords
-                          PreviousChords = ""
-                          Comment = ""
-                          AiComment = cpuAiComment
-                          AiScores = cpuAiScores
-                          CreatedAt = DateTime.UtcNow }
-                    let cpuNextTurn = getOpponentId updatedThread "cpu"
-                    let! cpuResult = repo.ExecuteTurn threadId cpuAction cpuLines cpuNextTurn
-                    match cpuResult with
-                    | Some cpuUpdated -> return cpuUpdated
-                    | None -> return updatedThread
-        }
-
-    let private commitTurn
-        (repo: IThreadRepository) (config: AppConfig) (ctx: HttpContext)
-        (threadId: string) (t: Thread) (userId: string) (userName: string)
-        (action: string) (lineNumber: int) (chords: string) (previousChords: string)
-        (comment: string) (updatedLines: Line list) (nextTurn: string)
-        : Task<Result<Thread, string>> =
-        task {
-            let! struct (aiComment, aiScores) = tryReviewTurn ctx config.AnthropicApiKey t action lineNumber chords updatedLines
-            let turnAction =
-                { TurnNumber = t.TurnCount + 1
-                  UserId = userId
-                  UserName = userName
-                  Action = action
-                  LineNumber = lineNumber
-                  Chords = chords
-                  PreviousChords = previousChords
-                  Comment = comment
-                  AiComment = aiComment
-                  AiScores = aiScores
-                  CreatedAt = DateTime.UtcNow }
-
-            let! result = repo.ExecuteTurn threadId turnAction updatedLines nextTurn
-            match result with
-            | Some updated ->
-                let! finalThread = executeCpuTurn repo config ctx threadId updated
-                return Ok finalThread
-            | None ->
-                return Error "Failed to execute turn"
-        }
-
-    let private writeTurnResult (ctx: HttpContext) (result: Result<Thread, string>) : Task =
-        task {
-            match result with
-            | Ok thread -> do! ctx.Response.WriteAsJsonAsync(thread)
-            | Error msg ->
-                ctx.Response.StatusCode <- 500
-                do! ctx.Response.WriteAsJsonAsync({| error = msg |})
-        }
-
-    let executeTurn (repo: IThreadRepository) (config: AppConfig) (threadId: string) (ctx: HttpContext) : Task =
+    let getHistory (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
 
             match thread with
+            | Some t -> do! ctx.Response.WriteAsJsonAsync(t.History)
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t ->
-                if t.Status <> "active" then
-                    ctx.Response.StatusCode <- 403
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Game is not active" |})
-                else
-                    let (userId, userName, _email) = getUserInfo ctx
-
-                    if t.CurrentTurn <> userId then
-                        ctx.Response.StatusCode <- 403
-                        do! ctx.Response.WriteAsJsonAsync({| error = "Not your turn" |})
-                    else
-                        let! req = ctx.Request.ReadFromJsonAsync<TurnRequest>()
-                        let nextTurn = getOpponentId t userId
-
-                        match req.action with
-                        | "add" ->
-                            if String.IsNullOrWhiteSpace(req.chords) then
-                                ctx.Response.StatusCode <- 400
-                                do! ctx.Response.WriteAsJsonAsync({| error = "chords is required for add" |})
-                            else
-                                let newLineNumber = t.Lines.Length + 1
-                                let newLine =
-                                    { LineNumber = newLineNumber
-                                      Chords = req.chords
-                                      AddedBy = userId
-                                      AddedByName = userName
-                                      LastEditedBy = userId }
-                                let updatedLines = t.Lines @ [ newLine ]
-                                let! result = commitTurn repo config ctx threadId t userId userName "add" newLineNumber req.chords "" req.comment updatedLines nextTurn
-                                do! writeTurnResult ctx result
-
-                        | "edit" ->
-                            if req.lineNumber < 1 || req.lineNumber > t.Lines.Length then
-                                ctx.Response.StatusCode <- 400
-                                do! ctx.Response.WriteAsJsonAsync({| error = "Invalid lineNumber" |})
-                            elif String.IsNullOrWhiteSpace(req.chords) then
-                                ctx.Response.StatusCode <- 400
-                                do! ctx.Response.WriteAsJsonAsync({| error = "chords is required for edit" |})
-                            else
-                                let targetLine = t.Lines.[req.lineNumber - 1]
-                                let updatedLines =
-                                    t.Lines
-                                    |> List.mapi (fun i line ->
-                                        if i = req.lineNumber - 1 then
-                                            { line with Chords = req.chords; LastEditedBy = userId }
-                                        else line)
-                                let! result = commitTurn repo config ctx threadId t userId userName "edit" req.lineNumber req.chords targetLine.Chords req.comment updatedLines nextTurn
-                                do! writeTurnResult ctx result
-
-                        | "delete" ->
-                            if req.lineNumber < 1 || req.lineNumber > t.Lines.Length then
-                                ctx.Response.StatusCode <- 400
-                                do! ctx.Response.WriteAsJsonAsync({| error = "Invalid lineNumber" |})
-                            else
-                                let targetLine = t.Lines.[req.lineNumber - 1]
-                                let updatedLines =
-                                    t.Lines
-                                    |> List.filter (fun line -> line.LineNumber <> req.lineNumber)
-                                    |> List.mapi (fun i line -> { line with LineNumber = i + 1 })
-                                let! result = commitTurn repo config ctx threadId t userId userName "delete" req.lineNumber "" targetLine.Chords req.comment updatedLines nextTurn
-                                do! writeTurnResult ctx result
-
-                        | _ ->
-                            ctx.Response.StatusCode <- 400
-                            do! ctx.Response.WriteAsJsonAsync({| error = "Invalid action. Must be add, edit, or delete" |})
-        }
-
-    let proposeFinish (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t ->
-                if t.Status <> "active" then
-                    ctx.Response.StatusCode <- 403
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Game is not active" |})
-                else
-                    let (userId, _userName, _email) = getUserInfo ctx
-
-                    if t.CurrentTurn <> userId then
-                        ctx.Response.StatusCode <- 403
-                        do! ctx.Response.WriteAsJsonAsync({| error = "Not your turn" |})
-                    else
-                        let nextTurn = getOpponentId t userId
-                        let! result = repo.ProposeFinish threadId userId nextTurn
-
-                        match result with
-                        | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
-                        | None ->
-                            ctx.Response.StatusCode <- 500
-                            do! ctx.Response.WriteAsJsonAsync({| error = "Failed to propose finish" |})
-        }
-
-    let acceptFinish (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t ->
-                if t.Status <> "finish_proposed" then
-                    ctx.Response.StatusCode <- 403
-                    do! ctx.Response.WriteAsJsonAsync({| error = "No finish proposal pending" |})
-                else
-                    let (userId, _userName, _email) = getUserInfo ctx
-
-                    if t.FinishProposedBy = userId then
-                        ctx.Response.StatusCode <- 403
-                        do! ctx.Response.WriteAsJsonAsync({| error = "Cannot accept your own proposal" |})
-                    else
-                        let! result = repo.AcceptFinish threadId
-
-                        match result with
-                        | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
-                        | None ->
-                            ctx.Response.StatusCode <- 500
-                            do! ctx.Response.WriteAsJsonAsync({| error = "Failed to accept finish" |})
-        }
-
-    let rejectFinish (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t ->
-                if t.Status <> "finish_proposed" then
-                    ctx.Response.StatusCode <- 403
-                    do! ctx.Response.WriteAsJsonAsync({| error = "No finish proposal pending" |})
-                else
-                    let (userId, _userName, _email) = getUserInfo ctx
-
-                    if t.FinishProposedBy = userId then
-                        ctx.Response.StatusCode <- 403
-                        do! ctx.Response.WriteAsJsonAsync({| error = "Cannot reject your own proposal" |})
-                    else
-                        let! result = repo.RejectFinish threadId userId
-
-                        match result with
-                        | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
-                        | None ->
-                            ctx.Response.StatusCode <- 500
-                            do! ctx.Response.WriteAsJsonAsync({| error = "Failed to reject finish" |})
         }
 
     let exportThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
@@ -419,16 +207,11 @@ module ThreadHandlers =
                 sb.AppendLine($"- Key: {t.Key}") |> ignore
                 sb.AppendLine($"- Time Signature: {t.TimeSignature}") |> ignore
                 sb.AppendLine($"- BPM: {t.Bpm}") |> ignore
-                sb.AppendLine($"- Players: {t.CreatedByName} & {t.OpponentName}") |> ignore
                 sb.AppendLine() |> ignore
-                sb.AppendLine("## Chord Progression") |> ignore
+                sb.AppendLine("## Score") |> ignore
                 sb.AppendLine() |> ignore
                 sb.AppendLine("```") |> ignore
-
-                t.Lines
-                |> List.iter (fun line ->
-                    sb.AppendLine(line.Chords) |> ignore)
-
+                sb.AppendLine(t.Score) |> ignore
                 sb.AppendLine("```") |> ignore
 
                 ctx.Response.ContentType <- "text/markdown; charset=utf-8"

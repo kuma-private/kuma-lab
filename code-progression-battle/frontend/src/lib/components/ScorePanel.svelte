@@ -9,18 +9,15 @@
 		activeBarIndex: number;
 		scoreDisplayMode: DisplayMode;
 		transposeSemitones: number;
-		canAct: boolean;
-		scoreReadonly: boolean;
 		pendingInsertText: string;
-		isPlayer: boolean;
-		opponentName: string;
 		commentInput: string;
 		submitting: boolean;
-		diffError: string | null;
+		reviewing: boolean;
 		latestAiComment: string;
 		latestAiScores: { tension: number; creativity: number; coherence: number; surprise: number } | null;
 		onScoreChange: (value: string) => void;
 		onSave: () => void;
+		onRequestReview: () => void;
 		onTransposeUp: () => void;
 		onTransposeDown: () => void;
 		onDisplayModeChange: (mode: DisplayMode) => void;
@@ -36,18 +33,15 @@
 		activeBarIndex,
 		scoreDisplayMode,
 		transposeSemitones,
-		canAct,
-		scoreReadonly,
 		pendingInsertText,
-		isPlayer,
-		opponentName,
 		commentInput,
 		submitting,
-		diffError,
+		reviewing,
 		latestAiComment,
 		latestAiScores,
 		onScoreChange,
 		onSave,
+		onRequestReview,
 		onTransposeUp,
 		onTransposeDown,
 		onDisplayModeChange,
@@ -56,6 +50,8 @@
 		onInsertNewline,
 		onDeleteLastLine,
 	}: Props = $props();
+
+	const lineCount = $derived(scoreEditorValue.split('\n').filter((l: string) => l.trim()).length);
 </script>
 
 <div class="panel panel-main">
@@ -90,26 +86,24 @@
 				</span>
 				<button class="transpose-btn" onclick={onTransposeUp} title="半音上げ">+</button>
 			</div>
-			<span class="count">{thread.lines.length} lines</span>
+			<span class="count">{lineCount} lines</span>
 		</div>
 	</div>
 
-	{#if canAct}
-		<div class="score-toolbar">
-			<button class="score-tool-btn" onclick={onInsertBar} title="小節区切りを追加">
-				<span class="tool-label">|</span> 小節
-			</button>
-			<button class="score-tool-btn" onclick={onInsertNewline} title="改行を追加">
-				改行
-			</button>
-			<button class="score-tool-btn score-tool-btn--danger" onclick={onDeleteLastLine} title="最終行を削除">
-				最終行を削除
-			</button>
-		</div>
-	{/if}
+	<div class="score-toolbar">
+		<button class="score-tool-btn" onclick={onInsertBar} title="小節区切りを追加">
+			<span class="tool-label">|</span> 小節
+		</button>
+		<button class="score-tool-btn" onclick={onInsertNewline} title="改行を追加">
+			改行
+		</button>
+		<button class="score-tool-btn score-tool-btn--danger" onclick={onDeleteLastLine} title="最終行を削除">
+			最終行を削除
+		</button>
+	</div>
 
 	<div class="score-area">
-		{#if thread.lines.length === 0 && scoreReadonly}
+		{#if !scoreEditorValue.trim()}
 			<div class="empty-score">
 				<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.2">
 					<path d="M9 18V5l12-2v13" />
@@ -121,7 +115,7 @@
 		{:else}
 			<ScoreEditor
 				value={scoreEditorValue}
-				readonly={scoreReadonly}
+				readonly={false}
 				{activeBarIndex}
 				displayMode={scoreDisplayMode}
 				musicalKey={thread.key}
@@ -131,18 +125,15 @@
 		{/if}
 	</div>
 
-	{#if canAct}
-		<div class="save-area">
-			{#if diffError}
-				<div class="diff-error">{diffError}</div>
-			{/if}
-			<textarea
-				class="comment-textarea"
-				value={commentInput}
-				oninput={(e) => onCommentChange(e.currentTarget.value)}
-				placeholder="コメントを残す..."
-				rows="1"
-			></textarea>
+	<div class="save-area">
+		<textarea
+			class="comment-textarea"
+			value={commentInput}
+			oninput={(e) => onCommentChange(e.currentTarget.value)}
+			placeholder="コメントを残す..."
+			rows="1"
+		></textarea>
+		<div class="save-buttons">
 			<button
 				class="btn-submit-turn"
 				onclick={onSave}
@@ -159,15 +150,23 @@
 				{/if}
 				保存
 			</button>
+			<button
+				class="btn-review"
+				onclick={onRequestReview}
+				disabled={reviewing}
+			>
+				{#if reviewing}
+					<span class="spinner"></span>
+				{:else}
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/>
+						<path d="M12 6v6l4 2"/>
+					</svg>
+				{/if}
+				AI分析
+			</button>
 		</div>
-	{/if}
-
-	<!-- Waiting hint when not your turn -->
-	{#if thread.status === 'active' && isPlayer && !canAct}
-		<div class="submit-area submit-area--disabled">
-			<div class="waiting-hint">@{opponentName} が作曲中...</div>
-		</div>
-	{/if}
+	</div>
 </div>
 
 <style>
@@ -330,32 +329,9 @@
 		gap: var(--space-sm);
 	}
 
-	.submit-area {
-		padding: var(--space-md) var(--space-lg);
-		background: var(--bg-surface);
+	.save-buttons {
 		display: flex;
-		flex-direction: column;
-		gap: var(--space-md);
-	}
-
-	.submit-area--disabled {
-		opacity: 0.5;
-	}
-
-	.waiting-hint {
-		text-align: center;
-		font-size: 0.75rem;
-		color: var(--text-muted);
-		font-style: italic;
-		padding-bottom: var(--space-xs);
-	}
-
-	.diff-error {
-		font-size: 0.78rem;
-		color: var(--error);
-		padding: 4px 8px;
-		background: rgba(248, 113, 113, 0.1);
-		border-radius: 4px;
+		gap: var(--space-sm);
 	}
 
 	.comment-textarea {
@@ -386,7 +362,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: var(--space-sm);
-		width: 100%;
+		flex: 1;
 		padding: var(--space-sm) var(--space-lg);
 		border-radius: var(--radius-md);
 		background: var(--accent-primary);
@@ -408,6 +384,32 @@
 		cursor: default;
 	}
 
+	.btn-review {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+		border-radius: var(--radius-md);
+		background: transparent;
+		color: var(--accent-primary);
+		border: 1px solid var(--accent-primary);
+		font-size: 0.82rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+
+	.btn-review:hover:not(:disabled) {
+		background: rgba(167, 139, 250, 0.1);
+	}
+
+	.btn-review:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
 	.spinner {
 		width: 14px;
 		height: 14px;
@@ -415,6 +417,11 @@
 		border-top-color: #fff;
 		border-radius: 50%;
 		animation: spin 0.6s linear infinite;
+	}
+
+	.btn-review .spinner {
+		border-color: rgba(167, 139, 250, 0.3);
+		border-top-color: var(--accent-primary);
 	}
 
 	@keyframes spin {

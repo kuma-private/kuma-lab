@@ -1,35 +1,25 @@
 <script lang="ts">
-	import type { Thread, UserInfo } from '$lib/api';
+	import type { SaveHistory } from '$lib/api';
 
 	interface Props {
-		thread: Thread;
+		history: SaveHistory[];
 		open: boolean;
-		user: UserInfo | null;
-		opponentName: string;
-		isOpponentFinishProposal: boolean;
-		isPlayer: boolean;
 		onClose: () => void;
-		onAcceptFinish: () => void;
-		onRejectFinish: () => void;
+		onRestore: (score: string) => void;
 	}
 
 	let {
-		thread,
+		history,
 		open,
-		user,
-		opponentName,
-		isOpponentFinishProposal,
-		isPlayer,
 		onClose,
-		onAcceptFinish,
-		onRejectFinish,
+		onRestore,
 	}: Props = $props();
 
 	let historyEl: HTMLDivElement | undefined = $state();
 
 	// Auto-scroll history to bottom
 	$effect(() => {
-		if (thread && historyEl) {
+		if (history && historyEl) {
 			requestAnimationFrame(() => {
 				historyEl!.scrollTop = historyEl!.scrollHeight;
 			});
@@ -50,12 +40,11 @@
 		return name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 	};
 
-	const actionLabel = (action: string, lineNum: number): string => {
-		switch (action) {
-			case 'add': return `L${lineNum} を追加`;
-			case 'edit': return `L${lineNum} を編集`;
-			case 'delete': return `L${lineNum} を削除`;
-			default: return action;
+	const formatTime = (dateStr: string): string => {
+		try {
+			return new Date(dateStr).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+		} catch {
+			return dateStr;
 		}
 	};
 </script>
@@ -67,8 +56,8 @@
 {/if}
 <div class="drawer" class:drawer--open={open}>
 	<div class="drawer-header">
-		<h2>セッションログ</h2>
-		<span class="count">{thread.history.length} ターン</span>
+		<h2>保存履歴</h2>
+		<span class="count">{history.length} 件</span>
 		<button class="drawer-close" onclick={onClose} title="閉じる">
 			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
 				<line x1="3" y1="3" x2="13" y2="13" />
@@ -77,57 +66,29 @@
 		</button>
 	</div>
 
-	<!-- Finish proposal inside drawer -->
-	{#if isOpponentFinishProposal && isPlayer}
-		<div class="drawer-finish-response">
-			<span class="finish-text">@{opponentName} がスコアの完成を提案しています。終了しますか?</span>
-			<div class="finish-buttons">
-				<button class="btn btn-primary btn-sm" onclick={onAcceptFinish}>承認</button>
-				<button class="btn btn-secondary btn-sm" onclick={onRejectFinish}>却下</button>
-			</div>
-		</div>
-	{/if}
-
 	<div class="history-timeline" bind:this={historyEl}>
-		{#each thread.history as turn, i}
-			{@const isMe = turn.userId === user?.sub}
-			<div class="post" class:post--mine={isMe}>
+		{#each history as item, i}
+			<div class="post">
 				<div class="post-header">
-					<span class="post-number">#{turn.turnNumber}</span>
-					<div class="post-avatar" style="background: {avatarColor(turn.userName)}">
-						{initials(turn.userName)}
+					<span class="post-number">#{i + 1}</span>
+					<div class="post-avatar" style="background: {avatarColor(item.userName)}">
+						{initials(item.userName)}
 					</div>
-					<span class="post-name">{turn.userName}</span>
-					<span class="post-action post-action--{turn.action}">
-						{actionLabel(turn.action, turn.lineNumber)}
-					</span>
-					{#if turn.createdAt}
-						<span class="post-time">{new Date(turn.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+					<span class="post-name">{item.userName}</span>
+					{#if item.createdAt}
+						<span class="post-time">{formatTime(item.createdAt)}</span>
 					{/if}
 				</div>
-				{#if turn.action !== 'delete' && turn.chords}
-					<div class="post-chords">{turn.chords}</div>
+				{#if item.comment}
+					<div class="post-comment">{item.comment}</div>
 				{/if}
-				{#if turn.action === 'edit' && turn.previousChords}
-					<div class="post-diff">
-						<span class="diff-before">{turn.previousChords}</span>
-						<span class="diff-arrow">-></span>
-						<span class="diff-after">{turn.chords}</span>
-					</div>
-				{/if}
-				{#if turn.action === 'delete'}
-					<div class="post-deleted">line {turn.lineNumber} removed</div>
-				{/if}
-				{#if turn.comment}
-					<div class="post-comment">{turn.comment}</div>
-				{/if}
-				{#if turn.aiComment}
+				{#if item.aiComment}
 					<div class="ai-comment">
 						<span class="ai-icon">AI</span>
 						<div class="ai-body">
-							<span class="ai-text">{turn.aiComment}</span>
-							{#if turn.aiScores}
-								{@const scores = (() => { try { return JSON.parse(turn.aiScores); } catch { return null; } })()}
+							<span class="ai-text">{item.aiComment}</span>
+							{#if item.aiScores}
+								{@const scores = (() => { try { return JSON.parse(item.aiScores); } catch { return null; } })()}
 								{#if scores && typeof scores.tension === 'number'}
 									<div class="ai-scores">
 										<span class="ai-score" title="テンション">T:{scores.tension}</span>
@@ -140,10 +101,15 @@
 						</div>
 					</div>
 				{/if}
+				<div class="post-actions">
+					<button class="btn-restore" onclick={() => { onRestore(item.score); onClose(); }}>
+						このバージョンに戻す
+					</button>
+				</div>
 			</div>
 		{/each}
 
-		{#if thread.history.length === 0}
+		{#if history.length === 0}
 			<div class="empty-history">
 				<div class="empty-icon">
 					<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
@@ -152,15 +118,15 @@
 						<circle cx="18" cy="16" r="3" />
 					</svg>
 				</div>
-				<p class="empty-title">まだターンがありません</p>
-				<p class="empty-sub">スコアを編集してセッションを始めよう!</p>
+				<p class="empty-title">まだ保存履歴がありません</p>
+				<p class="empty-sub">スコアを編集して保存しよう!</p>
 			</div>
 		{/if}
 	</div>
 </div>
 
 <style>
-	/* Drawer (session log) */
+	/* Drawer */
 	.drawer-overlay {
 		position: fixed;
 		inset: 0;
@@ -237,32 +203,7 @@
 		color: var(--text-primary);
 	}
 
-	.drawer-finish-response {
-		padding: var(--space-md) var(--space-lg);
-		background: rgba(251, 191, 36, 0.1);
-		border-bottom: 1px solid rgba(251, 191, 36, 0.3);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-sm);
-	}
-
-	.finish-text {
-		color: var(--accent-warm);
-		font-weight: 500;
-		font-size: 0.85rem;
-	}
-
-	.finish-buttons {
-		display: flex;
-		gap: var(--space-xs);
-	}
-
-	.btn-sm {
-		padding: 4px 12px;
-		font-size: 0.8rem;
-	}
-
-	/* BBS-style thread history */
+	/* History timeline */
 	.history-timeline {
 		flex: 1;
 		overflow-y: auto;
@@ -281,10 +222,6 @@
 
 	.post:hover {
 		background: rgba(167, 139, 250, 0.03);
-	}
-
-	.post--mine {
-		border-left: 3px solid var(--accent-primary);
 	}
 
 	@keyframes post-in {
@@ -327,15 +264,6 @@
 		font-size: 0.78rem;
 	}
 
-	.post-action {
-		font-size: 0.72rem;
-		color: var(--text-muted);
-	}
-
-	.post-action--add { color: var(--success); }
-	.post-action--edit { color: var(--accent-warm); }
-	.post-action--delete { color: var(--error); }
-
 	.post-time {
 		margin-left: auto;
 		font-size: 0.68rem;
@@ -344,56 +272,33 @@
 		font-family: var(--font-mono);
 	}
 
-	.post-chords {
-		font-family: var(--font-mono);
-		font-size: 0.85rem;
-		color: var(--text-primary);
-		padding: var(--space-sm) var(--space-md);
-		background: rgba(0, 0, 0, 0.12);
-		border-radius: 6px;
-		margin: var(--space-sm) 0 var(--space-xs) 30px;
-		border-left: 2px solid rgba(167, 139, 250, 0.3);
-	}
-
-	.post-diff {
-		font-family: var(--font-mono);
-		font-size: 0.78rem;
-		margin: var(--space-sm) 0 var(--space-xs) 30px;
-		display: flex;
-		align-items: center;
-		gap: var(--space-sm);
-		flex-wrap: wrap;
-	}
-
-	.diff-before {
-		color: var(--error);
-		opacity: 0.7;
-		text-decoration: line-through;
-	}
-
-	.diff-arrow {
-		color: var(--text-muted);
-		font-size: 0.7rem;
-	}
-
-	.diff-after {
-		color: var(--success);
-	}
-
-	.post-deleted {
-		color: var(--error);
-		font-size: 0.78rem;
-		font-style: italic;
-		opacity: 0.7;
-		margin-left: 30px;
-	}
-
 	.post-comment {
 		color: var(--text-muted);
 		font-size: 0.78rem;
 		margin: var(--space-sm) 0 0 30px;
 		padding-left: var(--space-sm);
 		border-left: 2px solid var(--border-default);
+	}
+
+	.post-actions {
+		margin: var(--space-sm) 0 0 30px;
+	}
+
+	.btn-restore {
+		padding: 3px 10px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-secondary);
+		font-size: 0.72rem;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.btn-restore:hover {
+		border-color: var(--accent-primary);
+		color: var(--accent-primary);
+		background: rgba(167, 139, 250, 0.08);
 	}
 
 	/* AI comment bubble */

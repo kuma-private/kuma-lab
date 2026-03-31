@@ -5,6 +5,7 @@
 	import { parseProgression, transpose, parseChord } from '$lib/chord-parser';
 	import { ChordPlayer, type PlayerState, type OscPreset, setGlobalOscPreset, chordToNotes } from '$lib/chord-player';
 	import type { DisplayMode } from '$lib/components/ScoreEditor.svelte';
+	import type { SaveHistory } from '$lib/api';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import ThreadHeader from '$lib/components/ThreadHeader.svelte';
 	import ScorePanel from '$lib/components/ScorePanel.svelte';
@@ -23,10 +24,10 @@
 	let playerVolume = $state(-10);
 	let playerLoop = $state(false);
 
-	// Turn action state
+	// Save state
 	let commentInput = $state('');
 	let submitting = $state(false);
-	let diffError = $state<string | null>(null);
+	let reviewing = $state(false);
 
 	// ScoreEditor state
 	let scoreEditorValue = $state('');
@@ -36,9 +37,13 @@
 
 	// Drawer state
 	let drawerOpen = $state(false);
+	let historyItems = $state<SaveHistory[]>([]);
 
-	const toggleDrawer = () => {
+	const toggleDrawer = async () => {
 		drawerOpen = !drawerOpen;
+		if (drawerOpen) {
+			historyItems = await store.loadHistory(threadId);
+		}
 	};
 
 	const closeDrawer = () => {
@@ -54,22 +59,22 @@
 		player?.dispose();
 	});
 
-	// Sync ScoreEditor value from thread lines
+	// Sync ScoreEditor value from thread score
 	$effect(() => {
 		const thread = store.currentThread;
 		if (thread && !scoreInitialized) {
-			scoreEditorValue = thread.lines.map(l => l.chords).join('\n');
+			scoreEditorValue = thread.score || '';
 			scoreInitialized = true;
 		}
 	});
 
-	// Re-sync when thread updates (after submit)
-	let lastSyncedTurnCount = $state(-1);
+	// Re-sync when thread updates (after save)
+	let lastSyncedAt = $state('');
 	$effect(() => {
 		const thread = store.currentThread;
-		if (thread && scoreInitialized && !submitting && thread.turnCount !== lastSyncedTurnCount) {
-			scoreEditorValue = thread.lines.map(l => l.chords).join('\n');
-			lastSyncedTurnCount = thread.turnCount;
+		if (thread && scoreInitialized && !submitting && thread.lastEditedAt !== lastSyncedAt) {
+			scoreEditorValue = thread.score || '';
+			lastSyncedAt = thread.lastEditedAt;
 			transposeSemitones = 0;
 		}
 	});
@@ -82,7 +87,7 @@
 	const buildPlayer = () => {
 		const thread = store.currentThread;
 		if (!thread) return;
-		const textToPlay = scoreEditorValue || thread.lines.map(l => l.chords).join('\n');
+		const textToPlay = scoreEditorValue || thread.score || '';
 		if (!textToPlay.trim()) return;
 		player?.dispose();
 		player = new ChordPlayer(
@@ -100,7 +105,7 @@
 			const { bars } = parseProgression(textToPlay);
 			if (bars.length > 0) player.load(bars);
 		} catch {
-			// parse error – ignore
+			// parse error - ignore
 		}
 	};
 
@@ -136,7 +141,7 @@
 		const thread = store.currentThread;
 		if (!thread) return;
 		const header = `# ${thread.title}\nKey: ${thread.key} | ${thread.timeSignature} | BPM ${thread.bpm}\n\n`;
-		const body = thread.lines.map(l => l.chords).join('\n');
+		const body = thread.score || '';
 		const md = header + body;
 		const blob = new Blob([md], { type: 'text/markdown' });
 		const url = URL.createObjectURL(blob);
@@ -147,116 +152,13 @@
 		URL.revokeObjectURL(url);
 	};
 
-	// Diff calculation: compare old lines to new lines
-	type DiffResult =
-		| { action: 'add'; lineNumber: number; chords: string }
-		| { action: 'edit'; lineNumber: number; chords: string }
-		| { action: 'delete'; lineNumber: number }
-		| { action: 'none' }
-		| { action: 'error'; message: string };
-
-	const computeDiff = (oldLines: string[], newLines: string[]): DiffResult => {
-		const trimTrailing = (lines: string[]): string[] => {
-			const result = [...lines];
-			while (result.length > 0 && result[result.length - 1].trim() === '') {
-				result.pop();
-			}
-			return result;
-		};
-
-		const oldTrimmed = trimTrailing(oldLines);
-		const newTrimmed = trimTrailing(newLines);
-
-		const oldLen = oldTrimmed.length;
-		const newLen = newTrimmed.length;
-
-		if (newLen > oldLen) {
-			if (newLen - oldLen !== 1) {
-				return { action: 'error', message: '1ターンにつき1行のみ追加できます' };
-			}
-			let insertIdx = -1;
-			let j = 0;
-			for (let i = 0; i < newLen; i++) {
-				if (j < oldLen && newTrimmed[i].trim() === oldTrimmed[j].trim()) {
-					j++;
-				} else if (insertIdx === -1) {
-					insertIdx = i;
-				} else {
-					return { action: 'error', message: '1ターンにつき1操作のみ可能です（複数行の変更が検出されました）' };
-				}
-			}
-			if (j !== oldLen) {
-				return { action: 'error', message: '1ターンにつき1操作のみ可能です（追加と編集が同時に検出されました）' };
-			}
-			if (insertIdx === -1) insertIdx = newLen - 1;
-			return { action: 'add', lineNumber: insertIdx + 1, chords: newTrimmed[insertIdx].trim() };
-		} else if (newLen < oldLen) {
-			if (oldLen - newLen !== 1) {
-				return { action: 'error', message: '1ターンにつき1行のみ削除できます' };
-			}
-			let deleteIdx = -1;
-			let j = 0;
-			for (let i = 0; i < oldLen; i++) {
-				if (j < newLen && oldTrimmed[i].trim() === newTrimmed[j].trim()) {
-					j++;
-				} else if (deleteIdx === -1) {
-					deleteIdx = i;
-				} else {
-					return { action: 'error', message: '1ターンにつき1操作のみ可能です（複数行の変更が検出されました）' };
-				}
-			}
-			if (j !== newLen) {
-				return { action: 'error', message: '1ターンにつき1操作のみ可能です（削除と編集が同時に検出されました）' };
-			}
-			if (deleteIdx === -1) deleteIdx = oldLen - 1;
-			return { action: 'delete', lineNumber: deleteIdx + 1 };
-		} else {
-			const changedIndices: number[] = [];
-			for (let i = 0; i < oldLen; i++) {
-				if (oldTrimmed[i].trim() !== newTrimmed[i].trim()) {
-					changedIndices.push(i);
-				}
-			}
-			if (changedIndices.length === 0) {
-				return { action: 'none' };
-			}
-			if (changedIndices.length > 1) {
-				return { action: 'error', message: '1ターンにつき1行のみ編集できます' };
-			}
-			const idx = changedIndices[0];
-			return { action: 'edit', lineNumber: idx + 1, chords: newTrimmed[idx].trim() };
-		}
-	};
-
-	// Submit turn using diff
-	const handleSubmitTurn = async () => {
+	// Save score
+	const handleSave = async () => {
 		if (submitting) return;
-		const thread = store.currentThread;
-		if (!thread) return;
-
-		diffError = null;
-
-		const oldLines = thread.lines.map(l => l.chords);
-		const newLines = scoreEditorValue.split('\n');
-
-		const diff = computeDiff(oldLines, newLines);
-
-		if (diff.action === 'error') {
-			diffError = diff.message;
-			return;
-		}
-		if (diff.action === 'none') {
-			diffError = '変更がありません';
-			return;
-		}
-
 		submitting = true;
 		try {
-			const lineNumber = 'lineNumber' in diff ? diff.lineNumber : 0;
-			const chords = 'chords' in diff ? diff.chords : '';
-			await store.submitTurn(threadId, diff.action, lineNumber, chords, commentInput.trim());
+			await store.saveScore(threadId, { score: scoreEditorValue, comment: commentInput.trim() });
 			commentInput = '';
-			scoreInitialized = false;
 			player?.dispose();
 			player = null;
 		} finally {
@@ -264,80 +166,32 @@
 		}
 	};
 
-	// Friendly creative prompts that rotate
-	const myTurnPrompts = [
-		'次のコードはあなたの番。何を加える?',
-		'あなたの番! コード進行を追加しよう',
-		'スコアがあなたを待っています',
-		'あなたの声を加えよう',
-		"あなたのターンです。聴かせて!",
-	];
-
-	const pickPrompt = (turnCount: number): string => {
-		return myTurnPrompts[turnCount % myTurnPrompts.length];
+	// Request AI review
+	const handleRequestReview = async () => {
+		if (reviewing) return;
+		reviewing = true;
+		try {
+			await store.requestReview(threadId);
+		} finally {
+			reviewing = false;
+		}
 	};
 
-	// Get opponent display name
-	const opponentName = $derived.by(() => {
-		const t = store.currentThread;
-		if (!t) return '';
-		return t.currentTurn === t.createdBy ? t.createdByName : t.opponentName;
-	});
+	// Settings update
+	const handleUpdateSettings = async (data: { key?: string; timeSignature?: string; bpm?: number }) => {
+		await store.updateSettings(threadId, data);
+	};
 
-	// Status helpers
-	let statusLabel = $derived.by(() => {
-		const t = store.currentThread;
-		if (!t) return '';
-		switch (t.status) {
-			case 'waiting': return '参加者を待っています...';
-			case 'active': return store.isMyTurn ? pickPrompt(t.turnCount) : `@${opponentName} が考え中...`;
-			case 'finish_proposed': return t.finishProposedBy === store.user?.sub ? '完成を提案しました。返答待ち...' : `@${opponentName} がスコアの完成を提案しています!`;
-			case 'completed': return 'セッション完了! お疲れさまでした!';
-			default: return t.status;
-		}
-	});
-
-	let isMyTurnGlow = $derived.by(() => {
-		const t = store.currentThread;
-		if (!t) return false;
-		return t.status === 'active' && store.isMyTurn;
-	});
-
-	let isOpponentFinishProposal = $derived.by(() => {
-		const t = store.currentThread;
-		if (!t) return false;
-		return t.status === 'finish_proposed' && t.finishProposedBy !== store.user?.sub;
-	});
-
-	let statusType = $derived.by(() => {
-		const t = store.currentThread;
-		if (!t) return 'waiting';
-		if (t.status === 'completed') return 'completed';
-		if (t.status === 'waiting') return 'waiting';
-		if (store.isMyTurn || isOpponentFinishProposal) return 'myturn';
-		return 'waiting';
-	});
-
-	let canAct = $derived.by(() => {
-		const t = store.currentThread;
-		if (!t) return false;
-		return t.status === 'active' && store.isMyTurn && store.isPlayer;
-	});
-
-	let scoreReadonly = $derived(!canAct);
-
-	// AI Review: extract from latest turn
+	// AI Review: extract from latest history
 	const latestAiComment = $derived.by(() => {
-		const t = store.currentThread;
-		if (!t || t.history.length === 0) return '';
-		const latest = t.history[t.history.length - 1];
+		if (historyItems.length === 0) return '';
+		const latest = historyItems[historyItems.length - 1];
 		return latest.aiComment || '';
 	});
 
 	const latestAiScores = $derived.by(() => {
-		const t = store.currentThread;
-		if (!t || t.history.length === 0) return null;
-		const latest = t.history[t.history.length - 1];
+		if (historyItems.length === 0) return null;
+		const latest = historyItems[historyItems.length - 1];
 		if (!latest.aiScores) return null;
 		try {
 			const parsed = JSON.parse(latest.aiScores);
@@ -351,16 +205,13 @@
 
 	// Pattern insert handler
 	const handlePatternInsert = (chords: string) => {
-		if (scoreReadonly) return;
 		scoreEditorValue = scoreEditorValue
 			? scoreEditorValue + '\n' + chords
 			: chords;
-		diffError = null;
 	};
 
 	const handleScoreChange = (value: string) => {
 		scoreEditorValue = value;
-		diffError = null;
 	};
 
 	// Transpose handlers (preview only)
@@ -403,6 +254,10 @@
 	const handleCommentChange = (value: string) => {
 		commentInput = value;
 	};
+
+	const handleRestoreScore = (score: string) => {
+		scoreEditorValue = score;
+	};
 </script>
 
 <svelte:head>
@@ -415,60 +270,50 @@
 
 		<ThreadHeader
 			{thread}
-			logCount={thread.history.length}
-			{statusLabel}
-			{statusType}
-			{isMyTurnGlow}
-			{canAct}
-			isPlayer={store.isPlayer}
-			{isOpponentFinishProposal}
-			{opponentName}
 			{drawerOpen}
 			error={store.error}
 			onOpenLog={toggleDrawer}
-			onProposeFinish={() => store.proposeFinish(threadId)}
 			onExport={handleExport}
-			onJoin={() => store.joinThread(threadId)}
-			onAcceptFinish={() => store.acceptFinish(threadId)}
-			onRejectFinish={() => store.rejectFinish(threadId)}
+			onUpdateSettings={handleUpdateSettings}
 		/>
 
 		<!-- Main editor layout: Score (main) + Tools (sidebar) -->
 		<div class="editor-layout">
-			<ScorePanel
-				{thread}
-				{scoreEditorValue}
-				{activeBarIndex}
-				{scoreDisplayMode}
-				{transposeSemitones}
-				{canAct}
-				{scoreReadonly}
-				{pendingInsertText}
-				isPlayer={store.isPlayer}
-				{opponentName}
-				{commentInput}
-				{submitting}
-				{diffError}
-				{latestAiComment}
-				{latestAiScores}
-				onScoreChange={handleScoreChange}
-				onSave={handleSubmitTurn}
-				onTransposeUp={handleTransposeUp}
-				onTransposeDown={handleTransposeDown}
-				onDisplayModeChange={handleDisplayModeChange}
-				onCommentChange={handleCommentChange}
-				onInsertBar={handleInsertBar}
-				onInsertNewline={handleInsertNewline}
-				onDeleteLastLine={handleDeleteLastLine}
-			/>
+			<div class="panel-score">
+				<ScorePanel
+					{thread}
+					{scoreEditorValue}
+					{activeBarIndex}
+					{scoreDisplayMode}
+					{transposeSemitones}
+					{pendingInsertText}
+					{commentInput}
+					{submitting}
+					{reviewing}
+					{latestAiComment}
+					{latestAiScores}
+					onScoreChange={handleScoreChange}
+					onSave={handleSave}
+					onRequestReview={handleRequestReview}
+					onTransposeUp={handleTransposeUp}
+					onTransposeDown={handleTransposeDown}
+					onDisplayModeChange={handleDisplayModeChange}
+					onCommentChange={handleCommentChange}
+					onInsertBar={handleInsertBar}
+					onInsertNewline={handleInsertNewline}
+					onDeleteLastLine={handleDeleteLastLine}
+				/>
+			</div>
 
-			<ToolsPanel
-				{thread}
-				{canAct}
-				{scoreReadonly}
-				onChordSelect={handleChordSelect}
-				onPatternInsert={handlePatternInsert}
-			/>
+			<div class="panel-tools">
+				<ToolsPanel
+					{thread}
+					canAct={true}
+					scoreReadonly={false}
+					onChordSelect={handleChordSelect}
+					onPatternInsert={handlePatternInsert}
+				/>
+			</div>
 		</div>
 	{:else if store.loading}
 		<div class="loading">
@@ -479,17 +324,11 @@
 </div>
 
 {#if store.currentThread}
-	{@const thread = store.currentThread}
 	<SessionDrawer
-		{thread}
+		history={historyItems}
 		open={drawerOpen}
-		user={store.user}
-		{opponentName}
-		{isOpponentFinishProposal}
-		isPlayer={store.isPlayer}
 		onClose={closeDrawer}
-		onAcceptFinish={() => store.acceptFinish(threadId)}
-		onRejectFinish={() => store.rejectFinish(threadId)}
+		onRestore={handleRestoreScore}
 	/>
 {/if}
 
@@ -525,15 +364,25 @@
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: var(--space-md);
-		align-items: start;
+		height: calc(100vh - 160px - 80px - var(--space-2xl));
+	}
+
+	.panel-score, .panel-tools {
+		overflow-y: auto;
+		height: 100%;
 	}
 
 	@media (max-width: 900px) {
 		.editor-layout {
 			grid-template-columns: 1fr;
+			height: auto;
 		}
 		.editor-layout > :nth-child(2) {
 			order: -1;
+		}
+		.panel-score, .panel-tools {
+			height: auto;
+			overflow-y: visible;
 		}
 	}
 
