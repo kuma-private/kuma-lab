@@ -206,10 +206,21 @@
 		return name;
 	};
 
-	const handleQualityClick = (q: string) => {
+	const handleQualityClick = async (q: string) => {
 		selectedQuality = selectedQuality === q ? '' : q;
-		// Quality change only updates the display, does NOT insert to score
-		// User must click "add" button to insert
+		// Play preview of the new chord
+		if (selectedRoot) {
+			const chordName = buildChordName(selectedRoot);
+			try {
+				const mod = await ensureSynth();
+				const parsed = parseChord(chordName);
+				const notes = chordToNotes(parsed);
+				await mod.keyboardAttack(notes);
+				setTimeout(async () => {
+					try { await mod.keyboardRelease(notes); } catch {}
+				}, 400);
+			} catch {}
+		}
 	};
 
 	const handleOnToggle = () => {
