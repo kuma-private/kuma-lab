@@ -208,10 +208,8 @@
 
 	const handleQualityClick = (q: string) => {
 		selectedQuality = selectedQuality === q ? '' : q;
-		if (selectedRoot) {
-			const chordName = buildChordName(selectedRoot);
-			onSelect?.(chordName);
-		}
+		// Quality change only updates the display, does NOT insert to score
+		// User must click "add" button to insert
 	};
 
 	const handleOnToggle = () => {
