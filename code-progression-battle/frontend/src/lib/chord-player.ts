@@ -306,45 +306,31 @@ export const playSelection = async (text: string, config: PlayerConfig): Promise
   const resolved = resolveRepeats(bars);
   const totalDuration = resolved.length * barDur;
 
-  const reverb = new Tone.Reverb({ decay: 1.2, wet: 0.2 }).toDestination();
-  let synth: Tone.PolySynth | Tone.Sampler;
-  let disposeSynth = true;
-  if (_currentOscPreset === 'piano') {
-    const sampler = getPianoSampler();
-    // Don't dispose the shared sampler
-    disposeSynth = false;
-    synth = sampler;
-  } else {
-    synth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'fmtriangle' as const, modulationType: 'sine' as const, modulationIndex: 2, harmonicity: 3.01 },
-      envelope: { attack: 0.005, decay: 0.5, sustain: 0.2, release: 1.0 },
-      volume: -10,
-    }).connect(reverb);
-  }
+  // Use shared piano sampler or create disposable synth
+  const synth = _currentOscPreset === 'piano'
+    ? getPianoSampler()
+    : new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'fmtriangle' as const, modulationType: 'sine' as const, modulationIndex: 2, harmonicity: 3.01 },
+        envelope: { attack: 0.005, decay: 0.5, sustain: 0.2, release: 1.0 },
+        volume: -10,
+      }).toDestination();
+  const isShared = _currentOscPreset === 'piano';
 
-  const transport = Tone.getTransport();
-  const ids: number[] = [];
-
+  // Use setTimeout instead of Transport to avoid conflicts with main player
+  const startTime = Tone.now();
   for (const event of schedule) {
-    const id = transport.schedule((time) => {
-      synth.triggerAttackRelease(event.notes, event.duration, time);
-    }, '+' + event.time);
-    ids.push(id);
+    setTimeout(() => {
+      try {
+        synth.triggerAttackRelease(event.notes, event.duration, Tone.now());
+      } catch {}
+    }, event.time * 1000);
   }
 
   return new Promise<void>((resolve) => {
-    const stopId = transport.schedule(() => {
-      for (const id of ids) transport.clear(id);
-      transport.clear(stopId);
-      if (disposeSynth) synth.dispose();
-      reverb.dispose();
+    setTimeout(() => {
+      if (!isShared) synth.dispose();
       resolve();
-    }, '+' + totalDuration);
-    ids.push(stopId);
-
-    if (transport.state !== 'started') {
-      transport.start();
-    }
+    }, totalDuration * 1000 + 500);
   });
 };
 
