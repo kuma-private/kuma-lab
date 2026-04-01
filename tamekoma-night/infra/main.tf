@@ -31,7 +31,7 @@ resource "google_project_service" "apis" {
 # --- Secret Manager ---
 
 resource "google_secret_manager_secret" "anthropic_api_key" {
-  secret_id = "chord-battle-anthropic-api-key"
+  secret_id = "tamekoma-night-anthropic-api-key"
 
   replication {
     auto {}
@@ -46,7 +46,7 @@ resource "google_secret_manager_secret_version" "anthropic_api_key" {
 }
 
 resource "google_secret_manager_secret" "google_oauth_client_secret" {
-  secret_id = "chord-battle-google-oauth-client-secret"
+  secret_id = "tamekoma-night-google-oauth-client-secret"
 
   replication {
     auto {}
@@ -61,7 +61,7 @@ resource "google_secret_manager_secret_version" "google_oauth_client_secret" {
 }
 
 resource "google_secret_manager_secret" "jwt_signing_key" {
-  secret_id = "chord-battle-jwt-signing-key"
+  secret_id = "tamekoma-night-jwt-signing-key"
 
   replication {
     auto {}
@@ -78,8 +78,8 @@ resource "google_secret_manager_secret_version" "jwt_signing_key" {
 # --- Cloud Run service account ---
 
 resource "google_service_account" "app" {
-  account_id   = "chord-battle"
-  display_name = "chord-battle Cloud Run"
+  account_id   = "tamekoma-night"
+  display_name = "tamekoma-night Cloud Run"
 }
 
 resource "google_secret_manager_secret_iam_member" "app_anthropic" {
@@ -111,9 +111,9 @@ resource "google_project_iam_member" "app_firestore" {
 
 resource "google_artifact_registry_repository" "app" {
   location      = var.region
-  repository_id = "chord-battle"
+  repository_id = "tamekoma-night"
   format        = "DOCKER"
-  description   = "Docker images for chord-battle (Tamekoma Night)"
+  description   = "Docker images for tamekoma-night (Tamekoma Night)"
 
   depends_on = [google_project_service.apis]
 }
@@ -121,14 +121,14 @@ resource "google_artifact_registry_repository" "app" {
 # --- Cloud Run Service ---
 
 resource "google_cloud_run_v2_service" "app" {
-  name     = "chord-battle"
+  name     = "tamekoma-night"
   location = var.region
 
   template {
     service_account = google_service_account.app.email
 
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/chord-battle/app:latest"
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/tamekoma-night/app:latest"
 
       ports {
         container_port = 8080

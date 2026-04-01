@@ -3,7 +3,7 @@ set -euo pipefail
 
 PROJECT_ID="kuma-lab"
 REGION="asia-northeast1"
-REPO="chord-battle"
+REPO="tamekoma-night"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:latest"
 
 echo "=== Building with Cloud Build ==="

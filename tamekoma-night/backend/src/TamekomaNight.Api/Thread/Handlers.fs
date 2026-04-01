@@ -1,4 +1,4 @@
-namespace ChordBattle.Api.Thread
+namespace TamekomaNight.Api.Thread
 
 open System
 open System.Net.Http
@@ -7,10 +7,10 @@ open System.Text
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
-open ChordBattle.Api
-open ChordBattle.Api.Thread.Models
-open ChordBattle.Api.Thread.Repository
-open ChordBattle.Api.Analysis
+open TamekomaNight.Api
+open TamekomaNight.Api.Thread.Models
+open TamekomaNight.Api.Thread.Repository
+open TamekomaNight.Api.Analysis
 
 module ThreadHandlers =
 

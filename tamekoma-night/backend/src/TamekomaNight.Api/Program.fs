@@ -1,4 +1,4 @@
-namespace ChordBattle.Api
+namespace TamekomaNight.Api
 
 open System
 open System.Threading.Tasks
@@ -7,9 +7,9 @@ open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.HttpOverrides
 open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.DependencyInjection
-open ChordBattle.Api.Auth
-open ChordBattle.Api.Thread
-open ChordBattle.Api.Middleware
+open TamekomaNight.Api.Auth
+open TamekomaNight.Api.Thread
+open TamekomaNight.Api.Middleware
 
 module Program =
 

@@ -1,4 +1,4 @@
-namespace ChordBattle.Api
+namespace TamekomaNight.Api
 
 open System
 open System.IO

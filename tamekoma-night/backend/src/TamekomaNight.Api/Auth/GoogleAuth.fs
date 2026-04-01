@@ -1,10 +1,10 @@
-namespace ChordBattle.Api.Auth
+namespace TamekomaNight.Api.Auth
 
 open Microsoft.AspNetCore.Authentication
 open Microsoft.AspNetCore.Authentication.Cookies
 open Microsoft.AspNetCore.Authentication.Google
 open Microsoft.Extensions.DependencyInjection
-open ChordBattle.Api
+open TamekomaNight.Api
 
 module GoogleAuth =
 

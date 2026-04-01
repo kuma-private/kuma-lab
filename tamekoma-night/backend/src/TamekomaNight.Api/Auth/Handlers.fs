@@ -1,4 +1,4 @@
-namespace ChordBattle.Api.Auth
+namespace TamekomaNight.Api.Auth
 
 open System
 open System.Security.Claims
@@ -9,7 +9,7 @@ open Microsoft.AspNetCore.Authentication
 open Microsoft.AspNetCore.Authentication.Google
 open Microsoft.AspNetCore.Http
 open Microsoft.IdentityModel.Tokens
-open ChordBattle.Api
+open TamekomaNight.Api
 
 module AuthHandlers =
 
@@ -27,8 +27,8 @@ module AuthHandlers =
 
         let token =
             JwtSecurityToken(
-                issuer = "chord-battle",
-                audience = "chord-battle",
+                issuer = "tamekoma-night",
+                audience = "tamekoma-night",
                 claims = filteredClaims,
                 expires = DateTime.UtcNow.AddDays(7.0),
                 signingCredentials = credentials

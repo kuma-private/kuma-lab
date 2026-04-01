@@ -1,9 +1,9 @@
-namespace ChordBattle.Api.Thread
+namespace TamekomaNight.Api.Thread
 
 open System
 open System.Collections.Concurrent
 open System.Threading.Tasks
-open ChordBattle.Api.Thread.Models
+open TamekomaNight.Api.Thread.Models
 
 module Repository =
 

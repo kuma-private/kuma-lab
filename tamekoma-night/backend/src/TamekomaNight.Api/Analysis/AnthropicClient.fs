@@ -1,4 +1,4 @@
-namespace ChordBattle.Api.Analysis
+namespace TamekomaNight.Api.Analysis
 
 open System.Net.Http
 open System.Text
