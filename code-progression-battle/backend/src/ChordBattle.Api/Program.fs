@@ -108,6 +108,10 @@ module Program =
             (requireLogin (ThreadHandlers.getThread repo id)) ctx))
         |> ignore
 
+        app.MapDelete("/api/threads/{id}", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (ThreadHandlers.deleteThread repo id)) ctx))
+        |> ignore
+
         app.MapPut("/api/threads/{id}", Func<string, HttpContext, Task>(fun id ctx ->
             (requireLogin (withRateLimit (ThreadHandlers.saveScore repo id))) ctx))
         |> ignore

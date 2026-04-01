@@ -35,7 +35,8 @@
 </script>
 
 {#if visible}
-	<div class="fab" style="left: {x}px; top: {y}px;">
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="fab" style="left: {x}px; top: {y}px;" onmousedown={(e) => { e.preventDefault(); e.stopPropagation(); }}>
 		<button class="fab-btn" onclick={handleToggleReactions} title="リアクション">
 			<span class="fab-icon">{'\u{1F44D}'}</span> いいね
 		</button>

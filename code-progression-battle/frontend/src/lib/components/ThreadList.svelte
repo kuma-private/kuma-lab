@@ -69,8 +69,8 @@
 {#if threads.length === 0}
 	<div class="empty">
 		<div class="empty-chords" aria-hidden="true">| Cmaj7 | Dm7 | G7 | Cmaj7 |</div>
-		<p class="empty-title">まだセッションがありません</p>
-		<p class="empty-sub">新規作成してコードを書き始めよう</p>
+		<p class="empty-title">まだスコアがありません</p>
+		<p class="empty-sub">新規作成してコードを放とう</p>
 	</div>
 {:else}
 	<div class="grid">

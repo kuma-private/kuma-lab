@@ -99,6 +99,23 @@ module ThreadHandlers =
             do! ctx.Response.WriteAsJsonAsync({| id = created.Id |})
         }
 
+    let deleteThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+            let (userId, _) = getUserInfo ctx
+
+            match thread with
+            | Some t when t.CreatedBy = userId ->
+                let! _ = repo.Delete(threadId)
+                ctx.Response.StatusCode <- 204
+            | Some _ ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Only the owner can delete" |})
+            | None ->
+                ctx.Response.StatusCode <- 404
+                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+        }
+
     let getThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)

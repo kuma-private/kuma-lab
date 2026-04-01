@@ -6,12 +6,14 @@
 		drawerOpen: boolean;
 		error: string | null;
 		submitting: boolean;
+		hasChanges: boolean;
 		visibility: string;
+		onDelete?: () => void;
 		onOpenLog: () => void;
 		onExport: () => void;
 		onSave: () => void;
 		onShare: () => void;
-		onUpdateSettings: (data: { key?: string; timeSignature?: string; bpm?: number }) => void;
+		onUpdateSettings: (data: { title?: string; key?: string; timeSignature?: string; bpm?: number }) => void;
 	}
 
 	let {
@@ -19,11 +21,13 @@
 		drawerOpen,
 		error,
 		submitting,
+		hasChanges = false,
 		visibility = 'private',
 		onOpenLog,
 		onExport,
 		onSave,
 		onShare,
+		onDelete,
 		onUpdateSettings,
 	}: Props = $props();
 
@@ -105,16 +109,20 @@
 	let editingTitle = $state(false);
 	let editTitle = $state('');
 
+	let titleInputEl = $state<HTMLInputElement | undefined>(undefined);
+
 	const startEditTitle = () => {
 		editTitle = thread.title;
 		editingTitle = true;
+		requestAnimationFrame(() => titleInputEl?.focus());
 	};
 
 	const saveTitle = () => {
-		editingTitle = false;
+		if (!editingTitle) return;
 		const trimmed = editTitle.trim();
+		editingTitle = false;
 		if (trimmed && trimmed !== thread.title) {
-			onUpdateSettings({ title: trimmed } as any);
+			onUpdateSettings({ title: trimmed });
 		}
 	};
 
@@ -132,8 +140,16 @@
 		{#if editingTitle}
 			<input
 				class="title-input"
+				bind:this={titleInputEl}
 				bind:value={editTitle}
-				onkeydown={(e) => { if (e.key === 'Enter' && !e.isComposing) saveTitle(); if (e.key === 'Escape') editingTitle = false; }}
+				onkeydown={(e) => {
+					if (e.key === 'Enter' && !e.isComposing) {
+						e.preventDefault();
+						saveTitle();
+					} else if (e.key === 'Escape') {
+						editingTitle = false;
+					}
+				}}
 				onblur={saveTitle}
 			/>
 		{:else}
@@ -193,17 +209,28 @@
 		</div>
 	</div>
 	<div class="header-actions">
-		<button class="btn-save-header" onclick={onSave} disabled={submitting}>
+		<button
+			class="btn-save-header"
+			class:btn-save-header--saved={!hasChanges && !submitting}
+			onclick={onSave}
+			disabled={submitting || !hasChanges}
+		>
 			{#if submitting}
 				<span class="save-spinner"></span>
-			{:else}
+				保存中...
+			{:else if hasChanges}
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
 					<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
 					<polyline points="17 21 17 13 7 13 7 21" />
 					<polyline points="7 3 7 8 15 8" />
 				</svg>
+				保存
+			{:else}
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+					<polyline points="20 6 9 17 4 12" />
+				</svg>
+				保存済み
 			{/if}
-			保存
 		</button>
 		<button class="btn-log" onclick={onOpenLog} title="保存履歴">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -216,6 +243,9 @@
 			共有
 		</button>
 		<button class="btn btn-ghost" onclick={onExport}>エクスポート</button>
+		{#if onDelete}
+			<button class="btn btn-ghost btn-ghost--danger" onclick={onDelete}>削除</button>
+		{/if}
 	</div>
 </header>
 
@@ -271,7 +301,9 @@
 		border-radius: var(--radius-sm);
 		padding: 2px 8px;
 		margin: 0 0 8px;
-		width: 100%;
+		width: auto;
+		min-width: 120px;
+		max-width: 400px;
 		box-sizing: border-box;
 		outline: none;
 	}
@@ -387,8 +419,18 @@
 	}
 
 	.btn-save-header:disabled {
-		opacity: 0.4;
+		opacity: 0.6;
 		cursor: default;
+	}
+
+	.btn-save-header--saved {
+		background: var(--bg-elevated);
+		color: var(--success);
+		border: 1px solid rgba(52, 211, 153, 0.3);
+	}
+
+	.btn-ghost--danger:hover {
+		color: var(--error) !important;
 	}
 
 	.save-spinner {

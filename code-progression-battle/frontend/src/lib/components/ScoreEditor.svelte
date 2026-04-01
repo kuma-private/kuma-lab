@@ -3,7 +3,6 @@
 	import { extractRoot } from '$lib/chord-parser';
 	import { chordToDegree } from '$lib/chord-suggest';
 	import type { Annotation } from '$lib/api';
-	import FloatingActionBar from './FloatingActionBar.svelte';
 
 	export type DisplayMode = 'chord' | 'degree';
 
@@ -141,29 +140,7 @@
 		}
 	});
 
-	const highlighted = $derived.by(() => {
-		let html = colorize(internalValue, activeBarIndex, displayMode, musicalKey, lastInsertedText);
-		// Inject annotation badges after bar separators in the preview
-		if (Object.keys(annotationBadges).length > 0) {
-			let barIdx = 0;
-			let insideBar = false;
-			html = html.replace(/<span class="se-bar">\|<\/span>/g, (match) => {
-				let badges = '';
-				if (insideBar && annotationBadges[barIdx]) {
-					const entries = Object.entries(annotationBadges[barIdx]);
-					badges = '<span class="se-badges">' + entries.map(([emoji, count]) =>
-						`<span class="se-badge">${emoji}${count > 1 ? '\u00d7' + count : ''}</span>`
-					).join('') + '</span>';
-					barIdx++;
-				} else if (insideBar) {
-					barIdx++;
-				}
-				insideBar = true;
-				return badges + match;
-			});
-		}
-		return html;
-	});
+	const highlighted = $derived(colorize(internalValue, activeBarIndex, displayMode, musicalKey, lastInsertedText));
 
 	// Convert chord text to degree text for display in textarea
 	const toDegreeText = (text: string, key: string): string => {
@@ -292,10 +269,6 @@
 		}
 	};
 
-	// Floating action bar state
-	let floatingBar = $state<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 });
-	let selectedRange = $state<{ startBar: number; endBar: number; snapshot: string } | null>(null);
-
 	const selectionToBars = (text: string, start: number, end: number): { startBar: number; endBar: number; snapshot: string } => {
 		const snapshot = text.substring(start, end);
 		let startBar = 0;
@@ -309,57 +282,7 @@
 		return { startBar, endBar: Math.max(endBar, startBar), snapshot };
 	};
 
-	const handleMouseUp = (e: MouseEvent) => {
-		if (!textareaEl) return;
-		const selected = textareaEl.value.substring(textareaEl.selectionStart, textareaEl.selectionEnd).trim();
-		if (!selected) {
-			floatingBar = { visible: false, x: 0, y: 0 };
-			selectedRange = null;
-			return;
-		}
-		const rect = textareaEl.getBoundingClientRect();
-		// Position above the click, within the textarea area
-		const barX = Math.min(Math.max(e.clientX - 80, rect.left), rect.right - 200);
-		const barY = e.clientY - 50;
-		selectedRange = selectionToBars(textareaEl.value, textareaEl.selectionStart, textareaEl.selectionEnd);
-		floatingBar = { visible: true, x: barX, y: barY };
-	};
 
-	const hideFloatingBar = () => {
-		floatingBar = { visible: false, x: 0, y: 0 };
-		selectedRange = null;
-	};
-
-	const handleFloatingReaction = (emoji: string) => {
-		if (!selectedRange) return;
-		onReaction?.(emoji, selectedRange.startBar, selectedRange.endBar, selectedRange.snapshot);
-		hideFloatingBar();
-	};
-
-	const handleFloatingComment = () => {
-		if (!selectedRange) return;
-		onRangeComment?.(selectedRange.startBar, selectedRange.endBar, selectedRange.snapshot);
-		hideFloatingBar();
-	};
-
-	const handleFloatingAiAnalyze = () => {
-		if (!selectedRange) return;
-		onAiAnalyze?.(selectedRange.snapshot);
-		hideFloatingBar();
-	};
-
-	// Build annotation badges per bar for preview overlay
-	const annotationBadges = $derived.by(() => {
-		const badges: Record<number, Record<string, number>> = {};
-		for (const ann of annotations) {
-			if (ann.type !== 'reaction' || !ann.emoji) continue;
-			for (let bar = ann.startBar; bar <= ann.endBar; bar++) {
-				if (!badges[bar]) badges[bar] = {};
-				badges[bar][ann.emoji] = (badges[bar][ann.emoji] || 0) + 1;
-			}
-		}
-		return badges;
-	});
 
 	// Double-click chord preview
 	const handleDblClick = async () => {
@@ -381,7 +304,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 {#if contextMenu}
 	<div class="ctx-overlay" onclick={closeContextMenu}></div>
-	<div class="ctx-menu" style="left: {contextMenu.x}px; top: {contextMenu.y}px;">
+	<div class="ctx-menu" style="left: {contextMenu.x}px; top: {contextMenu.y}px;" onmousedown={(e) => e.preventDefault()}>
 		<button class="ctx-item" onclick={handlePlaySelection}>
 			<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
 				<polygon points="4,2 14,8 4,14" />
@@ -389,11 +312,19 @@
 			選択範囲を再生
 		</button>
 		{#if threadId}
+			<div class="ctx-sep"></div>
+			<button class="ctx-item" onclick={() => { const r = selectionToBars(textareaEl!.value, textareaEl!.selectionStart, textareaEl!.selectionEnd); onReaction?.('👍', r.startBar, r.endBar, r.snapshot); closeContextMenu(); }}>
+				👍 いいね
+			</button>
+			<button class="ctx-item" onclick={() => { const r = selectionToBars(textareaEl!.value, textareaEl!.selectionStart, textareaEl!.selectionEnd); onRangeComment?.(r.startBar, r.endBar, r.snapshot); closeContextMenu(); }}>
+				💬 コメント
+			</button>
+			<div class="ctx-sep"></div>
+			<button class="ctx-item" onclick={() => { const sel = textareaEl!.value.substring(textareaEl!.selectionStart, textareaEl!.selectionEnd).trim(); onAiAnalyze?.(sel); closeContextMenu(); }}>
+				🤖 AI分析
+			</button>
 			<button class="ctx-item" onclick={handleOpenAiTransform}>
-				<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path d="M8 1v4M8 11v4M1 8h4M11 8h4M3 3l2.5 2.5M10.5 10.5L13 13M13 3l-2.5 2.5M5.5 10.5L3 13" />
-				</svg>
-				AIで変更...
+				✨ AIで変更...
 			</button>
 		{/if}
 	</div>
@@ -416,7 +347,6 @@
 			onscroll={handleScroll}
 			oncontextmenu={handleContextMenu}
 			ondblclick={handleDblClick}
-			onmouseup={handleMouseUp}
 			readonly={readonly || displayMode === 'degree'}
 			autocomplete="off"
 			spellcheck="false"
@@ -428,14 +358,6 @@
 	</div>
 </div>
 
-<FloatingActionBar
-	visible={floatingBar.visible}
-	x={floatingBar.x}
-	y={floatingBar.y}
-	onReaction={handleFloatingReaction}
-	onComment={handleFloatingComment}
-	onAiAnalyze={handleFloatingAiAnalyze}
-/>
 
 {#if aiTransform}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -652,6 +574,12 @@
 		background: var(--bg-hover);
 	}
 
+	.ctx-sep {
+		height: 1px;
+		background: var(--border-subtle);
+		margin: 2px 4px;
+	}
+
 	/* AI Toast */
 	.ai-toast {
 		padding: 8px 12px;
@@ -834,17 +762,4 @@
 		to { transform: rotate(360deg); }
 	}
 
-	/* Annotation badges */
-	:global(.se-badges) {
-		display: inline;
-		margin-right: 2px;
-	}
-
-	:global(.se-badge) {
-		font-size: 0.7rem;
-		background: rgba(167, 139, 250, 0.15);
-		border-radius: 3px;
-		padding: 0 3px;
-		margin-right: 1px;
-	}
 </style>

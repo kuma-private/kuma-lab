@@ -23,7 +23,7 @@
 		'A#': { label: 'A#', offsetIndex: 6 },
 	};
 
-	const WHITE_KEY_WIDTH = 32; // px - slightly narrower for dock layout
+	const WHITE_KEY_WIDTH = 26; // px - narrower to show more range
 	const BLACK_KEY_WIDTH = WHITE_KEY_WIDTH * 0.6;
 	const TOTAL_WHITE_KEYS = OCTAVE_COUNT * 7 + 1; // +1 for final C7
 	const TOTAL_WIDTH = TOTAL_WHITE_KEYS * WHITE_KEY_WIDTH;
@@ -101,22 +101,43 @@
 		handleKeyUp(note);
 	};
 
-	// Scroll to C4 on mount
-	const scrollToC4 = () => {
+	// Scroll to C3 on mount (good center for AutoVoicing: bass at C2, upper at C4-C5)
+	const scrollToCenter = () => {
 		if (!scrollContainer) return;
-		const c4WhiteIndex = (4 - OCTAVE_START) * 7;
-		const c4Left = c4WhiteIndex * WHITE_KEY_WIDTH;
+		const c3WhiteIndex = (3 - OCTAVE_START) * 7;
+		const c3Left = c3WhiteIndex * WHITE_KEY_WIDTH;
 		const containerWidth = scrollContainer.clientWidth;
-		scrollContainer.scrollLeft = c4Left - containerWidth / 2 + WHITE_KEY_WIDTH / 2;
+		scrollContainer.scrollLeft = c3Left - containerWidth * 0.3;
 	};
 
 	onMount(() => {
-		setTimeout(scrollToC4, 100);
+		setTimeout(scrollToCenter, 100);
 	});
 
+	// Auto-scroll to show playing notes
 	$effect(() => {
-		if (scrollContainer) {
-			requestAnimationFrame(scrollToC4);
+		if (!scrollContainer || playingNotes.length === 0) return;
+		// Find leftmost playing note position
+		const noteToWhiteIndex = (note: string): number => {
+			const match = note.match(/^([A-G]#?)(\d)$/);
+			if (!match) return 0;
+			const [, name, octStr] = match;
+			const oct = parseInt(octStr) - OCTAVE_START;
+			const whiteIdx = WHITE_NOTES.indexOf(name.replace('#', ''));
+			return oct * 7 + whiteIdx;
+		};
+		const indices = playingNotes.map(noteToWhiteIndex);
+		const minIdx = Math.min(...indices);
+		const maxIdx = Math.max(...indices);
+		const minLeft = minIdx * WHITE_KEY_WIDTH;
+		const maxRight = (maxIdx + 1) * WHITE_KEY_WIDTH;
+		const containerWidth = scrollContainer.clientWidth;
+		const scrollLeft = scrollContainer.scrollLeft;
+		// Only scroll if notes are out of view
+		if (minLeft < scrollLeft + 20) {
+			scrollContainer.scrollLeft = minLeft - 40;
+		} else if (maxRight > scrollLeft + containerWidth - 20) {
+			scrollContainer.scrollLeft = maxRight - containerWidth + 40;
 		}
 	});
 </script>

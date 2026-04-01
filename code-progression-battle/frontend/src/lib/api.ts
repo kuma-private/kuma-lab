@@ -55,6 +55,10 @@ export const getThread = async (id: string): Promise<Thread> => {
 	return res.json();
 };
 
+export const deleteThread = async (threadId: string): Promise<void> => {
+	await apiFetch(`/api/threads/${threadId}`, { method: 'DELETE' });
+};
+
 export const createThread = async (data: { title: string }): Promise<{ id: string }> => {
 	const res = await apiFetch('/api/threads', {
 		method: 'POST',

@@ -20,7 +20,7 @@
 	});
 
 	const handleNewSession = async () => {
-		const result = await store.createThread({ title: '新しいセッション' });
+		const result = await store.createThread({ title: '無題のスコア' });
 		if (result) {
 			window.location.href = `/thread/${result.id}`;
 		}
@@ -32,17 +32,18 @@
 </svelte:head>
 
 <div class="page-bg" aria-hidden="true">
-	<div class="bg-grid"></div>
+	<div class="bg-stars"></div>
+	<div class="bg-city"></div>
 	<div class="orb orb-1"></div>
 	<div class="orb orb-2"></div>
-	<div class="orb orb-3"></div>
-	<div class="bg-vignette"></div>
 </div>
 
 <div class="page">
+	<div class="slogan">溜め込まないで、コードを放て。</div>
+
 	<div class="top-bar">
 		<div class="top-left">
-			<h1 class="top-title">セッション</h1>
+			<h1 class="top-title">スコア</h1>
 			{#if store.threads.length > 0}
 				<span class="top-count">{store.threads.length}</span>
 			{/if}
@@ -75,76 +76,85 @@
 		overflow: hidden;
 		pointer-events: none;
 		z-index: -1;
-		background: var(--bg-deepest);
+		background: linear-gradient(180deg, #030010 0%, #0a0820 40%, #0f0c2e 70%, #1a1040 100%);
 	}
 
-	/* Subtle dot grid - DAW-inspired */
-	.bg-grid {
+	.bg-stars {
 		position: absolute;
 		inset: 0;
 		background-image:
-			radial-gradient(circle, rgba(167, 139, 250, 0.08) 1px, transparent 1px);
-		background-size: 32px 32px;
-		mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 20%, transparent 70%);
-		-webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 20%, transparent 70%);
+			radial-gradient(2px 2px at 8% 10%, #fff, transparent),
+			radial-gradient(2px 2px at 22% 6%, #fff, transparent),
+			radial-gradient(3px 3px at 38% 18%, #c4b5fd, transparent),
+			radial-gradient(2px 2px at 52% 4%, #fff, transparent),
+			radial-gradient(2px 2px at 68% 14%, #fff, transparent),
+			radial-gradient(3px 3px at 82% 9%, #93c5fd, transparent),
+			radial-gradient(1.5px 1.5px at 12% 26%, #e0e0f0, transparent),
+			radial-gradient(2px 2px at 32% 30%, #fff, transparent),
+			radial-gradient(1.5px 1.5px at 58% 24%, #e0e0f0, transparent),
+			radial-gradient(3px 3px at 78% 28%, #f9a8d4, transparent),
+			radial-gradient(2px 2px at 90% 20%, #fff, transparent),
+			radial-gradient(4px 4px at 18% 2%, #c4b5fd, transparent),
+			radial-gradient(1.5px 1.5px at 45% 34%, #e0e0f0, transparent),
+			radial-gradient(2px 2px at 95% 6%, #fff, transparent),
+			radial-gradient(2px 2px at 5% 38%, #fff, transparent),
+			radial-gradient(3px 3px at 65% 8%, #93c5fd, transparent),
+			radial-gradient(2px 2px at 28% 16%, #fff, transparent),
+			radial-gradient(1.5px 1.5px at 72% 36%, #e0e0f0, transparent),
+			radial-gradient(2px 2px at 48% 12%, #fff, transparent),
+			radial-gradient(3px 3px at 85% 22%, #c4b5fd, transparent);
+		animation: twinkle 3s ease-in-out infinite alternate;
 	}
 
-	/* Edge vignette */
-	.bg-vignette {
+	@keyframes twinkle {
+		0% { opacity: 0.6; }
+		100% { opacity: 1; }
+	}
+
+	.bg-city {
 		position: absolute;
-		inset: 0;
-		background: radial-gradient(ellipse at 50% 50%, transparent 40%, var(--bg-deepest) 100%);
+		bottom: 0;
+		left: 0;
+		right: 0;
+		height: 35%;
+		background: linear-gradient(180deg, transparent 0%, rgba(167,139,250,0.03) 50%, rgba(139,92,246,0.06) 100%);
 	}
 
 	.orb {
 		position: absolute;
 		border-radius: 50%;
-		filter: blur(120px);
-		opacity: 0.08;
+		filter: blur(100px);
 		will-change: transform;
 	}
 
 	.orb-1 {
-		width: 600px;
-		height: 600px;
+		width: 500px;
+		height: 500px;
 		background: var(--accent-primary);
-		top: -200px;
-		right: -150px;
-		animation: drift1 14s ease-in-out infinite;
+		bottom: -200px;
+		right: 10%;
+		opacity: 0.06;
+		animation: drift1 16s ease-in-out infinite;
 	}
 
 	.orb-2 {
-		width: 450px;
-		height: 450px;
+		width: 400px;
+		height: 400px;
 		background: var(--accent-secondary);
 		bottom: -150px;
-		left: -100px;
-		animation: drift2 18s ease-in-out infinite;
-	}
-
-	.orb-3 {
-		width: 350px;
-		height: 350px;
-		background: #f472b6;
-		top: 50%;
-		left: 40%;
-		opacity: 0.04;
-		animation: drift3 22s ease-in-out infinite;
+		left: 15%;
+		opacity: 0.05;
+		animation: drift2 20s ease-in-out infinite;
 	}
 
 	@keyframes drift1 {
-		0%, 100% { transform: translate(0, 0) scale(1); }
-		50% { transform: translate(-50px, 40px) scale(1.05); }
+		0%, 100% { transform: translate(0, 0); }
+		50% { transform: translate(-30px, -20px); }
 	}
 
 	@keyframes drift2 {
-		0%, 100% { transform: translate(0, 0) scale(1); }
-		50% { transform: translate(40px, -30px) scale(0.95); }
-	}
-
-	@keyframes drift3 {
 		0%, 100% { transform: translate(0, 0); }
-		50% { transform: translate(-30px, -40px); }
+		50% { transform: translate(20px, -15px); }
 	}
 
 	.page {
@@ -152,6 +162,15 @@
 		margin: 0 auto;
 		padding: var(--space-lg) var(--space-xl);
 		min-height: calc(100vh - 44px);
+	}
+
+	.slogan {
+		text-align: center;
+		font-size: 0.85rem;
+		color: var(--text-muted);
+		padding: var(--space-lg) 0 var(--space-sm);
+		letter-spacing: 0.15em;
+		opacity: 0.6;
 	}
 
 	.top-bar {
@@ -253,7 +272,6 @@
 
 	@media (max-width: 600px) {
 		.orb { display: none; }
-		.bg-grid { opacity: 0.5; }
 
 		.top-bar {
 			flex-direction: column;

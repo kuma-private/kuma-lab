@@ -217,12 +217,12 @@ function chordToNotesHarmonic(chord: ParsedChord, intervals: number[]): string[]
   const bassRoot = chord.bass ?? chord.root;
   const bassMidi = rootToMidi(bassRoot, 2);
 
-  // Upper voices: intervals without root (or all if only 3 notes), centered around octave 4
+  // Upper voices: skip root (already in bass), center around C4 (MIDI 60)
   const rootPc = rootToMidi(chord.root, 0) % 12;
   const upperIntervals = intervals.length > 3 ? intervals.slice(1) : intervals;
   let upperMidi = upperIntervals.map(iv => {
     const pc = (rootPc + iv) % 12;
-    return pc + 48; // octave 4 base (C4 = 48 in our system, MIDI 60)
+    return pc + 60; // C4 = MIDI 60
   });
 
   // Voice leading: if we have a previous chord, find closest inversion
@@ -238,18 +238,16 @@ function chordToNotesHarmonic(chord: ParsedChord, intervals: number[]): string[]
 
 /**
  * Voice leading: rearrange target notes to minimize total movement from previous notes.
- * Each note finds the closest octave transposition to the average position of previous notes.
  */
 function voiceLead(target: number[], previous: number[]): number[] {
   const prevCenter = previous.reduce((a, b) => a + b, 0) / previous.length;
 
   return target.map(note => {
     const pc = note % 12;
-    // Find the octave placement closest to the previous center
     let best = pc + Math.round((prevCenter - pc) / 12) * 12;
-    // Keep within reasonable piano range (C3-C5 = MIDI 48-72)
-    if (best < 48) best += 12;
-    if (best > 72) best -= 12;
+    // Keep within C4-C5 range (MIDI 60-72) to stay above bass
+    if (best < 57) best += 12;  // below A3 → move up
+    if (best > 76) best -= 12;  // above E5 → move down
     return best;
   });
 }
@@ -381,6 +379,7 @@ export const stopSelection = () => {
 
 export const playSelection = async (text: string, config: PlayerConfig): Promise<void> => {
   stopSelection();
+  resetVoiceLeading();
   await Tone.start();
   const { bars } = parseProgression(text);
   if (bars.length === 0) return;

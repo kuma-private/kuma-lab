@@ -46,6 +46,12 @@ module Repository =
                 return thread
             }
 
+        let delete (threadId: string) : Task<bool> =
+            task {
+                let (removed, _) = threads.TryRemove(threadId)
+                return removed
+            }
+
         let saveScore (threadId: string) (score: string) (history: SaveHistory) : Task<Thread option> =
             task {
                 match threads.TryGetValue(threadId) with
@@ -328,6 +334,17 @@ module Repository =
                 return thread
             }
 
+        let delete (threadId: string) : Task<bool> =
+            task {
+                let docRef = db.Value.Collection("threads").Document(threadId)
+                let! snapshot = docRef.GetSnapshotAsync()
+                if snapshot.Exists then
+                    let! _ = docRef.DeleteAsync()
+                    return true
+                else
+                    return false
+            }
+
         let private updateThread (threadId: string) (transform: Thread -> Thread) : Task<Thread option> =
             task {
                 let! existing = getById threadId
@@ -509,6 +526,7 @@ module Repository =
           GetById: string -> Task<Thread option>
           Create: Thread -> Task<Thread>
           Update: Thread -> Task<Thread>
+          Delete: string -> Task<bool>
           SaveScore: string -> string -> SaveHistory -> Task<Thread option>
           UpdateSettings: string -> string -> string -> int -> string -> Task<Thread option>
           UpdateShare: string -> string -> string list -> Task<Thread option>
@@ -525,6 +543,7 @@ module Repository =
               GetById = InMemory.getById
               Create = InMemory.create
               Update = InMemory.update
+              Delete = InMemory.delete
               SaveScore = InMemory.saveScore
               UpdateSettings = InMemory.updateSettings
               UpdateShare = InMemory.updateShare
@@ -539,6 +558,7 @@ module Repository =
               GetById = Firestore.getById
               Create = Firestore.create
               Update = Firestore.update
+              Delete = Firestore.delete
               SaveScore = Firestore.saveScore
               UpdateSettings = Firestore.updateSettings
               UpdateShare = Firestore.updateShare

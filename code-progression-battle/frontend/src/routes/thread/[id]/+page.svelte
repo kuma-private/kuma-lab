@@ -3,7 +3,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { createAppStore } from '$lib/stores/app.svelte';
 	import { parseProgression, transpose, parseChord } from '$lib/chord-parser';
-	import { ChordPlayer, type PlayerState, type OscPreset, type VoicingMode, setGlobalOscPreset, setVoicingMode, chordToNotes, onSelectionNotes } from '$lib/chord-player';
+	import { ChordPlayer, type PlayerState, type OscPreset, type VoicingMode, setGlobalOscPreset, setVoicingMode, chordToNotes, onSelectionNotes, stopSelection } from '$lib/chord-player';
 	import type { DisplayMode } from '$lib/components/ScoreEditor.svelte';
 	import type { SaveHistory, Comment, Annotation } from '$lib/api';
 	import { getComments, addComment, deleteComment, getAnnotations, addAnnotation, analyzeSelection } from '$lib/api';
@@ -38,6 +38,7 @@
 	let scoreEditorValue = $state('');
 	let pendingInsertText = $state('');
 	let scoreInitialized = $state(false);
+	const hasChanges = $derived(store.currentThread ? scoreEditorValue !== (store.currentThread.score || '') : false);
 	let scoreDisplayMode = $state<DisplayMode>('chord');
 
 	// Import modal state
@@ -184,7 +185,7 @@
 		if (player) await player.play();
 	};
 	const handlePause = () => { player?.pause(); };
-	const handleStop = () => { player?.stop(); activeBarIndex = -1; currentChord = null; };
+	const handleStop = () => { player?.stop(); stopSelection(); activeBarIndex = -1; currentChord = null; };
 	const handleSeek = (time: number) => { player?.seekTo(time); };
 	const handleVolumeChange = (db: number) => { playerVolume = db; player?.setVolume(db); };
 	const handleLoopChange = (loop: boolean) => { playerLoop = loop; player?.setLoop(loop); };
@@ -226,14 +227,28 @@
 		URL.revokeObjectURL(url);
 	};
 
+	const handleDelete = async () => {
+		if (!confirm('このセッションを削除しますか？')) return;
+		try {
+			const { deleteThread } = await import('$lib/api');
+			await deleteThread(threadId);
+			window.location.href = '/';
+		} catch (e) {
+			alert('削除に失敗しました');
+		}
+	};
+
 	// Annotation handlers
 	const handleReaction = async (emoji: string, startBar: number, endBar: number, snapshot: string) => {
 		try {
-			const annotation = await addAnnotation(threadId, {
-				annotationType: 'reaction',
-				startBar, endBar, snapshot, emoji
+			const comment = await addComment(threadId, {
+				text: `${emoji} ${snapshot}`,
+				anchorType: 'range',
+				anchorStart: startBar,
+				anchorEnd: endBar,
+				anchorSnapshot: snapshot,
 			});
-			annotations = [...annotations, annotation];
+			comments = [...comments, comment];
 		} catch {
 			// handle error silently
 		}
@@ -386,11 +401,13 @@
 			{drawerOpen}
 			error={store.error}
 			{submitting}
+			{hasChanges}
 			visibility={thread.visibility || 'private'}
 			onOpenLog={toggleDrawer}
 			onExport={handleExport}
 			onSave={handleSave}
 			onShare={handleShare}
+			onDelete={handleDelete}
 			onUpdateSettings={handleUpdateSettings}
 		/>
 
@@ -460,13 +477,10 @@
 		history={historyItems}
 		open={drawerOpen}
 		onClose={closeDrawer}
-		onRestore={handleRestoreScore}
-		onReviewEntry={handleReviewEntry}
 		{comments}
 		onAddComment={handleAddComment}
 		onDeleteComment={handleDeleteComment}
 		currentUserId={store.user?.sub || ''}
-		{annotations}
 	/>
 {/if}
 
