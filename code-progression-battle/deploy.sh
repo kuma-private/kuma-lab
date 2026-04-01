@@ -6,11 +6,13 @@ REGION="asia-northeast1"
 REPO="chord-battle"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:latest"
 
-echo "=== Building Docker image ==="
-docker build -f backend/Dockerfile -t "${IMAGE}" .
-
-echo "=== Pushing to Artifact Registry ==="
-docker push "${IMAGE}"
+echo "=== Building with Cloud Build ==="
+gcloud builds submit \
+  --project="${PROJECT_ID}" \
+  --region="${REGION}" \
+  --config=cloudbuild.yaml \
+  --substitutions="_IMAGE=${IMAGE}" \
+  .
 
 echo "=== Applying Terraform ==="
 cd infra

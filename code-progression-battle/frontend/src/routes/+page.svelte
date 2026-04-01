@@ -5,10 +5,14 @@
 
 	const store = createAppStore();
 	let threadFilter = $state('all');
+	let authChecked = $state(false);
 
-	onMount(() => {
-		store.checkLogin();
-		store.loadThreads();
+	onMount(async () => {
+		await store.checkLogin();
+		authChecked = true;
+		if (store.loggedIn) {
+			store.loadThreads();
+		}
 	});
 
 	const filteredThreads = $derived.by(() => {
@@ -39,34 +43,63 @@
 </div>
 
 <div class="page">
-	<div class="slogan">溜め込まないで、コードを放て。</div>
-
-	<div class="top-bar">
-		<div class="top-left">
-			<h1 class="top-title">スコア</h1>
-			{#if store.threads.length > 0}
-				<span class="top-count">{store.threads.length}</span>
-			{/if}
+	{#if !authChecked}
+		<div class="loading-full">
+			<div class="loading-spinner"></div>
 		</div>
-		<button class="btn-new" onclick={handleNewSession}>
-			<span class="btn-new-icon">+</span>
-			新規作成
-		</button>
-	</div>
-
-	{#if store.error}
-		<div class="error-banner" role="alert">{store.error}</div>
-	{/if}
-
-	<main class="main">
-		{#if store.loading}
-			<div class="loading" role="status" aria-label="読み込み中">
-				<div class="loading-spinner"></div>
+	{:else if !store.loggedIn}
+		<div class="login-screen">
+			<div class="login-card">
+				<div class="login-icon">
+					<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M9 18V5l12-2v13" />
+						<circle cx="6" cy="18" r="3" />
+						<circle cx="18" cy="16" r="3" />
+					</svg>
+				</div>
+				<h1 class="login-title">Tamekoma Night</h1>
+				<p class="login-sub">溜め込まないで、コードを放て。</p>
+				<a href="/auth/google" class="btn-google">
+					<svg width="18" height="18" viewBox="0 0 24 24">
+						<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+						<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+						<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+						<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+					</svg>
+					Googleでログイン
+				</a>
 			</div>
-		{:else}
-			<ThreadList threads={filteredThreads} filter={threadFilter} onFilterChange={(f) => { threadFilter = f; }} />
+		</div>
+	{:else}
+		<div class="slogan">溜め込まないで、コードを放て。</div>
+
+		<div class="top-bar">
+			<div class="top-left">
+				<h1 class="top-title">スコア</h1>
+				{#if store.threads.length > 0}
+					<span class="top-count">{store.threads.length}</span>
+				{/if}
+			</div>
+			<button class="btn-new" onclick={handleNewSession}>
+				<span class="btn-new-icon">+</span>
+				新規作成
+			</button>
+		</div>
+
+		{#if store.error}
+			<div class="error-banner" role="alert">{store.error}</div>
 		{/if}
-	</main>
+
+		<main class="main">
+			{#if store.loading}
+				<div class="loading" role="status" aria-label="読み込み中">
+					<div class="loading-spinner"></div>
+				</div>
+			{:else}
+				<ThreadList threads={filteredThreads} filter={threadFilter} onFilterChange={(f) => { threadFilter = f; }} />
+			{/if}
+		</main>
+	{/if}
 </div>
 
 <style>
@@ -162,6 +195,76 @@
 		margin: 0 auto;
 		padding: var(--space-lg) var(--space-xl);
 		min-height: calc(100vh - 44px);
+	}
+
+	/* Login screen */
+	.loading-full {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		min-height: 60vh;
+	}
+
+	.login-screen {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		min-height: 70vh;
+	}
+
+	.login-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-2xl) var(--space-xl);
+		background: rgba(20, 20, 50, 0.6);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
+		backdrop-filter: blur(12px);
+		text-align: center;
+		max-width: 360px;
+		width: 100%;
+	}
+
+	.login-icon {
+		color: var(--accent-primary);
+		opacity: 0.8;
+	}
+
+	.login-title {
+		font-family: var(--font-display);
+		font-size: 1.8rem;
+		font-weight: 700;
+		color: var(--text-primary);
+		margin: 0;
+	}
+
+	.login-sub {
+		color: var(--text-muted);
+		font-size: 0.88rem;
+		margin: 0;
+	}
+
+	.btn-google {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 24px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background: #fff;
+		color: #333;
+		font-size: 0.88rem;
+		font-weight: 500;
+		text-decoration: none;
+		transition: all 0.2s;
+		margin-top: var(--space-sm);
+	}
+
+	.btn-google:hover {
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		transform: translateY(-1px);
 	}
 
 	.slogan {
