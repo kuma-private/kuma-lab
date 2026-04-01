@@ -682,6 +682,24 @@
 	}
 
 	@media (max-width: 600px) {
+		.modal {
+			width: 96vw;
+		}
+
+		.drop-zone {
+			padding: var(--space-lg);
+		}
+
+		.thumb {
+			width: 64px;
+			height: 64px;
+		}
+
+		.btn-cancel,
+		.btn-submit {
+			min-height: 40px;
+		}
+
 		.meta-row {
 			flex-direction: column;
 		}

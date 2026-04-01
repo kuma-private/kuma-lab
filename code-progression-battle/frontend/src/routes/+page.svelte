@@ -273,6 +273,10 @@
 	@media (max-width: 600px) {
 		.orb { display: none; }
 
+		.page {
+			padding: var(--space-md) var(--space-md);
+		}
+
 		.top-bar {
 			flex-direction: column;
 			align-items: stretch;

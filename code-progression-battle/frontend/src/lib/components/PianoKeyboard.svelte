@@ -302,5 +302,13 @@
 		.bk {
 			height: 35px;
 		}
+
+		.wk-label {
+			display: none;
+		}
+
+		.bk-label {
+			display: none;
+		}
 	}
 </style>

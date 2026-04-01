@@ -238,6 +238,52 @@
 	let hovered = $state<string | null>(null);
 	let svgEl: SVGSVGElement | undefined = $state();
 
+	// Swipe handling for mobile
+	let touchStartX = $state(0);
+	let touchStartY = $state(0);
+	let swipeRotation = $state(0);
+
+	const FIFTHS_ORDER = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
+
+	const handleTouchStart = (e: TouchEvent) => {
+		touchStartX = e.touches[0].clientX;
+		touchStartY = e.touches[0].clientY;
+	};
+
+	const handleTouchEnd = (e: TouchEvent) => {
+		const dx = e.changedTouches[0].clientX - touchStartX;
+		const dy = e.changedTouches[0].clientY - touchStartY;
+
+		// Only process horizontal swipes (ignore vertical scrolling)
+		if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx)) return;
+
+		// Find current position in fifths order
+		const currentRoot = selectedRoot ? getRootFromLabel(selectedRoot) : null;
+		if (!currentRoot) return;
+		const currentIdx = FIFTHS_ORDER.indexOf(currentRoot);
+		if (currentIdx === -1) return;
+
+		// Left swipe = next (clockwise), right swipe = previous
+		const nextIdx = dx < 0
+			? (currentIdx + 1) % 12
+			: (currentIdx - 1 + 12) % 12;
+
+		const newRoot = FIFTHS_ORDER[nextIdx];
+
+		// Visual feedback: rotate in swipe direction then spring back
+		swipeRotation = dx < 0 ? -15 : 15;
+		setTimeout(() => { swipeRotation = 0; }, 200);
+
+		// Determine if we should select major or minor based on current selection
+		const isMinor = selectedRoot ? selectedRoot.endsWith('m') && !selectedRoot.endsWith('dim') : false;
+		if (isMinor) {
+			const minorLabel = newRoot + 'm';
+			handleChordClick(minorLabel, true);
+		} else {
+			handleChordClick(newRoot, false);
+		}
+	};
+
 	// Compute preview button position in pixels relative to the SVG container
 	const hoveredPreviewPos = $derived.by(() => {
 		if (!hovered) return null;
@@ -303,8 +349,10 @@
 	</div>
 
 	<!-- SVG Circle wrapper -->
-	<div class="cof-svg-wrapper">
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="cof-svg-wrapper" ontouchstart={handleTouchStart} ontouchend={handleTouchEnd}>
 		<svg bind:this={svgEl} viewBox="0 0 400 400" class="cof-svg" xmlns="http://www.w3.org/2000/svg">
+			<g class="cof-ring" style="transform: rotate({swipeRotation}deg); transform-origin: {CX}px {CY}px; transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);">
 			<!-- Outer ring: Major chords -->
 			{#each MAJOR_ROOTS as label, i}
 				{@const root = getRootFromLabel(label)}
@@ -373,6 +421,7 @@
 				>{label}</text>
 			{/each}
 
+			</g>
 			<!-- Center circle: current selection -->
 			<circle cx={CX} cy={CY} r={R_CENTER} class="cof-center" />
 			<text x={CX} y={CY - 8} class="cof-center-text" dominant-baseline="central" text-anchor="middle">
@@ -593,5 +642,36 @@
 
 	.cof-add-btn:hover {
 		background: rgba(167, 139, 250, 0.3);
+	}
+
+	@media (max-width: 600px) {
+		.cof-qualities {
+			display: flex;
+			overflow-x: auto;
+			-webkit-overflow-scrolling: touch;
+			scroll-snap-type: x mandatory;
+			gap: 4px;
+			padding: 4px 0;
+			flex-wrap: nowrap;
+		}
+
+		.cof-q-btn {
+			flex-shrink: 0;
+			min-width: 44px;
+			height: 36px;
+			scroll-snap-align: center;
+			padding: 4px 10px;
+		}
+
+		.cof-svg-wrapper, .cof-svg-wrapper svg {
+			max-width: 100%;
+			width: 100%;
+		}
+
+		.cof-add-btn {
+			font-size: 0.8rem;
+			padding: 8px;
+			min-height: 40px;
+		}
 	}
 </style>

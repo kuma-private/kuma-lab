@@ -408,4 +408,19 @@
 	@keyframes spin {
 		to { transform: rotate(360deg); }
 	}
+
+	@media (max-width: 600px) {
+		.modal {
+			width: 95vw;
+		}
+
+		.radio-option {
+			padding: var(--space-md);
+		}
+
+		.btn-remove {
+			width: 32px;
+			height: 32px;
+		}
+	}
 </style>

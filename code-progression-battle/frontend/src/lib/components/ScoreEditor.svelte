@@ -553,6 +553,7 @@
 		box-shadow: var(--shadow-elevated);
 		padding: 4px;
 		min-width: 160px;
+		max-width: calc(100vw - 20px);
 	}
 
 	.ctx-item {
@@ -760,6 +761,17 @@
 
 	@keyframes spin {
 		to { transform: rotate(360deg); }
+	}
+
+	@media (max-width: 600px) {
+		.ai-modal {
+			width: 95vw;
+		}
+
+		.ai-btn {
+			padding: 8px 14px;
+			min-height: 40px;
+		}
 	}
 
 </style>

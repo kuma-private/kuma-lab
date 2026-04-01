@@ -126,7 +126,6 @@
 		}
 	};
 
-	const memberCount = $derived(thread.members?.length ?? 0);
 </script>
 
 <header class="thread-header">
@@ -201,10 +200,6 @@
 				</div>
 			{:else}
 				<button class="badge badge-editable" onclick={startEditBpm} title="クリックして変更">BPM {thread.bpm}</button>
-			{/if}
-
-			{#if memberCount > 0}
-				<span class="badge badge-members">{memberCount}人参加中</span>
 			{/if}
 		</div>
 	</div>
@@ -511,9 +506,31 @@
 			gap: var(--space-sm);
 		}
 
+		.thread-title {
+			font-size: 1.1rem;
+		}
+
+		.title-input {
+			max-width: 100%;
+			font-size: 1.1rem;
+		}
+
+		.badge-editable {
+			padding: 4px 10px;
+			min-height: 32px;
+		}
+
 		.header-actions {
 			width: 100%;
 			justify-content: flex-end;
+			flex-wrap: wrap;
+		}
+
+		.btn-save-header,
+		.btn-log,
+		.btn-share,
+		.btn.btn-ghost {
+			min-height: 36px;
 		}
 	}
 </style>

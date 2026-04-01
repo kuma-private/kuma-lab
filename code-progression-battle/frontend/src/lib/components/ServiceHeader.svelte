@@ -121,4 +121,10 @@
 	.btn-login:hover {
 		background: rgba(167, 139, 250, 0.1);
 	}
+
+	@media (max-width: 600px) {
+		.service-header { padding: 0 var(--space-sm); }
+		.service-logo { font-size: 0.78rem; }
+		.btn-logout, .btn-login { padding: 6px 12px; }
+	}
 </style>

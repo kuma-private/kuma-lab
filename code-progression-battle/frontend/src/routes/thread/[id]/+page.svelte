@@ -589,8 +589,13 @@
 	}
 
 	@media (max-width: 600px) {
+		.page {
+			padding-bottom: calc(72px + var(--space-md));
+		}
+
 		.editor-layout {
 			grid-template-columns: 1fr;
+			gap: var(--space-sm);
 		}
 	}
 </style>

@@ -300,4 +300,25 @@
 		padding: var(--space-xl);
 		font-size: 0.85rem;
 	}
+
+	@media (max-width: 600px) {
+		.panel-header {
+			flex-wrap: wrap;
+			gap: var(--space-sm);
+		}
+
+		.score-toolbar {
+			flex-wrap: wrap;
+			gap: 6px;
+		}
+
+		.score-tool-btn {
+			padding: 6px 10px;
+			min-height: 36px;
+		}
+
+		.toolbar-spacer {
+			display: none;
+		}
+	}
 </style>

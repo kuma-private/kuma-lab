@@ -554,6 +554,40 @@
 		.chord-name { font-size: 0.85rem; }
 	}
 
+	@media (max-width: 600px) {
+		.player-dock {
+			left: 4px;
+			right: 4px;
+			transform: none;
+			width: auto;
+			border-radius: var(--radius-md);
+		}
+
+		.player-btn {
+			width: 36px;
+			height: 36px;
+		}
+
+		.player-btn--play {
+			width: 40px;
+			height: 40px;
+		}
+
+		.player-spacer,
+		.player-sep {
+			display: none;
+		}
+
+		.voicing-toggle {
+			display: none;
+		}
+
+		.player-row-top {
+			flex-wrap: wrap;
+			gap: 4px;
+		}
+	}
+
 	@media (max-width: 500px) {
 		.piano-section { display: none; }
 		.dock-divider { display: none; }
