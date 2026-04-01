@@ -136,6 +136,22 @@ module Program =
             (ThreadHandlers.exportThread repo id) ctx))
         |> ignore
 
+        app.MapPut("/api/threads/{id}/share", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (ThreadHandlers.shareThread repo id)) ctx))
+        |> ignore
+
+        app.MapPost("/api/threads/{id}/comments", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (ThreadHandlers.addComment repo id)) ctx))
+        |> ignore
+
+        app.MapGet("/api/threads/{id}/comments", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (ThreadHandlers.listComments repo id)) ctx))
+        |> ignore
+
+        app.MapDelete("/api/threads/{id}/comments/{commentId}", Func<string, string, HttpContext, Task>(fun id commentId ctx ->
+            (requireLogin (ThreadHandlers.deleteComment repo id commentId)) ctx))
+        |> ignore
+
         // SPA fallback
         app.MapFallbackToFile("index.html") |> ignore
 

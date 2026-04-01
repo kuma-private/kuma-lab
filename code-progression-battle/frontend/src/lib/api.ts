@@ -10,6 +10,8 @@ export interface Thread {
 	lastEditedBy: string;
 	lastEditedAt: string;
 	members: string[];
+	visibility: string;
+	sharedWith: string[];
 }
 
 export interface SaveHistory {
@@ -123,4 +125,51 @@ export const importChordChart = async (
 export const exportThread = async (threadId: string): Promise<string> => {
 	const res = await apiFetch(`/api/threads/${threadId}/export`);
 	return res.text();
+};
+
+// Share
+export const shareThread = async (
+	threadId: string,
+	data: { visibility: string; sharedWith: string[] }
+): Promise<Thread> => {
+	const res = await apiFetch(`/api/threads/${threadId}/share`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};
+
+// Comments
+export interface Comment {
+	id: string;
+	userId: string;
+	userName: string;
+	text: string;
+	anchorType: string;
+	anchorStart: number;
+	anchorEnd: number;
+	anchorSnapshot: string;
+	createdAt: string;
+}
+
+export const addComment = async (
+	threadId: string,
+	data: { text: string; anchorType: string; anchorStart: number; anchorEnd: number; anchorSnapshot: string }
+): Promise<Comment> => {
+	const res = await apiFetch(`/api/threads/${threadId}/comments`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};
+
+export const getComments = async (threadId: string): Promise<Comment[]> => {
+	const res = await apiFetch(`/api/threads/${threadId}/comments`);
+	return res.json();
+};
+
+export const deleteComment = async (threadId: string, commentId: string): Promise<void> => {
+	await apiFetch(`/api/threads/${threadId}/comments/${commentId}`, { method: 'DELETE' });
 };

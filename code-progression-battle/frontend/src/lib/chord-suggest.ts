@@ -154,14 +154,32 @@ const ROMAN_LOWER = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii'];
  * In C Major: Am7 → vi7, Dm7 → ii7, G7 → V7, Cmaj7 → Imaj7
  * Major chords → uppercase, minor/dim → lowercase.
  */
+const noteToDegree = (noteIdx: number, keyRootIdx: number, intervals: number[]): { accidental: string; degreeIdx: number } | null => {
+  const semitone = ((noteIdx - keyRootIdx) % 12 + 12) % 12;
+  const degreeIdx = intervals.indexOf(semitone);
+  if (degreeIdx !== -1) return { accidental: '', degreeIdx };
+
+  const sharpIdx = intervals.indexOf(((semitone - 1) % 12 + 12) % 12);
+  if (sharpIdx !== -1) return { accidental: '#', degreeIdx: sharpIdx };
+
+  const flatIdx = intervals.indexOf(((semitone + 1) % 12 + 12) % 12);
+  if (flatIdx !== -1) return { accidental: 'b', degreeIdx: flatIdx };
+
+  return null;
+};
+
 export const chordToDegree = (chord: string, key: string): string => {
   const { root, isMinor } = parseKeyString(key);
   const rootIdx = noteToIndex(root);
   const intervals = isMinor ? MINOR_INTERVALS : MAJOR_INTERVALS;
 
-  // Parse the chord: extract root note, then quality
-  // Root can be a letter + optional # or b
-  const chordMatch = chord.match(/^([A-G][#b]?)(.*)/);
+  // Handle slash chords: split into chord part and bass part
+  const slashMatch = chord.match(/^(.+)\/([A-G][#b]?)$/);
+  const mainChord = slashMatch ? slashMatch[1] : chord;
+  const bassNote = slashMatch ? slashMatch[2] : null;
+
+  // Parse the main chord: root + quality
+  const chordMatch = mainChord.match(/^([A-G][#b]?)(.*)/);
   if (!chordMatch) return chord;
 
   const [, chordRoot, qualitySuffix] = chordMatch;
@@ -173,49 +191,46 @@ export const chordToDegree = (chord: string, key: string): string => {
     return chord;
   }
 
-  // Find which scale degree this root corresponds to
-  const semitoneFromKey = ((chordRootIdx - rootIdx) % 12 + 12) % 12;
-
-  let degreeIdx = intervals.indexOf(semitoneFromKey);
-  let accidental = '';
-
-  if (degreeIdx === -1) {
-    // Non-diatonic: try sharp or flat of a diatonic degree
-    const sharpIdx = intervals.indexOf(((semitoneFromKey - 1) % 12 + 12) % 12);
-    const flatIdx = intervals.indexOf(((semitoneFromKey + 1) % 12 + 12) % 12);
-    if (sharpIdx !== -1) {
-      degreeIdx = sharpIdx;
-      accidental = '#';
-    } else if (flatIdx !== -1) {
-      degreeIdx = flatIdx;
-      accidental = 'b';
-    } else {
-      return chord; // can't map
-    }
-  }
+  const degree = noteToDegree(chordRootIdx, rootIdx, intervals);
+  if (!degree) return chord;
 
   // Determine if the chord is minor/dim based on quality suffix
-  // Quality starts with 'm' (but not 'maj') → minor; 'dim' → diminished
   const isMinorChord = /^m($|[^a])/.test(qualitySuffix) || qualitySuffix.startsWith('min');
   const isDimChord = qualitySuffix.startsWith('dim');
 
-  // Use lowercase for minor/dim, uppercase for major
   const roman = (isMinorChord || isDimChord)
-    ? ROMAN_LOWER[degreeIdx]
-    : ROMAN_UPPER[degreeIdx];
+    ? ROMAN_LOWER[degree.degreeIdx]
+    : ROMAN_UPPER[degree.degreeIdx];
 
-  // Strip the leading 'm' or 'dim' from quality suffix to avoid duplication,
-  // since case already conveys major/minor
   let displaySuffix = qualitySuffix;
   if (isMinorChord) {
-    // Remove leading 'm' but keep the rest (e.g., 'm7' → '7', 'min7' → '7')
     displaySuffix = qualitySuffix.replace(/^min|^m/, '');
-  } else if (isDimChord) {
-    // Keep 'dim' in suffix since lowercase alone doesn't convey diminished
-    // (convention: vii° or viidim)
+  }
+  // Normalize display: -5 → ♭5, -9 → ♭9 for readability
+  displaySuffix = displaySuffix.replace(/-(\d)/g, '♭$1');
+  // M7/Maj7 → △7
+  displaySuffix = displaySuffix.replace(/^maj7|^Maj7|^M7/, '△7');
+  displaySuffix = displaySuffix.replace(/^maj9|^Maj9|^M9/, '△9');
+
+  let result = degree.accidental + roman + displaySuffix;
+
+  // Convert bass note to degree for slash chords
+  if (bassNote) {
+    try {
+      const bassIdx = noteToIndex(bassNote);
+      const bassDegree = noteToDegree(bassIdx, rootIdx, intervals);
+      if (bassDegree) {
+        const bassRoman = ROMAN_UPPER[bassDegree.degreeIdx];
+        result += '/' + bassDegree.accidental + bassRoman;
+      } else {
+        result += '/' + bassNote;
+      }
+    } catch {
+      result += '/' + bassNote;
+    }
   }
 
-  return accidental + roman + displaySuffix;
+  return result;
 };
 
 /**

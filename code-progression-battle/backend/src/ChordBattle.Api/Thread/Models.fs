@@ -26,7 +26,9 @@ module Models =
           LastEditedBy: string
           LastEditedAt: DateTime
           Members: string list
-          History: SaveHistory list }
+          History: SaveHistory list
+          Visibility: string
+          SharedWith: string list }
 
     type CreateThreadRequest = { title: string }
 
@@ -40,6 +42,26 @@ module Models =
           key: string
           timeSignature: string
           fullScore: string }
+
+    type ShareRequest = { visibility: string; sharedWith: string list }
+
+    type Comment =
+        { Id: string
+          UserId: string
+          UserName: string
+          Text: string
+          AnchorType: string
+          AnchorStart: int
+          AnchorEnd: int
+          AnchorSnapshot: string
+          CreatedAt: DateTime }
+
+    type AddCommentRequest =
+        { text: string
+          anchorType: string
+          anchorStart: int
+          anchorEnd: int
+          anchorSnapshot: string }
 
     type ImportChordChartRequest =
         { images: string list

@@ -101,8 +101,6 @@
 		return 'high';
 	});
 
-	// Visualizer bar heights (CSS-animated random heights while playing)
-	const barCount = 8;
 </script>
 
 <div class="player-dock">
@@ -156,35 +154,25 @@
 				</button>
 			</div>
 
-			<!-- Visualizer -->
-			<div class="player-visualizer" class:playing={isPlaying}>
-				{#each Array(barCount) as _, i}
-					<div
-						class="viz-bar"
-						style="animation-delay: {i * 0.08}s;"
-					></div>
-				{/each}
+			<!-- Chord + Time -->
+			<div class="player-info">
+				<div class="player-chord" class:player-chord--active={currentChord !== null && isPlaying}>
+					{#if currentChord}
+						<span class="chord-name">{currentChord}</span>
+					{:else}
+						<span class="chord-name chord-name--idle">---</span>
+					{/if}
+				</div>
+				<div class="player-time">
+					{formatTime(currentTime)} / {formatTime(totalDuration)}
+				</div>
 			</div>
 
-			<!-- Current chord display -->
-			<div class="player-chord" class:player-chord--active={currentChord !== null && isPlaying}>
-				{#if currentChord}
-					<span class="chord-name">{currentChord}</span>
-				{:else}
-					<span class="chord-name chord-name--idle">---</span>
-				{/if}
-			</div>
-
-			<!-- Time display -->
-			<div class="player-time">
-				<span>{formatTime(currentTime)}</span>
-				<span class="player-time-sep">/</span>
-				<span>{formatTime(totalDuration)}</span>
-			</div>
+			<div class="player-spacer"></div>
 
 			<!-- Volume -->
 			<div class="player-volume">
-				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					{#if volumeIcon === 'mute'}
 						<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
 						<line x1="23" y1="9" x2="17" y2="15" />
@@ -209,7 +197,17 @@
 				/>
 			</div>
 
-			<!-- Voicing mode toggle -->
+			<div class="player-sep"></div>
+
+			<!-- Tone + Voicing -->
+			<div class="player-tone">
+				<select class="tone-select" value={oscPreset} onchange={handleOscChange} title="音色">
+					{#each OSC_OPTIONS as opt}
+						<option value={opt}>{OSC_LABELS[opt]}</option>
+					{/each}
+				</select>
+			</div>
+
 			<div class="voicing-toggle">
 				<button
 					class="voicing-btn"
@@ -221,20 +219,12 @@
 					class="voicing-btn"
 					class:voicing-btn--active={voicingMode === 'harmonic'}
 					onclick={() => onVoicingModeChange?.('harmonic')}
-					title="オートボイシング（クローズドボイシング + ボイスリーディング）"
+					title="オートボイシング"
 				>Auto V.</button>
 			</div>
 
-			<!-- Tone selector -->
-			<div class="player-tone">
-				<select class="tone-select" value={oscPreset} onchange={handleOscChange} title="音色">
-					{#each OSC_OPTIONS as opt}
-						<option value={opt}>{OSC_LABELS[opt]}</option>
-					{/each}
-				</select>
-			</div>
+			<div class="player-sep"></div>
 
-			<!-- BPM badge -->
 			<div class="player-bpm">
 				<span class="badge">BPM {bpm}</span>
 			</div>
@@ -290,7 +280,25 @@
 	.player-row-top {
 		display: flex;
 		align-items: center;
-		gap: var(--space-xs);
+		gap: var(--space-sm);
+	}
+
+	.player-info {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex-shrink: 0;
+	}
+
+	.player-spacer {
+		flex: 1;
+	}
+
+	.player-sep {
+		width: 1px;
+		height: 20px;
+		background: var(--border-subtle);
+		flex-shrink: 0;
 	}
 
 	.player-controls {
@@ -338,44 +346,6 @@
 		color: var(--accent-primary);
 		background: rgba(167, 139, 250, 0.2);
 	}
-
-	/* Visualizer */
-	.player-visualizer {
-		display: flex;
-		align-items: flex-end;
-		gap: 2px;
-		height: 24px;
-		flex-shrink: 0;
-		padding: 0 2px;
-	}
-
-	.viz-bar {
-		width: 2px;
-		height: 3px;
-		border-radius: 1px;
-		background: var(--accent-primary);
-		opacity: 0.3;
-		transition: height 0.1s;
-	}
-
-	.playing .viz-bar {
-		animation: viz-bounce 0.8s ease-in-out infinite alternate;
-		opacity: 0.8;
-	}
-
-	@keyframes viz-bounce {
-		0% { height: 3px; }
-		100% { height: 20px; }
-	}
-
-	.playing .viz-bar:nth-child(1) { animation-duration: 0.6s; }
-	.playing .viz-bar:nth-child(2) { animation-duration: 0.75s; }
-	.playing .viz-bar:nth-child(3) { animation-duration: 0.5s; }
-	.playing .viz-bar:nth-child(4) { animation-duration: 0.85s; }
-	.playing .viz-bar:nth-child(5) { animation-duration: 0.55s; }
-	.playing .viz-bar:nth-child(6) { animation-duration: 0.7s; }
-	.playing .viz-bar:nth-child(7) { animation-duration: 0.65s; }
-	.playing .viz-bar:nth-child(8) { animation-duration: 0.8s; }
 
 	/* Current chord */
 	.player-chord {
@@ -441,15 +411,9 @@
 	.player-time {
 		font-family: var(--font-mono);
 		font-size: 0.68rem;
-		color: var(--text-secondary);
-		flex-shrink: 0;
-		min-width: 56px;
-		text-align: center;
-	}
-
-	.player-time-sep {
 		color: var(--text-muted);
-		margin: 0 1px;
+		flex-shrink: 0;
+		white-space: nowrap;
 	}
 
 	/* Volume */

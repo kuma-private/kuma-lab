@@ -7,14 +7,21 @@ open ChordBattle.Api.Thread.Models
 
 module Repository =
 
+    let canAccess (userId: string) (thread: Thread) : bool =
+        thread.CreatedBy = userId
+        || thread.Visibility = "public"
+        || (thread.Visibility = "shared" && thread.SharedWith |> List.contains userId)
+
     module InMemory =
 
         let private threads = ConcurrentDictionary<string, Thread>()
+        let private comments = ConcurrentDictionary<string, ConcurrentDictionary<string, Comment>>()
 
-        let getAll () : Task<Thread list> =
+        let getByUser (userId: string) : Task<Thread list> =
             task {
                 return
                     threads.Values
+                    |> Seq.filter (fun t -> canAccess userId t)
                     |> Seq.toList
                     |> List.sortByDescending (fun t -> t.CreatedAt)
             }
@@ -68,6 +75,43 @@ module Repository =
                 | false, _ -> return None
             }
 
+        let updateShare (threadId: string) (visibility: string) (sharedWith: string list) : Task<Thread option> =
+            task {
+                match threads.TryGetValue(threadId) with
+                | true, thread ->
+                    let updated = { thread with Visibility = visibility; SharedWith = sharedWith }
+                    threads.[threadId] <- updated
+                    return Some updated
+                | false, _ -> return None
+            }
+
+        let addComment (threadId: string) (comment: Comment) : Task<Comment> =
+            task {
+                let bag = comments.GetOrAdd(threadId, fun _ -> ConcurrentDictionary<string, Comment>())
+                bag.[comment.Id] <- comment
+                return comment
+            }
+
+        let getComments (threadId: string) : Task<Comment list> =
+            task {
+                match comments.TryGetValue(threadId) with
+                | true, bag ->
+                    return
+                        bag.Values
+                        |> Seq.toList
+                        |> List.sortBy (fun c -> c.CreatedAt)
+                | false, _ -> return []
+            }
+
+        let deleteComment (threadId: string) (commentId: string) : Task<bool> =
+            task {
+                match comments.TryGetValue(threadId) with
+                | true, bag ->
+                    let (removed, _) = bag.TryRemove(commentId)
+                    return removed
+                | false, _ -> return false
+            }
+
     module Firestore =
 
         open Google.Cloud.Firestore
@@ -114,6 +158,20 @@ module Repository =
                     |> Seq.toList
                 | _ -> []
 
+            let visibility =
+                match doc.TryGetValue<string>("visibility") with
+                | true, v when v <> null -> v
+                | _ -> "private"
+
+            let sharedWith =
+                match doc.TryGetValue<obj>("sharedWith") with
+                | true, (:? System.Collections.IList as list) ->
+                    list
+                    |> Seq.cast<obj>
+                    |> Seq.map (fun o -> o :?> string)
+                    |> Seq.toList
+                | _ -> []
+
             { Id = doc.Id
               Title = doc.GetValue<string>("title")
               Key = doc.GetValue<string>("key")
@@ -135,17 +193,32 @@ module Repository =
                   | true, v -> v.ToDateTime()
                   | _ -> DateTime.UtcNow
               Members = members
-              History = history }
+              History = history
+              Visibility = visibility
+              SharedWith = sharedWith }
 
-        let getAll () : Task<Thread list> =
+        let getByUser (userId: string) : Task<Thread list> =
             task {
                 let collection = db.Value.Collection("threads")
-                let! snapshot = collection.OrderByDescending("createdAt").GetSnapshotAsync()
 
-                return
-                    snapshot.Documents
+                let! ownedSnapshot =
+                    collection.WhereEqualTo("createdBy", userId).GetSnapshotAsync()
+
+                let! publicSnapshot =
+                    collection.WhereEqualTo("visibility", "public").GetSnapshotAsync()
+
+                let! sharedSnapshot =
+                    collection.WhereArrayContains("sharedWith", userId).GetSnapshotAsync()
+
+                let allDocs =
+                    [ ownedSnapshot.Documents; publicSnapshot.Documents; sharedSnapshot.Documents ]
+                    |> Seq.concat
+                    |> Seq.distinctBy (fun d -> d.Id)
                     |> Seq.map toThread
                     |> Seq.toList
+                    |> List.sortByDescending (fun t -> t.CreatedAt)
+
+                return allDocs
             }
 
         let getById (id: string) : Task<Thread option> =
@@ -177,7 +250,9 @@ module Repository =
                               "lastEditedBy", thread.LastEditedBy :> obj
                               "lastEditedAt", Timestamp.FromDateTime(thread.LastEditedAt.ToUniversalTime()) :> obj
                               "members", System.Collections.Generic.List<obj>(thread.Members |> List.map (fun m -> m :> obj)) :> obj
-                              "history", System.Collections.Generic.List<obj>() :> obj ]
+                              "history", System.Collections.Generic.List<obj>() :> obj
+                              "visibility", thread.Visibility :> obj
+                              "sharedWith", System.Collections.Generic.List<obj>(thread.SharedWith |> List.map (fun s -> s :> obj)) :> obj ]
                     )
 
                 let! _ = docRef.SetAsync(data)
@@ -219,6 +294,8 @@ module Repository =
                     "lastEditedAt", Timestamp.FromDateTime(thread.LastEditedAt.ToUniversalTime()) :> obj
                     "members", System.Collections.Generic.List<obj>(thread.Members |> List.map (fun m -> m :> obj)) :> obj
                     "history", (System.Collections.Generic.List<obj>(histDicts) :> obj)
+                    "visibility", thread.Visibility :> obj
+                    "sharedWith", System.Collections.Generic.List<obj>(thread.SharedWith |> List.map (fun s -> s :> obj)) :> obj
                 ]
                 return thread
             }
@@ -249,26 +326,111 @@ module Repository =
                     TimeSignature = timeSignature
                     Bpm = bpm })
 
+        let updateShare (threadId: string) (visibility: string) (sharedWith: string list) : Task<Thread option> =
+            updateThread threadId (fun thread ->
+                { thread with Visibility = visibility; SharedWith = sharedWith })
+
+        let addComment (threadId: string) (comment: Comment) : Task<Comment> =
+            task {
+                let docRef =
+                    db.Value.Collection("threads").Document(threadId)
+                        .Collection("comments").Document(comment.Id)
+
+                let data =
+                    System.Collections.Generic.Dictionary<string, obj>(
+                        dict
+                            [ "userId", comment.UserId :> obj
+                              "userName", comment.UserName :> obj
+                              "text", comment.Text :> obj
+                              "anchorType", comment.AnchorType :> obj
+                              "anchorStart", comment.AnchorStart :> obj
+                              "anchorEnd", comment.AnchorEnd :> obj
+                              "anchorSnapshot", comment.AnchorSnapshot :> obj
+                              "createdAt", Timestamp.FromDateTime(comment.CreatedAt.ToUniversalTime()) :> obj ]
+                    )
+
+                let! _ = docRef.SetAsync(data)
+                return comment
+            }
+
+        let getComments (threadId: string) : Task<Comment list> =
+            task {
+                let collection =
+                    db.Value.Collection("threads").Document(threadId).Collection("comments")
+                let! snapshot = collection.OrderBy("createdAt").GetSnapshotAsync()
+
+                return
+                    snapshot.Documents
+                    |> Seq.map (fun doc ->
+                        { Id = doc.Id
+                          UserId = doc.GetValue<string>("userId")
+                          UserName = doc.GetValue<string>("userName")
+                          Text = doc.GetValue<string>("text")
+                          AnchorType =
+                              match doc.TryGetValue<string>("anchorType") with
+                              | true, v -> v
+                              | _ -> "global"
+                          AnchorStart =
+                              match doc.TryGetValue<int>("anchorStart") with
+                              | true, v -> v
+                              | _ -> -1
+                          AnchorEnd =
+                              match doc.TryGetValue<int>("anchorEnd") with
+                              | true, v -> v
+                              | _ -> -1
+                          AnchorSnapshot =
+                              match doc.TryGetValue<string>("anchorSnapshot") with
+                              | true, v -> v
+                              | _ -> ""
+                          CreatedAt = doc.GetValue<Timestamp>("createdAt").ToDateTime() })
+                    |> Seq.toList
+            }
+
+        let deleteComment (threadId: string) (commentId: string) : Task<bool> =
+            task {
+                let docRef =
+                    db.Value.Collection("threads").Document(threadId)
+                        .Collection("comments").Document(commentId)
+                let! snapshot = docRef.GetSnapshotAsync()
+                if snapshot.Exists then
+                    let! _ = docRef.DeleteAsync()
+                    return true
+                else
+                    return false
+            }
+
     type IThreadRepository =
-        { GetAll: unit -> Task<Thread list>
+        { GetByUser: string -> Task<Thread list>
           GetById: string -> Task<Thread option>
           Create: Thread -> Task<Thread>
           Update: Thread -> Task<Thread>
           SaveScore: string -> string -> SaveHistory -> Task<Thread option>
-          UpdateSettings: string -> string -> string -> int -> string -> Task<Thread option> }
+          UpdateSettings: string -> string -> string -> int -> string -> Task<Thread option>
+          UpdateShare: string -> string -> string list -> Task<Thread option>
+          AddComment: string -> Comment -> Task<Comment>
+          GetComments: string -> Task<Comment list>
+          DeleteComment: string -> string -> Task<bool> }
 
     let create (firestoreProjectId: string) : IThreadRepository =
         if String.IsNullOrEmpty(firestoreProjectId) then
-            { GetAll = InMemory.getAll
+            { GetByUser = InMemory.getByUser
               GetById = InMemory.getById
               Create = InMemory.create
               Update = InMemory.update
               SaveScore = InMemory.saveScore
-              UpdateSettings = InMemory.updateSettings }
+              UpdateSettings = InMemory.updateSettings
+              UpdateShare = InMemory.updateShare
+              AddComment = InMemory.addComment
+              GetComments = InMemory.getComments
+              DeleteComment = InMemory.deleteComment }
         else
-            { GetAll = Firestore.getAll
+            { GetByUser = Firestore.getByUser
               GetById = Firestore.getById
               Create = Firestore.create
               Update = Firestore.update
               SaveScore = Firestore.saveScore
-              UpdateSettings = Firestore.updateSettings }
+              UpdateSettings = Firestore.updateSettings
+              UpdateShare = Firestore.updateShare
+              AddComment = Firestore.addComment
+              GetComments = Firestore.getComments
+              DeleteComment = Firestore.deleteComment }

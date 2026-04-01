@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SaveHistory } from '$lib/api';
+	import type { SaveHistory, Comment } from '$lib/api';
 
 	type AiScores = { tension: number; creativity: number; coherence: number; surprise: number };
 
@@ -31,6 +31,10 @@
 		onClose: () => void;
 		onRestore: (score: string) => void;
 		onReviewEntry: (index: number) => Promise<{ comment: string; scores: string }>;
+		comments: Comment[];
+		onAddComment: (text: string) => void;
+		onDeleteComment: (commentId: string) => void;
+		currentUserId: string;
 	}
 
 	let {
@@ -39,11 +43,42 @@
 		onClose,
 		onRestore,
 		onReviewEntry,
+		comments = [],
+		onAddComment,
+		onDeleteComment,
+		currentUserId = '',
 	}: Props = $props();
 
+	let activeTab = $state<'history' | 'comments'>('history');
+	let commentText = $state('');
 	let reviewingIndex = $state<number | null>(null);
 
 	let historyEl: HTMLDivElement | undefined = $state();
+
+	const handleSendComment = () => {
+		const text = commentText.trim();
+		if (!text) return;
+		onAddComment(text);
+		commentText = '';
+	};
+
+	const relativeTime = (dateStr: string): string => {
+		try {
+			const d = new Date(dateStr);
+			const now = new Date();
+			const diff = now.getTime() - d.getTime();
+			const mins = Math.floor(diff / 60000);
+			if (mins < 1) return 'たった今';
+			if (mins < 60) return `${mins}分前`;
+			const hours = Math.floor(mins / 60);
+			if (hours < 24) return `${hours}時間前`;
+			const days = Math.floor(hours / 24);
+			if (days < 7) return `${days}日前`;
+			return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+		} catch {
+			return dateStr;
+		}
+	};
 
 	// Auto-scroll history to bottom
 	$effect(() => {
@@ -84,8 +119,14 @@
 {/if}
 <div class="drawer" class:drawer--open={open}>
 	<div class="drawer-header">
-		<h2>保存履歴</h2>
-		<span class="count">{history.length} 件</span>
+		<div class="drawer-tabs">
+			<button class="drawer-tab" class:drawer-tab--active={activeTab === 'history'} onclick={() => { activeTab = 'history'; }}>
+				履歴 <span class="tab-count">{history.length}</span>
+			</button>
+			<button class="drawer-tab" class:drawer-tab--active={activeTab === 'comments'} onclick={() => { activeTab = 'comments'; }}>
+				コメント <span class="tab-count">{comments.length}</span>
+			</button>
+		</div>
 		<button class="drawer-close" onclick={onClose} title="閉じる">
 			<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
 				<line x1="3" y1="3" x2="13" y2="13" />
@@ -94,84 +135,135 @@
 		</button>
 	</div>
 
-	<div class="history-timeline" bind:this={historyEl}>
-		{#each history as item, i}
-			<div class="post">
-				<div class="post-header">
-					<span class="post-number">#{i + 1}</span>
-					<div class="post-avatar" style="background: {avatarColor(item.userName)}">
-						{initials(item.userName)}
-					</div>
-					<span class="post-name">{item.userName}</span>
-					{#if item.createdAt}
-						<span class="post-time">{formatTime(item.createdAt)}</span>
-					{/if}
-				</div>
-				{#if item.comment}
-					<div class="post-comment">{item.comment}</div>
-				{/if}
-				{#if item.aiComment}
-					{@const parsedAi = parseAiComment(item.aiComment, item.aiScores)}
-					<div class="ai-comment">
-						<span class="ai-icon">AI</span>
-						<div class="ai-body">
-							<span class="ai-text">{parsedAi.comment}</span>
-							{#if parsedAi.scores}
-								<div class="ai-scores">
-									<span class="ai-score">緊張感 {parsedAi.scores.tension}/5</span>
-									<span class="ai-score">独創性 {parsedAi.scores.creativity}/5</span>
-									<span class="ai-score">整合性 {parsedAi.scores.coherence}/5</span>
-									<span class="ai-score">意外性 {parsedAi.scores.surprise}/5</span>
-								</div>
-							{/if}
+	{#if activeTab === 'history'}
+		<div class="history-timeline" bind:this={historyEl}>
+			{#each history as item, i}
+				<div class="post">
+					<div class="post-header">
+						<span class="post-number">#{i + 1}</span>
+						<div class="post-avatar" style="background: {avatarColor(item.userName)}">
+							{initials(item.userName)}
 						</div>
+						<span class="post-name">{item.userName}</span>
+						{#if item.createdAt}
+							<span class="post-time">{formatTime(item.createdAt)}</span>
+						{/if}
 					</div>
-				{/if}
-				<div class="post-actions">
-					<button class="btn-restore" onclick={() => { onRestore(item.score); onClose(); }}>
-						このバージョンに戻す
-					</button>
-					{#if !item.aiComment}
-						<button
-							class="btn-ai-review"
-							disabled={reviewingIndex === i}
-							onclick={async () => {
-								reviewingIndex = i;
-								try {
-									await onReviewEntry(i);
-								} finally {
-									reviewingIndex = null;
-								}
-							}}
-						>
-							{#if reviewingIndex === i}
-								<span class="spinner-sm"></span>
-							{:else}
-								<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-									<path d="M8 1v4M8 11v4M1 8h4M11 8h4M3 3l2.5 2.5M10.5 10.5L13 13M13 3l-2.5 2.5M5.5 10.5L3 13" />
-								</svg>
-							{/if}
-							AI分析
-						</button>
+					{#if item.comment}
+						<div class="post-comment">{item.comment}</div>
 					{/if}
+					{#if item.aiComment}
+						{@const parsedAi = parseAiComment(item.aiComment, item.aiScores)}
+						<div class="ai-comment">
+							<span class="ai-icon">AI</span>
+							<div class="ai-body">
+								<span class="ai-text">{parsedAi.comment}</span>
+								{#if parsedAi.scores}
+									<div class="ai-scores">
+										<span class="ai-score">緊張感 {parsedAi.scores.tension}/5</span>
+										<span class="ai-score">独創性 {parsedAi.scores.creativity}/5</span>
+										<span class="ai-score">整合性 {parsedAi.scores.coherence}/5</span>
+										<span class="ai-score">意外性 {parsedAi.scores.surprise}/5</span>
+									</div>
+								{/if}
+							</div>
+						</div>
+					{/if}
+					<div class="post-actions">
+						<button class="btn-restore" onclick={() => { onRestore(item.score); onClose(); }}>
+							このバージョンに戻す
+						</button>
+						{#if !item.aiComment}
+							<button
+								class="btn-ai-review"
+								disabled={reviewingIndex === i}
+								onclick={async () => {
+									reviewingIndex = i;
+									try {
+										await onReviewEntry(i);
+									} finally {
+										reviewingIndex = null;
+									}
+								}}
+							>
+								{#if reviewingIndex === i}
+									<span class="spinner-sm"></span>
+								{:else}
+									<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+										<path d="M8 1v4M8 11v4M1 8h4M11 8h4M3 3l2.5 2.5M10.5 10.5L13 13M13 3l-2.5 2.5M5.5 10.5L3 13" />
+									</svg>
+								{/if}
+								AI分析
+							</button>
+						{/if}
+					</div>
 				</div>
-			</div>
-		{/each}
+			{/each}
 
-		{#if history.length === 0}
-			<div class="empty-history">
-				<div class="empty-icon">
-					<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-						<path d="M9 18V5l12-2v13" />
-						<circle cx="6" cy="18" r="3" />
-						<circle cx="18" cy="16" r="3" />
-					</svg>
+			{#if history.length === 0}
+				<div class="empty-history">
+					<div class="empty-icon">
+						<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+							<path d="M9 18V5l12-2v13" />
+							<circle cx="6" cy="18" r="3" />
+							<circle cx="18" cy="16" r="3" />
+						</svg>
+					</div>
+					<p class="empty-title">まだ保存履歴がありません</p>
+					<p class="empty-sub">スコアを編集して保存しよう!</p>
 				</div>
-				<p class="empty-title">まだ保存履歴がありません</p>
-				<p class="empty-sub">スコアを編集して保存しよう!</p>
-			</div>
-		{/if}
-	</div>
+			{/if}
+		</div>
+	{:else}
+		<div class="comments-list">
+			{#each comments as comment}
+				<div class="comment-item">
+					<div class="comment-header">
+						<div class="post-avatar" style="background: {avatarColor(comment.userName)}">
+							{initials(comment.userName)}
+						</div>
+						<span class="post-name">{comment.userName}</span>
+						<span class="post-time">{relativeTime(comment.createdAt)}</span>
+						{#if comment.userId === currentUserId}
+							<button class="btn-delete-comment" onclick={() => onDeleteComment(comment.id)} title="削除">
+								<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+									<line x1="3" y1="3" x2="13" y2="13" />
+									<line x1="13" y1="3" x2="3" y2="13" />
+								</svg>
+							</button>
+						{/if}
+					</div>
+					{#if comment.anchorSnapshot}
+						<pre class="comment-snapshot">{comment.anchorSnapshot}</pre>
+					{/if}
+					<div class="comment-text">{comment.text}</div>
+				</div>
+			{/each}
+
+			{#if comments.length === 0}
+				<div class="empty-history">
+					<p class="empty-title">まだコメントがありません</p>
+					<p class="empty-sub">下のフォームからコメントを追加しよう</p>
+				</div>
+			{/if}
+		</div>
+
+		<div class="comment-input-area">
+			<textarea
+				class="comment-textarea"
+				placeholder="コメントを入力..."
+				bind:value={commentText}
+				onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); handleSendComment(); } }}
+				rows="2"
+			></textarea>
+			<button class="btn-send-comment" onclick={handleSendComment} disabled={!commentText.trim()}>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+					<line x1="22" y1="2" x2="11" y2="13" />
+					<polygon points="22 2 15 22 11 13 2 9 22 2" />
+				</svg>
+			</button>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -220,18 +312,45 @@
 		flex-shrink: 0;
 	}
 
-	.drawer-header h2 {
-		font-family: var(--font-display);
-		font-size: 0.9rem;
-		font-weight: 500;
-		color: var(--text-secondary);
-		margin: 0;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
+	.drawer-tabs {
+		display: flex;
+		gap: 2px;
 		flex: 1;
 	}
 
-	.count { font-size: 0.75rem; color: var(--text-muted); }
+	.drawer-tab {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 12px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 0.82rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.drawer-tab:hover {
+		color: var(--text-secondary);
+		background: var(--bg-hover);
+	}
+
+	.drawer-tab--active {
+		color: var(--accent-primary);
+		background: rgba(167, 139, 250, 0.1);
+	}
+
+	.tab-count {
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		color: var(--text-muted);
+		background: var(--bg-base);
+		padding: 0 5px;
+		border-radius: 8px;
+	}
 
 	.drawer-close {
 		display: flex;
@@ -467,6 +586,127 @@
 	.empty-sub {
 		font-size: 0.8rem;
 		margin: 0;
+	}
+
+	/* Comments tab */
+	.comments-list {
+		flex: 1;
+		overflow-y: auto;
+		padding: var(--space-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+
+	.comment-item {
+		padding: var(--space-sm) var(--space-md);
+		border-bottom: 1px solid var(--border-subtle);
+		animation: post-in 0.25s ease-out;
+	}
+
+	.comment-header {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		margin-bottom: 4px;
+	}
+
+	.comment-snapshot {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		color: var(--text-muted);
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sm);
+		padding: var(--space-sm);
+		margin: 4px 0 4px 30px;
+		overflow-x: auto;
+		white-space: pre-wrap;
+	}
+
+	.comment-text {
+		font-size: 0.82rem;
+		color: var(--text-secondary);
+		margin-left: 30px;
+		line-height: 1.5;
+	}
+
+	.btn-delete-comment {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+		margin-left: auto;
+		transition: all 0.15s;
+		opacity: 0.5;
+	}
+
+	.comment-item:hover .btn-delete-comment {
+		opacity: 1;
+	}
+
+	.btn-delete-comment:hover {
+		background: rgba(248, 113, 113, 0.15);
+		color: var(--error);
+	}
+
+	.comment-input-area {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+		border-top: 1px solid var(--border-subtle);
+		background: var(--bg-surface);
+		flex-shrink: 0;
+	}
+
+	.comment-textarea {
+		flex: 1;
+		resize: none;
+		padding: 6px 10px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background: var(--bg-base);
+		color: var(--text-primary);
+		font-size: 0.82rem;
+		font-family: inherit;
+		outline: none;
+		transition: border-color 0.15s;
+		line-height: 1.4;
+	}
+
+	.comment-textarea:focus {
+		border-color: var(--accent-primary);
+	}
+
+	.btn-send-comment {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: var(--accent-primary);
+		color: #fff;
+		cursor: pointer;
+		transition: all 0.15s;
+		flex-shrink: 0;
+	}
+
+	.btn-send-comment:hover:not(:disabled) {
+		background: var(--accent-secondary);
+	}
+
+	.btn-send-comment:disabled {
+		opacity: 0.4;
+		cursor: default;
 	}
 
 	@media (max-width: 600px) {

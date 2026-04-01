@@ -5,13 +5,15 @@
 	import { parseProgression, transpose, parseChord } from '$lib/chord-parser';
 	import { ChordPlayer, type PlayerState, type OscPreset, type VoicingMode, setGlobalOscPreset, setVoicingMode, chordToNotes, onSelectionNotes } from '$lib/chord-player';
 	import type { DisplayMode } from '$lib/components/ScoreEditor.svelte';
-	import type { SaveHistory } from '$lib/api';
+	import type { SaveHistory, Comment } from '$lib/api';
+	import { getComments, addComment, deleteComment } from '$lib/api';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import ThreadHeader from '$lib/components/ThreadHeader.svelte';
 	import ScorePanel from '$lib/components/ScorePanel.svelte';
 	import ToolsPanel from '$lib/components/ToolsPanel.svelte';
 	import SessionDrawer from '$lib/components/SessionDrawer.svelte';
 	import ImportModal from '$lib/components/ImportModal.svelte';
+	import ShareModal from '$lib/components/ShareModal.svelte';
 
 	const store = createAppStore();
 	const threadId = page.params.id as string;
@@ -41,6 +43,12 @@
 	// Import modal state
 	let importModalOpen = $state(false);
 
+	// Share modal state
+	let shareModalOpen = $state(false);
+
+	// Comments state
+	let comments = $state<Comment[]>([]);
+
 	// Drawer state
 	let drawerOpen = $state(false);
 	let historyItems = $state<SaveHistory[]>([]);
@@ -49,6 +57,46 @@
 		drawerOpen = !drawerOpen;
 		if (drawerOpen) {
 			historyItems = await store.loadHistory(threadId);
+			try {
+				comments = await getComments(threadId);
+			} catch {
+				// comments endpoint may not exist yet
+			}
+		}
+	};
+
+	const handleShare = () => {
+		shareModalOpen = true;
+	};
+
+	const handleShareUpdate = (visibility: string, sharedWith: string[]) => {
+		if (store.currentThread) {
+			store.currentThread.visibility = visibility;
+			store.currentThread.sharedWith = sharedWith;
+		}
+	};
+
+	const handleAddComment = async (text: string) => {
+		try {
+			const comment = await addComment(threadId, {
+				text,
+				anchorType: 'global',
+				anchorStart: 0,
+				anchorEnd: 0,
+				anchorSnapshot: '',
+			});
+			comments = [...comments, comment];
+		} catch {
+			// handle error silently
+		}
+	};
+
+	const handleDeleteComment = async (commentId: string) => {
+		try {
+			await deleteComment(threadId, commentId);
+			comments = comments.filter(c => c.id !== commentId);
+		} catch {
+			// handle error silently
 		}
 	};
 
@@ -298,9 +346,11 @@
 			{drawerOpen}
 			error={store.error}
 			{submitting}
+			visibility={thread.visibility || 'private'}
 			onOpenLog={toggleDrawer}
 			onExport={handleExport}
 			onSave={handleSave}
+			onShare={handleShare}
 			onUpdateSettings={handleUpdateSettings}
 		/>
 
@@ -354,12 +404,24 @@
 		onclose={() => { importModalOpen = false; }}
 		onconfirm={handleImportConfirm}
 	/>
+	<ShareModal
+		open={shareModalOpen}
+		threadId={threadId}
+		currentVisibility={thread2.visibility || 'private'}
+		currentSharedWith={thread2.sharedWith || []}
+		onclose={() => { shareModalOpen = false; }}
+		onupdate={handleShareUpdate}
+	/>
 	<SessionDrawer
 		history={historyItems}
 		open={drawerOpen}
 		onClose={closeDrawer}
 		onRestore={handleRestoreScore}
 		onReviewEntry={handleReviewEntry}
+		{comments}
+		onAddComment={handleAddComment}
+		onDeleteComment={handleDeleteComment}
+		currentUserId={store.user?.sub || ''}
 	/>
 {/if}
 

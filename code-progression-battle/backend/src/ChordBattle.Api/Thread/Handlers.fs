@@ -40,7 +40,8 @@ module ThreadHandlers =
 
     let listThreads (repo: IThreadRepository) (ctx: HttpContext) : Task =
         task {
-            let! threads = repo.GetAll()
+            let (userId, _) = getUserInfo ctx
+            let! threads = repo.GetByUser(userId)
 
             let result =
                 threads
@@ -54,7 +55,8 @@ module ThreadHandlers =
                        createdAt = t.CreatedAt
                        lastEditedBy = t.LastEditedBy
                        lastEditedAt = t.LastEditedAt
-                       memberCount = t.Members.Length |})
+                       memberCount = t.Members.Length
+                       visibility = t.Visibility |})
 
             do! ctx.Response.WriteAsJsonAsync(result)
         }
@@ -87,7 +89,9 @@ module ThreadHandlers =
                   LastEditedBy = userId
                   LastEditedAt = DateTime.UtcNow
                   Members = [ userId ]
-                  History = [] }
+                  History = []
+                  Visibility = "private"
+                  SharedWith = [] }
 
             let! created = repo.Create(thread)
 
@@ -98,9 +102,14 @@ module ThreadHandlers =
     let getThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
+            let (userId, _) = getUserInfo ctx
 
             match thread with
-            | Some t -> do! ctx.Response.WriteAsJsonAsync(t)
+            | Some t when Repository.canAccess userId t ->
+                do! ctx.Response.WriteAsJsonAsync(t)
+            | Some _ ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
@@ -109,13 +118,16 @@ module ThreadHandlers =
     let saveScore (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
+            let (userId, userName) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some t when not (Repository.canAccess userId t) ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some _ ->
-                let (userId, userName) = getUserInfo ctx
                 let! req =
                     try
                         ctx.Request.ReadFromJsonAsync<SaveScoreRequest>()
@@ -148,11 +160,15 @@ module ThreadHandlers =
     let updateSettings (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
+            let (userId, _) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some t when t.CreatedBy <> userId ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Only the owner can update settings" |})
             | Some _ ->
                 let! req =
                     try
@@ -178,11 +194,15 @@ module ThreadHandlers =
     let reviewScore (repo: IThreadRepository) (config: AppConfig) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
+            let (userId, _) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some t when not (Repository.canAccess userId t) ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some t ->
                 if String.IsNullOrEmpty(config.AnthropicApiKey) then
                     ctx.Response.StatusCode <- 400
@@ -333,4 +353,123 @@ module ThreadHandlers =
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+        }
+
+    let shareThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+            let (userId, _) = getUserInfo ctx
+
+            match thread with
+            | None ->
+                ctx.Response.StatusCode <- 404
+                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some t when t.CreatedBy <> userId ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Only the owner can share" |})
+            | Some _ ->
+                let! req =
+                    try
+                        ctx.Request.ReadFromJsonAsync<ShareRequest>()
+                    with _ ->
+                        ValueTask<ShareRequest>(Unchecked.defaultof<ShareRequest>)
+
+                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.visibility, null) then
+                    ctx.Response.StatusCode <- 400
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
+                else
+
+                let sharedWith = if obj.ReferenceEquals(req.sharedWith, null) then [] else req.sharedWith
+                let! result = repo.UpdateShare threadId req.visibility sharedWith
+
+                match result with
+                | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
+                | None ->
+                    ctx.Response.StatusCode <- 500
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Failed to update share settings" |})
+        }
+
+    let addComment (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+            let (userId, userName) = getUserInfo ctx
+
+            match thread with
+            | None ->
+                ctx.Response.StatusCode <- 404
+                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some t when not (Repository.canAccess userId t) ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
+            | Some _ ->
+                let! req =
+                    try
+                        ctx.Request.ReadFromJsonAsync<AddCommentRequest>()
+                    with _ ->
+                        ValueTask<AddCommentRequest>(Unchecked.defaultof<AddCommentRequest>)
+
+                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.text, null) then
+                    ctx.Response.StatusCode <- 400
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
+                else
+
+                let comment: Comment =
+                    { Id = Guid.NewGuid().ToString("N")
+                      UserId = userId
+                      UserName = userName
+                      Text = req.text
+                      AnchorType = if obj.ReferenceEquals(req.anchorType, null) then "global" else req.anchorType
+                      AnchorStart = req.anchorStart
+                      AnchorEnd = req.anchorEnd
+                      AnchorSnapshot = if obj.ReferenceEquals(req.anchorSnapshot, null) then "" else req.anchorSnapshot
+                      CreatedAt = DateTime.UtcNow }
+
+                let! created = repo.AddComment threadId comment
+                ctx.Response.StatusCode <- 201
+                do! ctx.Response.WriteAsJsonAsync(created)
+        }
+
+    let listComments (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+            let (userId, _) = getUserInfo ctx
+
+            match thread with
+            | None ->
+                ctx.Response.StatusCode <- 404
+                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some t when not (Repository.canAccess userId t) ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
+            | Some _ ->
+                let! comments = repo.GetComments threadId
+                do! ctx.Response.WriteAsJsonAsync(comments)
+        }
+
+    let deleteComment (repo: IThreadRepository) (threadId: string) (commentId: string) (ctx: HttpContext) : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+            let (userId, _) = getUserInfo ctx
+
+            match thread with
+            | None ->
+                ctx.Response.StatusCode <- 404
+                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some t when not (Repository.canAccess userId t) ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
+            | Some t ->
+                let! comments = repo.GetComments threadId
+                let commentOpt = comments |> List.tryFind (fun c -> c.Id = commentId)
+
+                match commentOpt with
+                | None ->
+                    ctx.Response.StatusCode <- 404
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Comment not found" |})
+                | Some c when c.UserId <> userId && t.CreatedBy <> userId ->
+                    ctx.Response.StatusCode <- 403
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Only comment author or thread owner can delete" |})
+                | Some _ ->
+                    let! _ = repo.DeleteComment threadId commentId
+                    ctx.Response.StatusCode <- 204
         }

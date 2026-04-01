@@ -6,9 +6,11 @@
 		drawerOpen: boolean;
 		error: string | null;
 		submitting: boolean;
+		visibility: string;
 		onOpenLog: () => void;
 		onExport: () => void;
 		onSave: () => void;
+		onShare: () => void;
 		onUpdateSettings: (data: { key?: string; timeSignature?: string; bpm?: number }) => void;
 	}
 
@@ -17,11 +19,17 @@
 		drawerOpen,
 		error,
 		submitting,
+		visibility = 'private',
 		onOpenLog,
 		onExport,
 		onSave,
+		onShare,
 		onUpdateSettings,
 	}: Props = $props();
+
+	const visibilityIcon = $derived(
+		visibility === 'public' ? '\u{1F310}' : visibility === 'shared' ? '\u{1F465}' : '\u{1F512}'
+	);
 
 	// Inline edit states
 	let editingKey = $state(false);
@@ -202,6 +210,10 @@
 				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
 			</svg>
 			履歴
+		</button>
+		<button class="btn-share" onclick={onShare} title="共有設定">
+			<span class="share-icon">{visibilityIcon}</span>
+			共有
 		</button>
 		<button class="btn btn-ghost" onclick={onExport}>エクスポート</button>
 	</div>
@@ -413,6 +425,32 @@
 		border-color: var(--accent-primary);
 		color: var(--accent-primary);
 		background: rgba(167, 139, 250, 0.1);
+	}
+
+	/* Share button */
+	.btn-share {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 12px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		font-size: 0.78rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.btn-share:hover {
+		border-color: var(--accent-primary);
+		color: var(--accent-primary);
+		background: rgba(167, 139, 250, 0.1);
+	}
+
+	.share-icon {
+		font-size: 0.85rem;
 	}
 
 	.error-banner {

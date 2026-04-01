@@ -137,6 +137,27 @@
 
 	const highlighted = $derived(colorize(internalValue, activeBarIndex, displayMode, musicalKey, lastInsertedText));
 
+	// Convert chord text to degree text for display in textarea
+	const toDegreeText = (text: string, key: string): string => {
+		return text.split('\n').map(line => {
+			const trimmed = line.trim();
+			if (trimmed.startsWith('#') || trimmed.startsWith('//') || !trimmed) return line;
+			return line.split(/(\|)/).map(segment => {
+				if (segment === '|') return segment;
+				return segment.split(/(\s+)/).map(token => {
+					if (!token.trim() || token === '%' || token === '_' || token === '=' || token === '-') return token;
+					try {
+						return chordToDegree(token, key);
+					} catch {
+						return token;
+					}
+				}).join('');
+			}).join('');
+		}).join('\n');
+	};
+
+	const displayValue = $derived(displayMode === 'degree' ? toDegreeText(internalValue, musicalKey) : internalValue);
+
 	const handleInput = (e: Event) => {
 		const target = e.target as HTMLTextAreaElement;
 		internalValue = target.value;
@@ -291,13 +312,14 @@
 		<textarea
 			bind:this={textareaEl}
 			class="se-textarea"
-			value={internalValue}
+			class:se-textarea--degree={displayMode === 'degree'}
+			value={displayValue}
 			oninput={handleInput}
 			onblur={handleBlur}
 			onscroll={handleScroll}
 			oncontextmenu={handleContextMenu}
 			ondblclick={handleDblClick}
-			readonly={readonly}
+			readonly={readonly || displayMode === 'degree'}
 			autocomplete="off"
 			spellcheck="false"
 			placeholder={"// サビ\n| Am7 | Dm7 G7 | Cmaj7 |\n| C - - G | Am Em |\n\n|   小節区切り\n空白  拍分割 (| Am G | = 2拍ずつ)\n-   前コード伸ばし\n_   休符\n//  セクション名"}
@@ -415,6 +437,11 @@
 	.se-textarea[readonly] {
 		opacity: 0.6;
 		cursor: default;
+	}
+
+	.se-textarea--degree {
+		opacity: 1;
+		color: var(--accent-primary);
 	}
 
 	@media (max-width: 600px) {
