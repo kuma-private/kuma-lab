@@ -30,6 +30,7 @@
 		open: boolean;
 		onClose: () => void;
 		onRestore: (score: string) => void;
+		onReviewEntry: (index: number) => Promise<{ comment: string; scores: string }>;
 	}
 
 	let {
@@ -37,7 +38,10 @@
 		open,
 		onClose,
 		onRestore,
+		onReviewEntry,
 	}: Props = $props();
+
+	let reviewingIndex = $state<number | null>(null);
 
 	let historyEl: HTMLDivElement | undefined = $state();
 
@@ -127,6 +131,29 @@
 					<button class="btn-restore" onclick={() => { onRestore(item.score); onClose(); }}>
 						このバージョンに戻す
 					</button>
+					{#if !item.aiComment}
+						<button
+							class="btn-ai-review"
+							disabled={reviewingIndex === i}
+							onclick={async () => {
+								reviewingIndex = i;
+								try {
+									await onReviewEntry(i);
+								} finally {
+									reviewingIndex = null;
+								}
+							}}
+						>
+							{#if reviewingIndex === i}
+								<span class="spinner-sm"></span>
+							{:else}
+								<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+									<path d="M8 1v4M8 11v4M1 8h4M11 8h4M3 3l2.5 2.5M10.5 10.5L13 13M13 3l-2.5 2.5M5.5 10.5L3 13" />
+								</svg>
+							{/if}
+							AI分析
+						</button>
+					{/if}
 				</div>
 			</div>
 		{/each}
@@ -304,6 +331,8 @@
 
 	.post-actions {
 		margin: var(--space-sm) 0 0 30px;
+		display: flex;
+		gap: 6px;
 	}
 
 	.btn-restore {
@@ -321,6 +350,44 @@
 		border-color: var(--accent-primary);
 		color: var(--accent-primary);
 		background: rgba(167, 139, 250, 0.08);
+	}
+
+	.btn-ai-review {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 3px 10px;
+		border: 1px solid rgba(96, 165, 250, 0.4);
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: rgba(96, 165, 250, 0.8);
+		font-size: 0.72rem;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.btn-ai-review:hover:not(:disabled) {
+		border-color: rgba(96, 165, 250, 0.7);
+		color: rgba(96, 165, 250, 1);
+		background: rgba(96, 165, 250, 0.08);
+	}
+
+	.btn-ai-review:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+
+	.spinner-sm {
+		width: 10px;
+		height: 10px;
+		border: 1.5px solid rgba(96, 165, 250, 0.3);
+		border-top-color: rgba(96, 165, 250, 0.8);
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
 	}
 
 	/* AI comment bubble */

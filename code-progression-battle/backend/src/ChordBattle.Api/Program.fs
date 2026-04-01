@@ -5,6 +5,7 @@ open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.HttpOverrides
+open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.DependencyInjection
 open ChordBattle.Api.Auth
 open ChordBattle.Api.Thread
@@ -65,6 +66,10 @@ module Program =
             options.KnownProxies.Clear()
         ) |> ignore
 
+        builder.Services.Configure<KestrelServerOptions>(fun (options: KestrelServerOptions) ->
+            options.Limits.MaxRequestBodySize <- 30L * 1024L * 1024L
+        ) |> ignore
+
         let app = builder.Build()
 
         app.UseForwardedHeaders() |> ignore
@@ -117,6 +122,10 @@ module Program =
 
         app.MapPost("/api/threads/{id}/transform", Func<string, HttpContext, Task>(fun id ctx ->
             (requireLogin (withRateLimit (ThreadHandlers.transformChords config id))) ctx))
+        |> ignore
+
+        app.MapPost("/api/threads/{id}/import", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (withRateLimit (ThreadHandlers.importChordChart config))) ctx))
         |> ignore
 
         app.MapGet("/api/threads/{id}/history", Func<string, HttpContext, Task>(fun id ctx ->

@@ -140,6 +140,11 @@ const QUALITY_INTERVALS: Record<string, number[]> = {
   // Omit chords (approximate voicing)
   'omit3':  [0, 7],
   'omit5':  [0, 4],
+
+  // Hyphen-style alterations (U-Fret等で使われる表記)
+  '7-9':    [0, 4, 7, 10, 13],  // = 7b9
+  '7-5':    [0, 4, 6, 10],      // = 7b5
+  'm7-5':   [0, 3, 6, 10],      // = m7b5
 };
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -168,10 +173,19 @@ function midiToNoteName(midi: number): string {
   return `${note}${octave}`;
 }
 
+export type VoicingMode = 'normal' | 'harmonic';
+
+let _voicingMode: VoicingMode = 'normal';
+let _lastVoicingMidi: number[] | null = null;
+
+export const setVoicingMode = (mode: VoicingMode) => { _voicingMode = mode; };
+export const getVoicingMode = () => _voicingMode;
+export const resetVoiceLeading = () => { _lastVoicingMidi = null; };
+
 /**
  * Convert a parsed chord to an array of note names for Tone.js.
- * Voicing: root at octave 3, upper notes stacked above.
- * For slash chords, the bass note is placed at octave 2.
+ * Normal mode: root at octave 3, upper notes stacked above.
+ * Harmonic mode: close voicing with voice leading from previous chord.
  */
 export function chordToNotes(chord: ParsedChord): string[] {
   const intervals = QUALITY_INTERVALS[chord.quality];
@@ -179,16 +193,65 @@ export function chordToNotes(chord: ParsedChord): string[] {
     throw new Error(`Unknown chord quality: "${chord.quality}" in "${chord.raw}"`);
   }
 
+  if (_voicingMode === 'harmonic') {
+    return chordToNotesHarmonic(chord, intervals);
+  }
+
   const rootMidi = rootToMidi(chord.root, 3);
   const notes = intervals.map((interval) => midiToNoteName(rootMidi + interval));
 
   if (chord.bass) {
     const bassMidi = rootToMidi(chord.bass, 2);
-    // Ensure bass is below the root
     notes.unshift(midiToNoteName(bassMidi));
   }
 
   return notes;
+}
+
+/**
+ * Harmonic voicing: bass in octave 2, upper voices in octave 3-4 range
+ * with voice leading (minimize movement from previous chord).
+ */
+function chordToNotesHarmonic(chord: ParsedChord, intervals: number[]): string[] {
+  // Bass note: root or slash bass at octave 2
+  const bassRoot = chord.bass ?? chord.root;
+  const bassMidi = rootToMidi(bassRoot, 2);
+
+  // Upper voices: intervals without root (or all if only 3 notes), centered around octave 4
+  const rootPc = rootToMidi(chord.root, 0) % 12;
+  const upperIntervals = intervals.length > 3 ? intervals.slice(1) : intervals;
+  let upperMidi = upperIntervals.map(iv => {
+    const pc = (rootPc + iv) % 12;
+    return pc + 48; // octave 4 base (C4 = 48 in our system, MIDI 60)
+  });
+
+  // Voice leading: if we have a previous chord, find closest inversion
+  if (_lastVoicingMidi && _lastVoicingMidi.length > 0) {
+    upperMidi = voiceLead(upperMidi, _lastVoicingMidi);
+  }
+
+  _lastVoicingMidi = upperMidi;
+
+  const allMidi = [bassMidi, ...upperMidi];
+  return allMidi.map(midiToNoteName);
+}
+
+/**
+ * Voice leading: rearrange target notes to minimize total movement from previous notes.
+ * Each note finds the closest octave transposition to the average position of previous notes.
+ */
+function voiceLead(target: number[], previous: number[]): number[] {
+  const prevCenter = previous.reduce((a, b) => a + b, 0) / previous.length;
+
+  return target.map(note => {
+    const pc = note % 12;
+    // Find the octave placement closest to the previous center
+    let best = pc + Math.round((prevCenter - pc) / 12) * 12;
+    // Keep within reasonable piano range (C3-C5 = MIDI 48-72)
+    if (best < 48) best += 12;
+    if (best > 72) best -= 12;
+    return best;
+  });
 }
 
 // ── Scheduling ─────────────────────────────────────────
@@ -231,6 +294,14 @@ export function buildSchedule(
     for (let entryIdx = 0; entryIdx < bar.entries.length; entryIdx++) {
       const entry = bar.entries[entryIdx];
       const time = barStart + entryIdx * entryDur;
+
+      if (entry.type === 'sustain') {
+        // Extend the previous note's duration instead of re-attacking
+        if (schedule.length > 0) {
+          schedule[schedule.length - 1].duration += entryDur;
+        }
+        continue;
+      }
 
       const notes = entryToNotes(entry, lastChordNotes);
       if (notes) {
@@ -294,7 +365,22 @@ export const playChordPreview = async (chordName: string): Promise<void> => {
  * Parse and play a selection of text as a chord progression.
  * Returns a promise that resolves when playback completes.
  */
+let _selectionTimers: ReturnType<typeof setTimeout>[] = [];
+let _globalMetronome = false;
+let _selectionNotesCallback: ((notes: string[]) => void) | null = null;
+
+export const setGlobalMetronome = (on: boolean) => { _globalMetronome = on; };
+export const getGlobalMetronome = () => _globalMetronome;
+export const onSelectionNotes = (cb: ((notes: string[]) => void) | null) => { _selectionNotesCallback = cb; };
+
+export const stopSelection = () => {
+  _selectionTimers.forEach(clearTimeout);
+  _selectionTimers = [];
+  _selectionNotesCallback?.([]); // clear highlights
+};
+
 export const playSelection = async (text: string, config: PlayerConfig): Promise<void> => {
+  stopSelection();
   await Tone.start();
   const { bars } = parseProgression(text);
   if (bars.length === 0) return;
@@ -316,21 +402,44 @@ export const playSelection = async (text: string, config: PlayerConfig): Promise
       }).toDestination();
   const isShared = _currentOscPreset === 'piano';
 
+  // Metronome synth for selection playback
+  let metSynth: Tone.MembraneSynth | null = null;
+  if (_globalMetronome) {
+    metSynth = new Tone.MembraneSynth({
+      pitchDecay: 0.008, octaves: 2,
+      envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.05 },
+      volume: -16,
+    }).toDestination();
+    const beatDurSec = 60 / config.bpm;
+    const totalBeats = resolved.length * config.timeSignature.beats;
+    for (let beat = 0; beat < totalBeats; beat++) {
+      const time = beat * beatDurSec;
+      const isDownbeat = beat % config.timeSignature.beats === 0;
+      const note = isDownbeat ? 'C5' : 'C4';
+      _selectionTimers.push(setTimeout(() => {
+        try { metSynth?.triggerAttackRelease(note, '32n', Tone.now()); } catch {}
+      }, time * 1000));
+    }
+  }
+
   // Use setTimeout instead of Transport to avoid conflicts with main player
-  const startTime = Tone.now();
   for (const event of schedule) {
-    setTimeout(() => {
+    _selectionTimers.push(setTimeout(() => {
       try {
         synth.triggerAttackRelease(event.notes, event.duration, Tone.now());
+        _selectionNotesCallback?.(event.notes);
       } catch {}
-    }, event.time * 1000);
+    }, event.time * 1000));
   }
 
   return new Promise<void>((resolve) => {
-    setTimeout(() => {
+    _selectionTimers.push(setTimeout(() => {
       if (!isShared) synth.dispose();
+      metSynth?.dispose();
+      _selectionTimers = [];
+      _selectionNotesCallback?.([]);
       resolve();
-    }, totalDuration * 1000 + 500);
+    }, totalDuration * 1000 + 500));
   });
 };
 
@@ -489,6 +598,8 @@ export class ChordPlayer {
   private _loop = false;
   private _currentChord: string | null = null;
   private _bars: ParsedBar[] = [];
+  private _metronome = false;
+  private _metronomesynth: Tone.MembraneSynth | null = null;
 
   constructor(config: PlayerConfig, callbacks: PlayerCallbacks = {}) {
     this._config = config;
@@ -534,6 +645,23 @@ export class ChordPlayer {
     return this.synth;
   }
 
+  setMetronome(on: boolean): void {
+    this._metronome = on;
+    setGlobalMetronome(on);
+  }
+
+  private ensureMetronomeSynth(): Tone.MembraneSynth {
+    if (!this._metronomesynth) {
+      this._metronomesynth = new Tone.MembraneSynth({
+        pitchDecay: 0.008,
+        octaves: 2,
+        envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.05 },
+        volume: -16,
+      }).toDestination();
+    }
+    return this._metronomesynth;
+  }
+
   setOscPreset(preset: OscPreset): void {
     setGlobalOscPreset(preset);
     if (this.synth) {
@@ -550,6 +678,7 @@ export class ChordPlayer {
    */
   load(bars: ParsedBar[]): void {
     this.clearSchedule();
+    resetVoiceLeading();
     this._bars = bars;
     this._currentChord = null;
 
@@ -604,6 +733,22 @@ export class ChordPlayer {
         this._callbacks.onBarChange?.(i);
       }, i * barDur);
       this.scheduledEvents.push(id);
+    }
+
+    // Metronome clicks
+    if (this._metronome) {
+      const metSynth = this.ensureMetronomeSynth();
+      const beatDur = 60 / this._config.bpm;
+      const totalBeats = resolved.length * this._config.timeSignature.beats;
+      for (let beat = 0; beat < totalBeats; beat++) {
+        const time = beat * beatDur;
+        const isDownbeat = beat % this._config.timeSignature.beats === 0;
+        const note = isDownbeat ? 'C5' : 'C4';
+        const id = transport.schedule((t) => {
+          metSynth.triggerAttackRelease(note, '32n', t);
+        }, time);
+        this.scheduledEvents.push(id);
+      }
     }
 
     this._totalDuration = resolved.length * barDur;
@@ -736,6 +881,10 @@ export class ChordPlayer {
       this.synth.dispose();
     }
     this.synth = null;
+    if (this._metronomesynth) {
+      this._metronomesynth.dispose();
+      this._metronomesynth = null;
+    }
   }
 
   private clearSchedule(): void {

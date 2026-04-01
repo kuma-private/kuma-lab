@@ -5,8 +5,10 @@
 		thread: Thread;
 		drawerOpen: boolean;
 		error: string | null;
+		submitting: boolean;
 		onOpenLog: () => void;
 		onExport: () => void;
+		onSave: () => void;
 		onUpdateSettings: (data: { key?: string; timeSignature?: string; bpm?: number }) => void;
 	}
 
@@ -14,8 +16,10 @@
 		thread,
 		drawerOpen,
 		error,
+		submitting,
 		onOpenLog,
 		onExport,
+		onSave,
 		onUpdateSettings,
 	}: Props = $props();
 
@@ -90,6 +94,22 @@
 		}
 	};
 
+	let editingTitle = $state(false);
+	let editTitle = $state('');
+
+	const startEditTitle = () => {
+		editTitle = thread.title;
+		editingTitle = true;
+	};
+
+	const saveTitle = () => {
+		editingTitle = false;
+		const trimmed = editTitle.trim();
+		if (trimmed && trimmed !== thread.title) {
+			onUpdateSettings({ title: trimmed } as any);
+		}
+	};
+
 	const memberCount = $derived(thread.members?.length ?? 0);
 </script>
 
@@ -101,7 +121,16 @@
 		戻る
 	</a>
 	<div class="thread-info">
-		<h1 class="thread-title">{thread.title}</h1>
+		{#if editingTitle}
+			<input
+				class="title-input"
+				bind:value={editTitle}
+				onkeydown={(e) => { if (e.key === 'Enter' && !e.isComposing) saveTitle(); if (e.key === 'Escape') editingTitle = false; }}
+				onblur={saveTitle}
+			/>
+		{:else}
+			<h1 class="thread-title" onclick={startEditTitle} title="クリックして変更">{thread.title}</h1>
+		{/if}
 		<div class="thread-meta">
 			<!-- Key badge: click to edit -->
 			{#if editingKey}
@@ -142,7 +171,7 @@
 						type="number"
 						min="40"
 						max="300"
-						onkeydown={(e) => { if (e.key === 'Enter') saveBpm(); }}
+						onkeydown={(e) => { if (e.key === 'Enter' && !e.isComposing) saveBpm(); }}
 					/>
 					<button class="inline-save-btn" onclick={saveBpm}>OK</button>
 				</div>
@@ -156,6 +185,18 @@
 		</div>
 	</div>
 	<div class="header-actions">
+		<button class="btn-save-header" onclick={onSave} disabled={submitting}>
+			{#if submitting}
+				<span class="save-spinner"></span>
+			{:else}
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+					<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+					<polyline points="17 21 17 13 7 13 7 21" />
+					<polyline points="7 3 7 8 15 8" />
+				</svg>
+			{/if}
+			保存
+		</button>
 		<button class="btn-log" onclick={onOpenLog} title="保存履歴">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -200,6 +241,27 @@
 		font-weight: 700;
 		color: var(--text-primary);
 		margin: 0 0 8px;
+		cursor: pointer;
+		border-bottom: 1px dashed transparent;
+	}
+
+	.thread-title:hover {
+		border-bottom-color: var(--border-default);
+	}
+
+	.title-input {
+		font-family: var(--font-display);
+		font-size: 1.35rem;
+		font-weight: 700;
+		color: var(--text-primary);
+		background: var(--bg-base);
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-sm);
+		padding: 2px 8px;
+		margin: 0 0 8px;
+		width: 100%;
+		box-sizing: border-box;
+		outline: none;
 	}
 
 	.thread-meta {
@@ -289,6 +351,45 @@
 		gap: var(--space-sm);
 		align-items: center;
 		flex-shrink: 0;
+	}
+
+	/* Save button */
+	.btn-save-header {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 14px;
+		border: none;
+		border-radius: var(--radius-md);
+		background: var(--accent-primary);
+		color: #fff;
+		font-size: 0.78rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.btn-save-header:hover:not(:disabled) {
+		background: var(--accent-secondary);
+		transform: translateY(-1px);
+	}
+
+	.btn-save-header:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.save-spinner {
+		width: 12px;
+		height: 12px;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top-color: #fff;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
 	}
 
 	/* Log button */

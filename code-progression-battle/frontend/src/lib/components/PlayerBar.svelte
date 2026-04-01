@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { PlayerState } from '$lib/chord-player';
+	import type { PlayerState, VoicingMode } from '$lib/chord-player';
 	import type { OscPreset } from '$lib/chord-player';
 	import PianoKeyboard from './PianoKeyboard.svelte';
 
@@ -11,6 +11,8 @@
 		currentChord = null,
 		volume = -10,
 		loop = false,
+		metronome = false,
+		voicingMode = 'normal' as VoicingMode,
 		oscPreset = 'piano' as OscPreset,
 		playingNotes = [] as string[],
 		onplay,
@@ -19,6 +21,8 @@
 		onseek,
 		onVolumeChange,
 		onLoopChange,
+		onMetronomeChange,
+		onVoicingModeChange,
 		onOscPresetChange
 	}: {
 		state?: PlayerState;
@@ -34,8 +38,12 @@
 		onpause?: () => void;
 		onstop?: () => void;
 		onseek?: (time: number) => void;
+		metronome?: boolean;
+		voicingMode?: VoicingMode;
 		onVolumeChange?: (db: number) => void;
 		onLoopChange?: (loop: boolean) => void;
+		onMetronomeChange?: (on: boolean) => void;
+		onVoicingModeChange?: (mode: VoicingMode) => void;
 		onOscPresetChange?: (preset: OscPreset) => void;
 	} = $props();
 
@@ -134,6 +142,18 @@
 						<path d="M21 13v2a4 4 0 0 1-4 4H3" />
 					</svg>
 				</button>
+
+				<button
+					class="player-btn"
+					class:player-btn--active={metronome}
+					onclick={() => onMetronomeChange?.(!metronome)}
+					title="メトロノーム"
+				>
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+						<path d="M12 2L8 22h8L12 2z" />
+						<line x1="12" y1="8" x2="18" y2="4" />
+					</svg>
+				</button>
 			</div>
 
 			<!-- Visualizer -->
@@ -187,6 +207,22 @@
 					oninput={handleVolumeInput}
 					title="音量: {volume}dB"
 				/>
+			</div>
+
+			<!-- Voicing mode toggle -->
+			<div class="voicing-toggle">
+				<button
+					class="voicing-btn"
+					class:voicing-btn--active={voicingMode === 'normal'}
+					onclick={() => onVoicingModeChange?.('normal')}
+					title="そのまま再生"
+				>OFF</button>
+				<button
+					class="voicing-btn"
+					class:voicing-btn--active={voicingMode === 'harmonic'}
+					onclick={() => onVoicingModeChange?.('harmonic')}
+					title="オートボイシング（クローズドボイシング + ボイスリーディング）"
+				>Auto V.</button>
 			</div>
 
 			<!-- Tone selector -->
@@ -459,6 +495,30 @@
 	}
 
 	/* Tone selector */
+	.voicing-toggle {
+		display: flex;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+		flex-shrink: 0;
+	}
+
+	.voicing-btn {
+		padding: 1px 8px;
+		border: none;
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 0.65rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.12s;
+	}
+
+	.voicing-btn--active {
+		background: var(--accent-primary);
+		color: #fff;
+	}
+
 	.player-tone {
 		flex-shrink: 0;
 	}

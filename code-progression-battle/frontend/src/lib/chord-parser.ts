@@ -93,8 +93,8 @@ export function parseChord(raw: string): ParsedChord {
 
 function parseToken(token: string): BarEntry | null {
   if (token === '%') return { type: 'repeat' };
-  if (token === '_' || token === '-') return { type: 'rest' };
-  if (token === '=') return { type: 'sustain' };
+  if (token === '_') return { type: 'rest' };
+  if (token === '-' || token === '=') return { type: 'sustain' };
   try {
     return { type: 'chord', chord: parseChord(token) };
   } catch {
@@ -127,8 +127,11 @@ export function parseProgression(input: string): ParseResult {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith('#')) {
-      comments.push(trimmed.slice(1).trim());
+    if (trimmed.startsWith('#') || trimmed.startsWith('//')) {
+      const text = trimmed.startsWith('//')
+        ? trimmed.slice(2).trim()
+        : trimmed.slice(1).trim();
+      comments.push(text);
     } else if (trimmed) {
       contentParts.push(trimmed);
     }
@@ -217,7 +220,7 @@ export const transpose = (input: string, semitones: number): string => {
   if (semitones === 0) return input;
   return input.split('\n').map(line => {
     const trimmed = line.trim();
-    if (trimmed.startsWith('#') || !trimmed) return line;
+    if (trimmed.startsWith('#') || trimmed.startsWith('//') || !trimmed) return line;
     return line.split(/(\|)/).map(segment => {
       if (segment === '|') return segment;
       return segment.split(/(\s+)/).map(token => {

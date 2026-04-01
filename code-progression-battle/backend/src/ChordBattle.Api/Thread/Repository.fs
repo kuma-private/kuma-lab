@@ -53,12 +53,13 @@ module Repository =
                 | false, _ -> return None
             }
 
-        let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) : Task<Thread option> =
+        let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) (title: string) : Task<Thread option> =
             task {
                 match threads.TryGetValue(threadId) with
                 | true, thread ->
                     let updated =
                         { thread with
+                            Title = if title <> "" then title else thread.Title
                             Key = key
                             TimeSignature = timeSignature
                             Bpm = bpm }
@@ -240,9 +241,10 @@ module Repository =
                     LastEditedAt = history.CreatedAt
                     History = thread.History @ [ history ] })
 
-        let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) : Task<Thread option> =
+        let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) (title: string) : Task<Thread option> =
             updateThread threadId (fun thread ->
                 { thread with
+                    Title = if title <> "" then title else thread.Title
                     Key = key
                     TimeSignature = timeSignature
                     Bpm = bpm })
@@ -253,7 +255,7 @@ module Repository =
           Create: Thread -> Task<Thread>
           Update: Thread -> Task<Thread>
           SaveScore: string -> string -> SaveHistory -> Task<Thread option>
-          UpdateSettings: string -> string -> string -> int -> Task<Thread option> }
+          UpdateSettings: string -> string -> string -> int -> string -> Task<Thread option> }
 
     let create (firestoreProjectId: string) : IThreadRepository =
         if String.IsNullOrEmpty(firestoreProjectId) then

@@ -28,13 +28,6 @@
 			<h1 class="logo">Tamekoma Night</h1>
 			<p class="subtitle">溜め込まないで、コードを放て。</p>
 		</div>
-		<div class="header-right">
-			{#if store.loggedIn}
-				<span class="user-name">@{store.user?.name}</span>
-			{:else}
-				<a href="/auth/google" class="btn btn-secondary">Googleでログイン</a>
-			{/if}
-		</div>
 	</header>
 
 	<main class="main">

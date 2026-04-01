@@ -32,7 +32,7 @@ module Models =
 
     type SaveScoreRequest = { score: string; comment: string }
 
-    type UpdateSettingsRequest = { key: string; timeSignature: string; bpm: int }
+    type UpdateSettingsRequest = { title: string; key: string; timeSignature: string; bpm: int }
 
     type TransformRequest =
         { selectedChords: string
@@ -40,3 +40,12 @@ module Models =
           key: string
           timeSignature: string
           fullScore: string }
+
+    type ImportChordChartRequest =
+        { images: string list
+          songName: string
+          artist: string
+          sourceUrl: string
+          bpm: int
+          timeSignature: string
+          key: string }

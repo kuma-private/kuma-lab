@@ -3,7 +3,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { createAppStore } from '$lib/stores/app.svelte';
 	import { parseProgression, transpose, parseChord } from '$lib/chord-parser';
-	import { ChordPlayer, type PlayerState, type OscPreset, setGlobalOscPreset, chordToNotes } from '$lib/chord-player';
+	import { ChordPlayer, type PlayerState, type OscPreset, type VoicingMode, setGlobalOscPreset, setVoicingMode, chordToNotes, onSelectionNotes } from '$lib/chord-player';
 	import type { DisplayMode } from '$lib/components/ScoreEditor.svelte';
 	import type { SaveHistory } from '$lib/api';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
@@ -11,6 +11,7 @@
 	import ScorePanel from '$lib/components/ScorePanel.svelte';
 	import ToolsPanel from '$lib/components/ToolsPanel.svelte';
 	import SessionDrawer from '$lib/components/SessionDrawer.svelte';
+	import ImportModal from '$lib/components/ImportModal.svelte';
 
 	const store = createAppStore();
 	const threadId = page.params.id as string;
@@ -23,17 +24,22 @@
 	let currentChord = $state<string | null>(null);
 	let playerVolume = $state(-10);
 	let playerLoop = $state(false);
+	let playerMetronome = $state(false);
+	let playerVoicingMode = $state<VoicingMode>('normal');
+	let selectionNotes = $state<string[]>([]);
 
 	// Save state
 	let commentInput = $state('');
 	let submitting = $state(false);
-	let reviewing = $state(false);
 
 	// ScoreEditor state
 	let scoreEditorValue = $state('');
 	let pendingInsertText = $state('');
 	let scoreInitialized = $state(false);
 	let scoreDisplayMode = $state<DisplayMode>('chord');
+
+	// Import modal state
+	let importModalOpen = $state(false);
 
 	// Drawer state
 	let drawerOpen = $state(false);
@@ -53,11 +59,21 @@
 	onMount(() => {
 		store.checkLogin();
 		store.loadThread(threadId);
+		onSelectionNotes((notes) => { selectionNotes = notes; });
 	});
 
 	onDestroy(() => {
 		player?.dispose();
+		onSelectionNotes(null);
 	});
+
+	// Ctrl+S / Cmd+S to save
+	const handleKeydown = (e: KeyboardEvent) => {
+		if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+			e.preventDefault();
+			handleSave();
+		}
+	};
 
 	// Sync ScoreEditor value from thread score
 	$effect(() => {
@@ -101,6 +117,7 @@
 		);
 		player.setVolume(playerVolume);
 		player.setLoop(playerLoop);
+		player.setMetronome(playerMetronome);
 		try {
 			const { bars } = parseProgression(textToPlay);
 			if (bars.length > 0) player.load(bars);
@@ -118,9 +135,13 @@
 	const handleSeek = (time: number) => { player?.seekTo(time); };
 	const handleVolumeChange = (db: number) => { playerVolume = db; player?.setVolume(db); };
 	const handleLoopChange = (loop: boolean) => { playerLoop = loop; player?.setLoop(loop); };
+	const handleMetronomeChange = (on: boolean) => { playerMetronome = on; player?.setMetronome(on); };
+	const handleVoicingModeChange = (mode: VoicingMode) => { playerVoicingMode = mode; setVoicingMode(mode); };
 
 	// Compute notes for the current chord to highlight on the keyboard
 	const currentChordNotes = $derived.by(() => {
+		// Selection playback notes take priority
+		if (selectionNotes.length > 0) return selectionNotes;
 		if (!currentChord || playerState !== 'playing') return [] as string[];
 		try {
 			const parsed = parseChord(currentChord);
@@ -161,64 +182,32 @@
 			commentInput = '';
 			player?.dispose();
 			player = null;
-			// Auto-trigger AI review after save
-			reviewing = true;
-			try {
-				await store.requestReview(threadId);
-				// Reload history to show AI comment
-				historyItems = await store.loadHistory(threadId);
-			} finally {
-				reviewing = false;
-			}
+			// Reload history to reflect the new save
+			historyItems = await store.loadHistory(threadId);
 		} finally {
 			submitting = false;
 		}
 	};
 
-	// Request AI review
-	const handleRequestReview = async () => {
-		if (reviewing) return;
-		reviewing = true;
-		try {
-			await store.requestReview(threadId);
-		} finally {
-			reviewing = false;
-		}
+	// Review a specific history entry (called from SessionDrawer)
+	const handleReviewEntry = async (index: number): Promise<{ comment: string; scores: string }> => {
+		const result = await store.requestReview(threadId);
+		historyItems = await store.loadHistory(threadId);
+		return result;
 	};
 
 	// Settings update
-	const handleUpdateSettings = async (data: { key?: string; timeSignature?: string; bpm?: number }) => {
+	const handleUpdateSettings = async (data: { title?: string; key?: string; timeSignature?: string; bpm?: number }) => {
 		const thread = store.currentThread;
 		if (!thread) return;
-		// Always send all fields (backend requires all)
 		const fullData = {
+			title: data.title ?? '',
 			key: data.key ?? thread.key,
 			timeSignature: data.timeSignature ?? thread.timeSignature,
 			bpm: data.bpm ?? thread.bpm,
 		};
 		await store.updateSettings(threadId, fullData);
 	};
-
-	// AI Review: extract from latest history
-	const latestAiComment = $derived.by(() => {
-		if (historyItems.length === 0) return '';
-		const latest = historyItems[historyItems.length - 1];
-		return latest.aiComment || '';
-	});
-
-	const latestAiScores = $derived.by(() => {
-		if (historyItems.length === 0) return null;
-		const latest = historyItems[historyItems.length - 1];
-		if (!latest.aiScores) return null;
-		try {
-			const parsed = JSON.parse(latest.aiScores);
-			if (typeof parsed.tension === 'number' && typeof parsed.creativity === 'number'
-				&& typeof parsed.coherence === 'number' && typeof parsed.surprise === 'number') {
-				return parsed as { tension: number; creativity: number; coherence: number; surprise: number };
-			}
-		} catch { /* ignore */ }
-		return null;
-	});
 
 	// Pattern insert handler
 	const handlePatternInsert = (chords: string) => {
@@ -275,7 +264,26 @@
 	const handleRestoreScore = (score: string) => {
 		scoreEditorValue = score;
 	};
+
+	const handleOpenImport = () => { importModalOpen = true; };
+
+	const handleImportConfirm = (chords: string, meta: { bpm: number; timeSignature: string; key: string }) => {
+		scoreEditorValue = scoreEditorValue.trim()
+			? scoreEditorValue + '\n\n' + chords
+			: chords;
+		importModalOpen = false;
+		// Update session settings with import meta
+		const updates: { bpm?: number; timeSignature?: string; key?: string } = {};
+		if (meta.bpm > 0) updates.bpm = meta.bpm;
+		if (meta.timeSignature) updates.timeSignature = meta.timeSignature;
+		if (meta.key) updates.key = meta.key;
+		if (Object.keys(updates).length > 0) {
+			handleUpdateSettings(updates);
+		}
+	};
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
 	<title>{store.currentThread?.title || 'Thread'} - Tamekoma Night</title>
@@ -289,8 +297,10 @@
 			{thread}
 			{drawerOpen}
 			error={store.error}
+			{submitting}
 			onOpenLog={toggleDrawer}
 			onExport={handleExport}
+			onSave={handleSave}
 			onUpdateSettings={handleUpdateSettings}
 		/>
 
@@ -304,18 +314,11 @@
 					{scoreDisplayMode}
 					{transposeSemitones}
 					{pendingInsertText}
-					{commentInput}
-					{submitting}
-					{reviewing}
-					{latestAiComment}
-					{latestAiScores}
 					onScoreChange={handleScoreChange}
-					onSave={handleSave}
-					onRequestReview={handleRequestReview}
+					onImport={handleOpenImport}
 					onTransposeUp={handleTransposeUp}
 					onTransposeDown={handleTransposeDown}
 					onDisplayModeChange={handleDisplayModeChange}
-					onCommentChange={handleCommentChange}
 					onInsertBar={handleInsertBar}
 					onInsertNewline={handleInsertNewline}
 					onDeleteLastLine={handleDeleteLastLine}
@@ -341,11 +344,22 @@
 </div>
 
 {#if store.currentThread}
+	{@const thread2 = store.currentThread}
+	<ImportModal
+		open={importModalOpen}
+		threadId={threadId}
+		initialBpm={thread2.bpm}
+		initialTimeSignature={thread2.timeSignature}
+		initialKey={thread2.key}
+		onclose={() => { importModalOpen = false; }}
+		onconfirm={handleImportConfirm}
+	/>
 	<SessionDrawer
 		history={historyItems}
 		open={drawerOpen}
 		onClose={closeDrawer}
 		onRestore={handleRestoreScore}
+		onReviewEntry={handleReviewEntry}
 	/>
 {/if}
 
@@ -357,6 +371,8 @@
 	{currentChord}
 	volume={playerVolume}
 	loop={playerLoop}
+	metronome={playerMetronome}
+	voicingMode={playerVoicingMode}
 	{oscPreset}
 	playingNotes={currentChordNotes}
 	onplay={handlePlay}
@@ -365,6 +381,8 @@
 	onseek={handleSeek}
 	onVolumeChange={handleVolumeChange}
 	onLoopChange={handleLoopChange}
+	onMetronomeChange={handleMetronomeChange}
+	onVoicingModeChange={handleVoicingModeChange}
 	onOscPresetChange={handleOscPresetChange}
 />
 

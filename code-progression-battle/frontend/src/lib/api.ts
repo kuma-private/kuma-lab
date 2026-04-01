@@ -76,7 +76,7 @@ export const saveScore = async (
 
 export const updateSettings = async (
 	threadId: string,
-	data: { key?: string; timeSignature?: string; bpm?: number }
+	data: { title?: string; key?: string; timeSignature?: string; bpm?: number }
 ): Promise<Thread> => {
 	const res = await apiFetch(`/api/threads/${threadId}/settings`, {
 		method: 'PUT',
@@ -101,6 +101,18 @@ export const transformChords = async (
 	data: { selectedChords: string; instruction: string; key: string; timeSignature: string; fullScore: string }
 ): Promise<{ comment: string; chords: string }> => {
 	const res = await apiFetch(`/api/threads/${threadId}/transform`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};
+
+export const importChordChart = async (
+	threadId: string,
+	data: { images: string[]; songName: string; artist: string; sourceUrl: string; bpm: number; timeSignature: string; key: string }
+): Promise<{ chords: string }> => {
+	const res = await apiFetch(`/api/threads/${threadId}/import`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(data)

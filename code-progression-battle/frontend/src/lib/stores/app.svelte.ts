@@ -85,13 +85,15 @@ export const createAppStore = () => {
 			}
 		},
 
-		requestReview: async (threadId: string) => {
+		requestReview: async (threadId: string): Promise<{ comment: string; scores: string }> => {
 			error = null;
 			try {
-				await api.requestReview(threadId);
+				const result = await api.requestReview(threadId);
 				currentThread = await api.getThread(threadId);
+				return result;
 			} catch (e) {
 				error = e instanceof Error ? e.message : 'Failed to request review';
+				return { comment: '', scores: '' };
 			}
 		},
 

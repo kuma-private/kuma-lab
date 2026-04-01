@@ -16,10 +16,11 @@
 		fullScore?: string;
 		musicalKeyFull?: string;
 		timeSignature?: string;
+		bpm?: number;
 		onchange?: (value: string) => void;
 	}
 
-	let { value, readonly = false, activeBarIndex = -1, displayMode = 'chord', musicalKey = 'C', pendingInsert = '', threadId = '', fullScore = '', musicalKeyFull = 'C Major', timeSignature = '4/4', onchange }: Props = $props();
+	let { value, readonly = false, activeBarIndex = -1, displayMode = 'chord', musicalKey = 'C', pendingInsert = '', threadId = '', fullScore = '', musicalKeyFull = 'C Major', timeSignature = '4/4', bpm = 120, onchange }: Props = $props();
 
 	const ROOT_COLORS: Record<string, string> = {
 		'C': 'var(--chord-c-text)',
@@ -42,7 +43,7 @@
 	const colorize = (text: string, activeBar: number, mode: DisplayMode, key: string, insertedText: string): string => {
 		let barCounter = 0;
 		return text.split('\n').map(line => {
-			if (line.trim().startsWith('#')) {
+			if (line.trim().startsWith('#') || line.trim().startsWith('//')) {
 				return `<span class="se-comment">${escapeHtml(line)}</span>`;
 			}
 			const parts = line.split(/(\|)/);
@@ -69,11 +70,11 @@
 							return `<span class="se-degree${activeClass}${insertClass}">${escapeHtml(degree)}</span>`;
 						}
 						const rootLen = root.length;
-						const rootPart = token.slice(0, rootLen);
-						const qualityPart = token.slice(rootLen);
-						return `<span class="${activeClass}${insertClass}" style="color:${color}"><strong>${escapeHtml(rootPart)}</strong><span class="se-quality">${escapeHtml(qualityPart)}</span></span>`;
+						const rootDisplay = escapeHtml(token.slice(0, rootLen)).replace(/b$/, '♭');
+						const qualityDisplay = escapeHtml(token.slice(rootLen)).replace(/b(\d)/g, '♭$1');
+						return `<span class="${activeClass}${insertClass}" style="color:${color}"><strong>${rootDisplay}</strong><span class="se-quality">${qualityDisplay}</span></span>`;
 					} catch {
-						return escapeHtml(token);
+						return `<span class="se-invalid" title="無効なコード: ${escapeHtml(token)}">${escapeHtml(token)}</span>`;
 					}
 				}).join('');
 			}).join('');
@@ -83,8 +84,15 @@
 	// State
 	let internalValue = $state(value);
 	let textareaEl: HTMLTextAreaElement;
+	let previewEl: HTMLDivElement;
 	let lastCursorPos = $state(-1); // -1 = end
 	let lastInsertedText = $state('');
+
+	const handleScroll = () => {
+		if (textareaEl && previewEl) {
+			previewEl.scrollTop = textareaEl.scrollTop;
+		}
+	};
 
 	// Handle pending insert at cursor position
 	// pendingInsert format: "text::timestamp" to allow repeated same-text inserts
@@ -156,7 +164,8 @@
 		contextMenu = null;
 		try {
 			const { playSelection } = await import('$lib/chord-player');
-			await playSelection(text, { bpm: 120, timeSignature: { beats: 4, beatValue: 4 } });
+			const [tsBeats, tsValue] = timeSignature.split('/').map(Number);
+			await playSelection(text, { bpm, timeSignature: { beats: tsBeats || 4, beatValue: tsValue || 4 } });
 		} catch (err) {
 			console.error('[ScoreEditor] playSelection error:', err);
 		}
@@ -179,6 +188,19 @@
 		};
 		aiInstruction = '';
 		contextMenu = null;
+	};
+
+	export const openAiTransformFromSelection = () => {
+		if (!textareaEl) return false;
+		const selected = textareaEl.value.substring(textareaEl.selectionStart, textareaEl.selectionEnd).trim();
+		if (!selected) return false;
+		aiTransform = {
+			selectedText: selected,
+			selectionStart: textareaEl.selectionStart,
+			selectionEnd: textareaEl.selectionEnd,
+		};
+		aiInstruction = '';
+		return true;
 	};
 
 	const handleCancelAiTransform = () => {
@@ -264,51 +286,68 @@
 {/if}
 
 <div class="score-editor">
-	<!-- Preview: always visible, colorized HTML -->
-	<div class="se-preview">{@html highlighted}&nbsp;</div>
+	<div class="se-columns">
+		<!-- Editor: textarea (left) -->
+		<textarea
+			bind:this={textareaEl}
+			class="se-textarea"
+			value={internalValue}
+			oninput={handleInput}
+			onblur={handleBlur}
+			onscroll={handleScroll}
+			oncontextmenu={handleContextMenu}
+			ondblclick={handleDblClick}
+			readonly={readonly}
+			autocomplete="off"
+			spellcheck="false"
+			placeholder={"// サビ\n| Am7 | Dm7 G7 | Cmaj7 |\n| C - - G | Am Em |\n\n|   小節区切り\n空白  拍分割 (| Am G | = 2拍ずつ)\n-   前コード伸ばし\n_   休符\n//  セクション名"}
+		></textarea>
 
-	<!-- Editor: always visible textarea -->
-	<textarea
-		bind:this={textareaEl}
-		class="se-textarea"
-		value={internalValue}
-		oninput={handleInput}
-		onblur={handleBlur}
-		oncontextmenu={handleContextMenu}
-		ondblclick={handleDblClick}
-		readonly={readonly}
-		autocomplete="off"
-		spellcheck="false"
-		placeholder="| Am7 | Dm7 | G7 | Cmaj7 |&#10;&#10;💡 選択して右クリック → 部分再生"
-	></textarea>
+		<!-- Preview: colorized HTML (right) -->
+		<div class="se-preview" bind:this={previewEl}>{@html highlighted}&nbsp;</div>
+	</div>
 </div>
 
 {#if aiTransform}
-	<div class="ai-transform-panel">
-		<div class="ai-transform-header">AI変更</div>
-		<div class="ai-transform-selected">選択: <code>{aiTransform.selectedText}</code></div>
-		<div class="ai-transform-input">
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="ai-modal-overlay" onclick={handleCancelAiTransform}></div>
+	<div class="ai-modal">
+		<div class="ai-modal-header">
+			<span class="ai-modal-title">AI変更</span>
+			<button class="ai-modal-close" onclick={handleCancelAiTransform} type="button" disabled={aiLoading}>
+				<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+					<line x1="3" y1="3" x2="13" y2="13" />
+					<line x1="13" y1="3" x2="3" y2="13" />
+				</svg>
+			</button>
+		</div>
+		<div class="ai-modal-body">
+			<div class="ai-transform-selected">選択: <code>{aiTransform.selectedText}</code></div>
 			<textarea
 				class="ai-instruction-input"
 				bind:value={aiInstruction}
 				placeholder="指示を入力... 例: もっとジャジーに"
-				rows="2"
+				rows="3"
 				disabled={aiLoading}
-				onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitAiTransform(); } }}
+				onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); handleSubmitAiTransform(); } }}
 			></textarea>
-			<div class="ai-transform-actions">
-				<button class="ai-btn ai-btn-submit" onclick={handleSubmitAiTransform} disabled={aiLoading || !aiInstruction.trim()}>
-					{#if aiLoading}
-						<span class="ai-spinner"></span>
-						変更中...
-					{:else}
-						変更
-					{/if}
-				</button>
-				<button class="ai-btn ai-btn-cancel" onclick={handleCancelAiTransform} disabled={aiLoading}>
-					キャンセル
-				</button>
-			</div>
+			{#if aiComment}
+				<div class="ai-modal-comment">{aiComment}</div>
+			{/if}
+		</div>
+		<div class="ai-modal-footer">
+			<button class="ai-btn ai-btn-cancel" onclick={handleCancelAiTransform} disabled={aiLoading}>
+				キャンセル
+			</button>
+			<button class="ai-btn ai-btn-submit" onclick={handleSubmitAiTransform} disabled={aiLoading || !aiInstruction.trim()}>
+				{#if aiLoading}
+					<span class="ai-spinner"></span>
+					変更中...
+				{:else}
+					変更
+				{/if}
+			</button>
 		</div>
 	</div>
 {/if}
@@ -322,47 +361,51 @@
 		flex: 1;
 	}
 
-	/* Colorized preview (always visible, read-only) */
+	.se-columns {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		flex: 1;
+		min-height: 0;
+	}
+
+	/* Colorized preview */
 	.se-preview {
 		font-family: var(--font-mono);
-		font-size: 1rem;
+		font-size: 0.85rem;
 		font-weight: 500;
-		line-height: 1.8;
+		line-height: 1.7;
 		padding: var(--space-md);
 		background: var(--bg-base);
-		border: 1px solid transparent;
-		border-radius: var(--radius-md) var(--radius-md) 0 0;
-		min-height: 30px;
+		border-left: 1px solid var(--border-subtle);
+		min-height: 120px;
 		white-space: pre-wrap;
 		word-wrap: break-word;
 		box-sizing: border-box;
+		overflow-y: hidden;
 	}
 
-	/* Textarea editor (always visible) */
+	/* Textarea editor */
 	.se-textarea {
 		width: 100%;
 		min-height: 120px;
-		flex: 1;
 		font-family: var(--font-mono);
-		font-size: 1rem;
+		font-size: 0.85rem;
 		font-weight: 500;
-		line-height: 1.6;
+		line-height: 1.7;
 		padding: var(--space-md);
 		background: var(--bg-base);
 		color: var(--text-primary);
-		border: 1px solid var(--border-default);
-		border-top: 1px solid var(--border-subtle);
-		border-radius: 0 0 var(--radius-md) var(--radius-md);
+		border: none;
 		caret-color: var(--accent-primary);
 		outline: none;
-		resize: vertical;
+		resize: none;
 		box-sizing: border-box;
 		white-space: pre-wrap;
 		word-wrap: break-word;
 	}
 
 	.se-textarea:focus {
-		border-color: var(--accent-primary);
+		background: rgba(167, 139, 250, 0.02);
 	}
 
 	.se-textarea::placeholder {
@@ -374,6 +417,16 @@
 		cursor: default;
 	}
 
+	@media (max-width: 600px) {
+		.se-columns {
+			grid-template-columns: 1fr;
+		}
+		.se-preview {
+			border-left: none;
+			border-top: 1px solid var(--border-subtle);
+		}
+	}
+
 	:global(.se-bar) {
 		color: var(--border-strong);
 		font-weight: 500;
@@ -382,6 +435,13 @@
 	:global(.se-special) {
 		color: var(--text-muted);
 		font-style: italic;
+	}
+
+	:global(.se-invalid) {
+		color: var(--error);
+		text-decoration: wavy underline var(--error);
+		text-underline-offset: 3px;
+		cursor: help;
 	}
 
 	:global(.se-comment) {
@@ -475,26 +535,85 @@
 		100% { opacity: 0; }
 	}
 
-	/* AI Transform Panel */
-	.ai-transform-panel {
-		border: 1px solid var(--accent-primary);
-		border-radius: var(--radius-md);
-		background: var(--bg-surface);
-		padding: 10px 12px;
-		margin-top: 6px;
+	/* AI Transform Modal */
+	.ai-modal-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.6);
+		z-index: 100;
 	}
 
-	.ai-transform-header {
-		font-size: 0.75rem;
+	.ai-modal {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 480px;
+		max-width: 90vw;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-modal);
+		z-index: 101;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.ai-modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-md) var(--space-lg);
+		border-bottom: 1px solid var(--border-subtle);
+	}
+
+	.ai-modal-title {
+		font-size: 0.9rem;
 		font-weight: 700;
 		color: var(--accent-primary);
-		margin-bottom: 6px;
+	}
+
+	.ai-modal-close {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+
+	.ai-modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+	.ai-modal-body {
+		padding: var(--space-lg);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+	}
+
+	.ai-modal-footer {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-sm);
+		padding: var(--space-md) var(--space-lg);
+		border-top: 1px solid var(--border-subtle);
+	}
+
+	.ai-modal-comment {
+		font-size: 0.78rem;
+		color: var(--accent-secondary);
+		padding: var(--space-sm) var(--space-md);
+		background: rgba(96, 165, 250, 0.08);
+		border-radius: var(--radius-sm);
 	}
 
 	.ai-transform-selected {
-		font-size: 0.75rem;
+		font-size: 0.78rem;
 		color: var(--text-secondary);
-		margin-bottom: 8px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -502,24 +621,18 @@
 
 	.ai-transform-selected code {
 		background: var(--bg-base);
-		padding: 1px 4px;
+		padding: 2px 6px;
 		border-radius: 3px;
 		font-family: var(--font-mono);
-		font-size: 0.72rem;
-	}
-
-	.ai-transform-input {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
+		font-size: 0.75rem;
 	}
 
 	.ai-instruction-input {
 		width: 100%;
-		font-size: 0.8rem;
-		padding: 6px 8px;
+		font-size: 0.82rem;
+		padding: var(--space-sm) var(--space-md);
 		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-md);
 		background: var(--bg-base);
 		color: var(--text-primary);
 		resize: none;
@@ -530,15 +643,11 @@
 	.ai-instruction-input:focus {
 		outline: none;
 		border-color: var(--accent-primary);
+		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
 	}
 
 	.ai-instruction-input::placeholder {
 		color: var(--text-muted);
-	}
-
-	.ai-transform-actions {
-		display: flex;
-		gap: 6px;
 	}
 
 	.ai-btn {

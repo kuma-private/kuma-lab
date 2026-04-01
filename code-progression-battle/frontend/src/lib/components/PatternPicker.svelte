@@ -21,13 +21,18 @@
 			const { playSelection } = await import('$lib/chord-player');
 			const pattern = PATTERNS[idx];
 			const chords = getPatternChords(pattern, keyName);
-			// Default config for preview
 			await playSelection(chords, { bpm: 120, timeSignature: { beats: 4, beatValue: 4 } });
 		} catch (e) {
 			console.error('[PatternPicker] preview error:', e);
 		} finally {
 			previewingIdx = null;
 		}
+	};
+
+	const handleStop = async () => {
+		const { stopSelection } = await import('$lib/chord-player');
+		stopSelection();
+		previewingIdx = null;
 	};
 
 	const getPreview = (pattern: ChordPattern): string => {
@@ -42,18 +47,20 @@
 				<div class="pattern-top">
 					<span class="pattern-name">{pattern.nameJa}</span>
 					<div class="pattern-actions">
-						<button
-							class="pattern-btn pattern-btn--play"
-							onclick={() => handlePreview(idx)}
-							disabled={previewingIdx !== null}
-							title="試聴"
-						>
-							{#if previewingIdx === idx}
-								<span class="mini-spinner"></span>
-							{:else}
-								&#9654;
-							{/if}
-						</button>
+						{#if previewingIdx === idx}
+							<button
+								class="pattern-btn pattern-btn--stop"
+								onclick={handleStop}
+								title="停止"
+							>&#9632;</button>
+						{:else}
+							<button
+								class="pattern-btn pattern-btn--play"
+								onclick={() => handlePreview(idx)}
+								disabled={previewingIdx !== null}
+								title="試聴"
+							>&#9654;</button>
+						{/if}
 						<button
 							class="pattern-btn pattern-btn--insert"
 							onclick={() => handleInsert(pattern)}
@@ -145,6 +152,16 @@
 	.pattern-btn--play:hover:not(:disabled) {
 		background: rgba(167, 139, 250, 0.15);
 		border-color: var(--accent-primary);
+	}
+
+	.pattern-btn--stop {
+		color: var(--error);
+		font-size: 0.6rem;
+	}
+
+	.pattern-btn--stop:hover {
+		background: rgba(248, 113, 113, 0.15);
+		border-color: var(--error);
 	}
 
 	.pattern-btn--insert {

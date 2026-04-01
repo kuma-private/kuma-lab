@@ -165,7 +165,8 @@ module ThreadHandlers =
                     do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
                     return ()
 
-                let! result = repo.UpdateSettings threadId req.key req.timeSignature req.bpm
+                let title = if obj.ReferenceEquals(req.title, null) then "" else req.title
+                let! result = repo.UpdateSettings threadId req.key req.timeSignature req.bpm title
 
                 match result with
                 | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
@@ -242,6 +243,59 @@ module ThreadHandlers =
             | Error e ->
                 ctx.Response.StatusCode <- 500
                 do! ctx.Response.WriteAsJsonAsync({| error = $"AI transform failed: {e}" |})
+        }
+
+    let importChordChart (config: AppConfig) (ctx: HttpContext) : Task =
+        task {
+            if String.IsNullOrEmpty(config.AnthropicApiKey) then
+                ctx.Response.StatusCode <- 400
+                do! ctx.Response.WriteAsJsonAsync({| error = "AI import is not configured" |})
+            else
+
+            let! req =
+                try
+                    ctx.Request.ReadFromJsonAsync<ImportChordChartRequest>()
+                with _ ->
+                    ValueTask<ImportChordChartRequest>(Unchecked.defaultof<ImportChordChartRequest>)
+
+            if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.images, null) || req.images.IsEmpty then
+                ctx.Response.StatusCode <- 400
+                do! ctx.Response.WriteAsJsonAsync({| error = "At least one image is required" |})
+            else
+
+            let httpClient = getHttpClient ctx
+
+            let parseDataUri (dataUri: string) =
+                if dataUri.Contains(",") then
+                    let prefix = dataUri.Substring(0, dataUri.IndexOf(","))
+                    let data = dataUri.Substring(dataUri.IndexOf(",") + 1)
+                    let mediaType =
+                        if prefix.Contains("image/jpeg") then "image/jpeg"
+                        elif prefix.Contains("image/webp") then "image/webp"
+                        elif prefix.Contains("image/gif") then "image/gif"
+                        else "image/png"
+                    (mediaType, data)
+                else
+                    ("image/png", dataUri)
+
+            let images = req.images |> List.map parseDataUri
+
+            let songName = if obj.ReferenceEquals(req.songName, null) then "" else req.songName
+            let artist = if obj.ReferenceEquals(req.artist, null) then "" else req.artist
+            let sourceUrl = if obj.ReferenceEquals(req.sourceUrl, null) then "" else req.sourceUrl
+            let timeSignature = if obj.ReferenceEquals(req.timeSignature, null) then "4/4" else req.timeSignature
+            let key = if obj.ReferenceEquals(req.key, null) then "" else req.key
+
+            let! result =
+                AnthropicClient.importChordChart httpClient config.AnthropicApiKey images songName artist sourceUrl req.bpm timeSignature key
+                |> Async.StartAsTask
+
+            match result with
+            | Ok chords ->
+                do! ctx.Response.WriteAsJsonAsync({| chords = chords |})
+            | Error e ->
+                ctx.Response.StatusCode <- 500
+                do! ctx.Response.WriteAsJsonAsync({| error = $"AI import failed: {e}" |})
         }
 
     let getHistory (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
