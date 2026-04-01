@@ -5,8 +5,8 @@
 	import { parseProgression, transpose, parseChord } from '$lib/chord-parser';
 	import { ChordPlayer, type PlayerState, type OscPreset, type VoicingMode, setGlobalOscPreset, setVoicingMode, chordToNotes, onSelectionNotes } from '$lib/chord-player';
 	import type { DisplayMode } from '$lib/components/ScoreEditor.svelte';
-	import type { SaveHistory, Comment } from '$lib/api';
-	import { getComments, addComment, deleteComment } from '$lib/api';
+	import type { SaveHistory, Comment, Annotation } from '$lib/api';
+	import { getComments, addComment, deleteComment, getAnnotations, addAnnotation, analyzeSelection } from '$lib/api';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import ThreadHeader from '$lib/components/ThreadHeader.svelte';
 	import ScorePanel from '$lib/components/ScorePanel.svelte';
@@ -48,6 +48,9 @@
 
 	// Comments state
 	let comments = $state<Comment[]>([]);
+
+	// Annotations state
+	let annotations = $state<Annotation[]>([]);
 
 	// Drawer state
 	let drawerOpen = $state(false);
@@ -108,6 +111,8 @@
 		store.checkLogin();
 		store.loadThread(threadId);
 		onSelectionNotes((notes) => { selectionNotes = notes; });
+		// Load annotations for score display
+		getAnnotations(threadId).then(a => { annotations = a; }).catch(() => {});
 	});
 
 	onDestroy(() => {
@@ -219,6 +224,41 @@
 		a.download = `${thread.title.replace(/\s+/g, '_')}.md`;
 		a.click();
 		URL.revokeObjectURL(url);
+	};
+
+	// Annotation handlers
+	const handleReaction = async (emoji: string, startBar: number, endBar: number, snapshot: string) => {
+		try {
+			const annotation = await addAnnotation(threadId, {
+				annotationType: 'reaction',
+				startBar, endBar, snapshot, emoji
+			});
+			annotations = [...annotations, annotation];
+		} catch {
+			// handle error silently
+		}
+	};
+
+	const handleRangeComment = (startBar: number, endBar: number, snapshot: string) => {
+		// Open drawer to comments tab and pre-fill with anchor info
+		drawerOpen = true;
+		getComments(threadId).then(c => { comments = c; }).catch(() => {});
+	};
+
+	const handleAiAnalyze = async (selectedChords: string) => {
+		const thread = store.currentThread;
+		if (!thread) return;
+		try {
+			const annotation = await analyzeSelection(threadId, {
+				selectedChords,
+				fullScore: scoreEditorValue,
+				key: thread.key,
+				timeSignature: thread.timeSignature
+			});
+			annotations = [...annotations, annotation];
+		} catch {
+			// handle error silently
+		}
 	};
 
 	// Save score
@@ -364,6 +404,7 @@
 					{scoreDisplayMode}
 					{transposeSemitones}
 					{pendingInsertText}
+					{annotations}
 					onScoreChange={handleScoreChange}
 					onImport={handleOpenImport}
 					onTransposeUp={handleTransposeUp}
@@ -372,6 +413,9 @@
 					onInsertBar={handleInsertBar}
 					onInsertNewline={handleInsertNewline}
 					onDeleteLastLine={handleDeleteLastLine}
+					onReaction={handleReaction}
+					onRangeComment={handleRangeComment}
+					onAiAnalyze={handleAiAnalyze}
 				/>
 			</div>
 
@@ -422,6 +466,7 @@
 		onAddComment={handleAddComment}
 		onDeleteComment={handleDeleteComment}
 		currentUserId={store.user?.sub || ''}
+		{annotations}
 	/>
 {/if}
 

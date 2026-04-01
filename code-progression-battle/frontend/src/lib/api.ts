@@ -173,3 +173,50 @@ export const getComments = async (threadId: string): Promise<Comment[]> => {
 export const deleteComment = async (threadId: string, commentId: string): Promise<void> => {
 	await apiFetch(`/api/threads/${threadId}/comments/${commentId}`, { method: 'DELETE' });
 };
+
+// Annotations
+export interface Annotation {
+	id: string;
+	userId: string;
+	userName: string;
+	type: string;
+	startBar: number;
+	endBar: number;
+	snapshot: string;
+	emoji: string;
+	aiComment: string;
+	createdAt: string;
+}
+
+export const addAnnotation = async (
+	threadId: string,
+	data: { annotationType: string; startBar: number; endBar: number; snapshot: string; emoji: string }
+): Promise<Annotation> => {
+	const res = await apiFetch(`/api/threads/${threadId}/annotations`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};
+
+export const getAnnotations = async (threadId: string): Promise<Annotation[]> => {
+	const res = await apiFetch(`/api/threads/${threadId}/annotations`);
+	return res.json();
+};
+
+export const deleteAnnotation = async (threadId: string, annotationId: string): Promise<void> => {
+	await apiFetch(`/api/threads/${threadId}/annotations/${annotationId}`, { method: 'DELETE' });
+};
+
+export const analyzeSelection = async (
+	threadId: string,
+	data: { selectedChords: string; fullScore: string; key: string; timeSignature: string }
+): Promise<Annotation> => {
+	const res = await apiFetch(`/api/threads/${threadId}/analyze-selection`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};

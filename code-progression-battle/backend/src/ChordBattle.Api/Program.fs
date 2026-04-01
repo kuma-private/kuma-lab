@@ -152,6 +152,22 @@ module Program =
             (requireLogin (ThreadHandlers.deleteComment repo id commentId)) ctx))
         |> ignore
 
+        app.MapPost("/api/threads/{id}/annotations", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (ThreadHandlers.addAnnotation repo id)) ctx))
+        |> ignore
+
+        app.MapGet("/api/threads/{id}/annotations", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (ThreadHandlers.listAnnotations repo id)) ctx))
+        |> ignore
+
+        app.MapDelete("/api/threads/{id}/annotations/{aid}", Func<string, string, HttpContext, Task>(fun id aid ctx ->
+            (requireLogin (ThreadHandlers.deleteAnnotation repo id aid)) ctx))
+        |> ignore
+
+        app.MapPost("/api/threads/{id}/analyze-selection", Func<string, HttpContext, Task>(fun id ctx ->
+            (requireLogin (withRateLimit (ThreadHandlers.analyzeSelection repo config id))) ctx))
+        |> ignore
+
         // SPA fallback
         app.MapFallbackToFile("index.html") |> ignore
 

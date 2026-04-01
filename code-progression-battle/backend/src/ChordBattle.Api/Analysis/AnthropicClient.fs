@@ -215,6 +215,32 @@ module AnthropicClient =
                     return Ok { Comment = text; ScoresJson = "" }
         }
 
+    let analyzeSelection
+        (httpClient: HttpClient)
+        (apiKey: string)
+        (selectedChords: string)
+        (fullScore: string)
+        (key: string)
+        (timeSignature: string)
+        : Async<Result<string, string>> =
+
+        let systemPrompt =
+            "あなたは音楽理論に精通したコード進行の分析家です。選択された部分を具体的に分析してください。"
+
+        let userMessage =
+            "以下のコード進行から、選択された部分を音楽理論的に分析してください。\n\n"
+            + $"曲全体:\n{fullScore}\n\n"
+            + $"選択部分:\n{selectedChords}\n\n"
+            + $"Key: {key}\n拍子: {timeSignature}\n\n"
+            + "選択部分について以下を分析:\n"
+            + "- 和声機能（トニック/サブドミナント/ドミナント）\n"
+            + "- 特徴的な進行パターン（ii-V-I、王道進行等）\n"
+            + "- この部分の良い点や特徴\n"
+            + "- 改善の提案（あれば）\n\n"
+            + "日本語で2-3文で簡潔に。"
+
+        callApi httpClient apiKey "claude-sonnet-4-20250514" systemPrompt userMessage 300
+
     let importChordChart
         (httpClient: HttpClient)
         (apiKey: string)

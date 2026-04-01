@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SaveHistory, Comment } from '$lib/api';
+	import type { SaveHistory, Comment, Annotation } from '$lib/api';
 
 	type AiScores = { tension: number; creativity: number; coherence: number; surprise: number };
 
@@ -35,6 +35,7 @@
 		onAddComment: (text: string) => void;
 		onDeleteComment: (commentId: string) => void;
 		currentUserId: string;
+		annotations?: Annotation[];
 	}
 
 	let {
@@ -47,7 +48,10 @@
 		onAddComment,
 		onDeleteComment,
 		currentUserId = '',
+		annotations = [],
 	}: Props = $props();
+
+	const aiAnnotations = $derived(annotations.filter(a => a.type === 'ai_analysis'));
 
 	let activeTab = $state<'history' | 'comments'>('history');
 	let commentText = $state('');
@@ -240,7 +244,23 @@
 				</div>
 			{/each}
 
-			{#if comments.length === 0}
+			{#each aiAnnotations as ann}
+				<div class="comment-item annotation-ai">
+					<div class="comment-header">
+						<span class="annotation-ai-icon">{'\u{1F916}'}</span>
+						<span class="post-name">{ann.userName || 'AI分析'}</span>
+						<span class="post-time">{relativeTime(ann.createdAt)}</span>
+					</div>
+					{#if ann.snapshot}
+						<pre class="comment-snapshot">{ann.snapshot}</pre>
+					{/if}
+					{#if ann.aiComment}
+						<div class="comment-text annotation-ai-text">{ann.aiComment}</div>
+					{/if}
+				</div>
+			{/each}
+
+			{#if comments.length === 0 && aiAnnotations.length === 0}
 				<div class="empty-history">
 					<p class="empty-title">まだコメントがありません</p>
 					<p class="empty-sub">下のフォームからコメントを追加しよう</p>
@@ -707,6 +727,22 @@
 	.btn-send-comment:disabled {
 		opacity: 0.4;
 		cursor: default;
+	}
+
+	/* AI annotation entries */
+	.annotation-ai {
+		background: rgba(96, 165, 250, 0.04);
+		border-left: 2px solid rgba(96, 165, 250, 0.3);
+	}
+
+	.annotation-ai-icon {
+		font-size: 0.9rem;
+		flex-shrink: 0;
+	}
+
+	.annotation-ai-text {
+		color: rgba(96, 165, 250, 0.9);
+		font-style: italic;
 	}
 
 	@media (max-width: 600px) {

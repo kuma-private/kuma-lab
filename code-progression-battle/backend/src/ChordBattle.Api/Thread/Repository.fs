@@ -16,6 +16,7 @@ module Repository =
 
         let private threads = ConcurrentDictionary<string, Thread>()
         let private comments = ConcurrentDictionary<string, ConcurrentDictionary<string, Comment>>()
+        let private annotations = ConcurrentDictionary<string, ConcurrentDictionary<string, Annotation>>()
 
         let getByUser (userId: string) : Task<Thread list> =
             task {
@@ -108,6 +109,33 @@ module Repository =
                 match comments.TryGetValue(threadId) with
                 | true, bag ->
                     let (removed, _) = bag.TryRemove(commentId)
+                    return removed
+                | false, _ -> return false
+            }
+
+        let addAnnotation (threadId: string) (annotation: Annotation) : Task<Annotation> =
+            task {
+                let bag = annotations.GetOrAdd(threadId, fun _ -> ConcurrentDictionary<string, Annotation>())
+                bag.[annotation.Id] <- annotation
+                return annotation
+            }
+
+        let getAnnotations (threadId: string) : Task<Annotation list> =
+            task {
+                match annotations.TryGetValue(threadId) with
+                | true, bag ->
+                    return
+                        bag.Values
+                        |> Seq.toList
+                        |> List.sortBy (fun a -> a.CreatedAt)
+                | false, _ -> return []
+            }
+
+        let deleteAnnotation (threadId: string) (annotationId: string) : Task<bool> =
+            task {
+                match annotations.TryGetValue(threadId) with
+                | true, bag ->
+                    let (removed, _) = bag.TryRemove(annotationId)
                     return removed
                 | false, _ -> return false
             }
@@ -399,6 +427,83 @@ module Repository =
                     return false
             }
 
+        let addAnnotation (threadId: string) (annotation: Annotation) : Task<Annotation> =
+            task {
+                let docRef =
+                    db.Value.Collection("threads").Document(threadId)
+                        .Collection("annotations").Document(annotation.Id)
+
+                let data =
+                    System.Collections.Generic.Dictionary<string, obj>(
+                        dict
+                            [ "userId", annotation.UserId :> obj
+                              "userName", annotation.UserName :> obj
+                              "type", annotation.Type :> obj
+                              "startBar", annotation.StartBar :> obj
+                              "endBar", annotation.EndBar :> obj
+                              "snapshot", annotation.Snapshot :> obj
+                              "emoji", annotation.Emoji :> obj
+                              "aiComment", annotation.AiComment :> obj
+                              "createdAt", Timestamp.FromDateTime(annotation.CreatedAt.ToUniversalTime()) :> obj ]
+                    )
+
+                let! _ = docRef.SetAsync(data)
+                return annotation
+            }
+
+        let getAnnotations (threadId: string) : Task<Annotation list> =
+            task {
+                let collection =
+                    db.Value.Collection("threads").Document(threadId).Collection("annotations")
+                let! snapshot = collection.OrderBy("createdAt").GetSnapshotAsync()
+
+                return
+                    snapshot.Documents
+                    |> Seq.map (fun doc ->
+                        { Id = doc.Id
+                          UserId = doc.GetValue<string>("userId")
+                          UserName = doc.GetValue<string>("userName")
+                          Type =
+                              match doc.TryGetValue<string>("type") with
+                              | true, v -> v
+                              | _ -> "reaction"
+                          StartBar =
+                              match doc.TryGetValue<int>("startBar") with
+                              | true, v -> v
+                              | _ -> 0
+                          EndBar =
+                              match doc.TryGetValue<int>("endBar") with
+                              | true, v -> v
+                              | _ -> 0
+                          Snapshot =
+                              match doc.TryGetValue<string>("snapshot") with
+                              | true, v -> v
+                              | _ -> ""
+                          Emoji =
+                              match doc.TryGetValue<string>("emoji") with
+                              | true, v -> v
+                              | _ -> ""
+                          AiComment =
+                              match doc.TryGetValue<string>("aiComment") with
+                              | true, v -> v
+                              | _ -> ""
+                          CreatedAt = doc.GetValue<Timestamp>("createdAt").ToDateTime() })
+                    |> Seq.toList
+            }
+
+        let deleteAnnotation (threadId: string) (annotationId: string) : Task<bool> =
+            task {
+                let docRef =
+                    db.Value.Collection("threads").Document(threadId)
+                        .Collection("annotations").Document(annotationId)
+                let! snapshot = docRef.GetSnapshotAsync()
+                if snapshot.Exists then
+                    let! _ = docRef.DeleteAsync()
+                    return true
+                else
+                    return false
+            }
+
     type IThreadRepository =
         { GetByUser: string -> Task<Thread list>
           GetById: string -> Task<Thread option>
@@ -409,7 +514,10 @@ module Repository =
           UpdateShare: string -> string -> string list -> Task<Thread option>
           AddComment: string -> Comment -> Task<Comment>
           GetComments: string -> Task<Comment list>
-          DeleteComment: string -> string -> Task<bool> }
+          DeleteComment: string -> string -> Task<bool>
+          AddAnnotation: string -> Annotation -> Task<Annotation>
+          GetAnnotations: string -> Task<Annotation list>
+          DeleteAnnotation: string -> string -> Task<bool> }
 
     let create (firestoreProjectId: string) : IThreadRepository =
         if String.IsNullOrEmpty(firestoreProjectId) then
@@ -422,7 +530,10 @@ module Repository =
               UpdateShare = InMemory.updateShare
               AddComment = InMemory.addComment
               GetComments = InMemory.getComments
-              DeleteComment = InMemory.deleteComment }
+              DeleteComment = InMemory.deleteComment
+              AddAnnotation = InMemory.addAnnotation
+              GetAnnotations = InMemory.getAnnotations
+              DeleteAnnotation = InMemory.deleteAnnotation }
         else
             { GetByUser = Firestore.getByUser
               GetById = Firestore.getById
@@ -433,4 +544,7 @@ module Repository =
               UpdateShare = Firestore.updateShare
               AddComment = Firestore.addComment
               GetComments = Firestore.getComments
-              DeleteComment = Firestore.deleteComment }
+              DeleteComment = Firestore.deleteComment
+              AddAnnotation = Firestore.addAnnotation
+              GetAnnotations = Firestore.getAnnotations
+              DeleteAnnotation = Firestore.deleteAnnotation }

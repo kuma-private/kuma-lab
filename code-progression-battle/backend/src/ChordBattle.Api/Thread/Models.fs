@@ -71,3 +71,28 @@ module Models =
           bpm: int
           timeSignature: string
           key: string }
+
+    type Annotation =
+        { Id: string
+          UserId: string
+          UserName: string
+          Type: string
+          StartBar: int
+          EndBar: int
+          Snapshot: string
+          Emoji: string
+          AiComment: string
+          CreatedAt: DateTime }
+
+    type AddAnnotationRequest =
+        { annotationType: string
+          startBar: int
+          endBar: int
+          snapshot: string
+          emoji: string }
+
+    type AnalyzeSelectionRequest =
+        { selectedChords: string
+          fullScore: string
+          key: string
+          timeSignature: string }

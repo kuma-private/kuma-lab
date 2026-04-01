@@ -473,3 +473,144 @@ module ThreadHandlers =
                     let! _ = repo.DeleteComment threadId commentId
                     ctx.Response.StatusCode <- 204
         }
+
+    let addAnnotation (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+            let (userId, userName) = getUserInfo ctx
+
+            match thread with
+            | None ->
+                ctx.Response.StatusCode <- 404
+                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some t when not (Repository.canAccess userId t) ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
+            | Some _ ->
+                let! req =
+                    try
+                        ctx.Request.ReadFromJsonAsync<AddAnnotationRequest>()
+                    with _ ->
+                        ValueTask<AddAnnotationRequest>(Unchecked.defaultof<AddAnnotationRequest>)
+
+                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.annotationType, null) then
+                    ctx.Response.StatusCode <- 400
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
+                else
+
+                let annotation: Annotation =
+                    { Id = Guid.NewGuid().ToString("N")
+                      UserId = userId
+                      UserName = userName
+                      Type = req.annotationType
+                      StartBar = req.startBar
+                      EndBar = req.endBar
+                      Snapshot = if obj.ReferenceEquals(req.snapshot, null) then "" else req.snapshot
+                      Emoji = if obj.ReferenceEquals(req.emoji, null) then "" else req.emoji
+                      AiComment = ""
+                      CreatedAt = DateTime.UtcNow }
+
+                let! created = repo.AddAnnotation threadId annotation
+                ctx.Response.StatusCode <- 201
+                do! ctx.Response.WriteAsJsonAsync(created)
+        }
+
+    let listAnnotations (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+            let (userId, _) = getUserInfo ctx
+
+            match thread with
+            | None ->
+                ctx.Response.StatusCode <- 404
+                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some t when not (Repository.canAccess userId t) ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
+            | Some _ ->
+                let! annotations = repo.GetAnnotations threadId
+                do! ctx.Response.WriteAsJsonAsync(annotations)
+        }
+
+    let deleteAnnotation (repo: IThreadRepository) (threadId: string) (annotationId: string) (ctx: HttpContext) : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+            let (userId, _) = getUserInfo ctx
+
+            match thread with
+            | None ->
+                ctx.Response.StatusCode <- 404
+                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some t when not (Repository.canAccess userId t) ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
+            | Some _ ->
+                let! annotations = repo.GetAnnotations threadId
+                let annotationOpt = annotations |> List.tryFind (fun a -> a.Id = annotationId)
+
+                match annotationOpt with
+                | None ->
+                    ctx.Response.StatusCode <- 404
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Annotation not found" |})
+                | Some a when a.UserId <> userId ->
+                    ctx.Response.StatusCode <- 403
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Only annotation author can delete" |})
+                | Some _ ->
+                    let! _ = repo.DeleteAnnotation threadId annotationId
+                    ctx.Response.StatusCode <- 204
+        }
+
+    let analyzeSelection (repo: IThreadRepository) (config: AppConfig) (threadId: string) (ctx: HttpContext) : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+            let (userId, userName) = getUserInfo ctx
+
+            match thread with
+            | None ->
+                ctx.Response.StatusCode <- 404
+                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
+            | Some t when not (Repository.canAccess userId t) ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
+            | Some _ ->
+                if String.IsNullOrEmpty(config.AnthropicApiKey) then
+                    ctx.Response.StatusCode <- 400
+                    do! ctx.Response.WriteAsJsonAsync({| error = "AI analysis is not configured" |})
+                else
+
+                let! req =
+                    try
+                        ctx.Request.ReadFromJsonAsync<AnalyzeSelectionRequest>()
+                    with _ ->
+                        ValueTask<AnalyzeSelectionRequest>(Unchecked.defaultof<AnalyzeSelectionRequest>)
+
+                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.selectedChords, null) then
+                    ctx.Response.StatusCode <- 400
+                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
+                else
+
+                let httpClient = getHttpClient ctx
+                let! result =
+                    AnthropicClient.analyzeSelection httpClient config.AnthropicApiKey req.selectedChords req.fullScore req.key req.timeSignature
+                    |> Async.StartAsTask
+
+                match result with
+                | Ok aiComment ->
+                    let annotation: Annotation =
+                        { Id = Guid.NewGuid().ToString("N")
+                          UserId = userId
+                          UserName = userName
+                          Type = "ai_analysis"
+                          StartBar = 0
+                          EndBar = 0
+                          Snapshot = req.selectedChords
+                          Emoji = ""
+                          AiComment = aiComment
+                          CreatedAt = DateTime.UtcNow }
+
+                    let! created = repo.AddAnnotation threadId annotation
+                    do! ctx.Response.WriteAsJsonAsync(created)
+                | Error e ->
+                    ctx.Response.StatusCode <- 500
+                    do! ctx.Response.WriteAsJsonAsync({| error = $"AI analysis failed: {e}" |})
+        }

@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { extractRoot } from '$lib/chord-parser';
 	import { chordToDegree } from '$lib/chord-suggest';
+	import type { Annotation } from '$lib/api';
+	import FloatingActionBar from './FloatingActionBar.svelte';
 
 	export type DisplayMode = 'chord' | 'degree';
 
@@ -17,10 +19,14 @@
 		musicalKeyFull?: string;
 		timeSignature?: string;
 		bpm?: number;
+		annotations?: Annotation[];
 		onchange?: (value: string) => void;
+		onReaction?: (emoji: string, startBar: number, endBar: number, snapshot: string) => void;
+		onRangeComment?: (startBar: number, endBar: number, snapshot: string) => void;
+		onAiAnalyze?: (selectedChords: string) => void;
 	}
 
-	let { value, readonly = false, activeBarIndex = -1, displayMode = 'chord', musicalKey = 'C', pendingInsert = '', threadId = '', fullScore = '', musicalKeyFull = 'C Major', timeSignature = '4/4', bpm = 120, onchange }: Props = $props();
+	let { value, readonly = false, activeBarIndex = -1, displayMode = 'chord', musicalKey = 'C', pendingInsert = '', threadId = '', fullScore = '', musicalKeyFull = 'C Major', timeSignature = '4/4', bpm = 120, annotations = [], onchange, onReaction, onRangeComment, onAiAnalyze }: Props = $props();
 
 	const ROOT_COLORS: Record<string, string> = {
 		'C': 'var(--chord-c-text)',
@@ -135,7 +141,29 @@
 		}
 	});
 
-	const highlighted = $derived(colorize(internalValue, activeBarIndex, displayMode, musicalKey, lastInsertedText));
+	const highlighted = $derived.by(() => {
+		let html = colorize(internalValue, activeBarIndex, displayMode, musicalKey, lastInsertedText);
+		// Inject annotation badges after bar separators in the preview
+		if (Object.keys(annotationBadges).length > 0) {
+			let barIdx = 0;
+			let insideBar = false;
+			html = html.replace(/<span class="se-bar">\|<\/span>/g, (match) => {
+				let badges = '';
+				if (insideBar && annotationBadges[barIdx]) {
+					const entries = Object.entries(annotationBadges[barIdx]);
+					badges = '<span class="se-badges">' + entries.map(([emoji, count]) =>
+						`<span class="se-badge">${emoji}${count > 1 ? '\u00d7' + count : ''}</span>`
+					).join('') + '</span>';
+					barIdx++;
+				} else if (insideBar) {
+					barIdx++;
+				}
+				insideBar = true;
+				return badges + match;
+			});
+		}
+		return html;
+	});
 
 	// Convert chord text to degree text for display in textarea
 	const toDegreeText = (text: string, key: string): string => {
@@ -264,6 +292,75 @@
 		}
 	};
 
+	// Floating action bar state
+	let floatingBar = $state<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 });
+	let selectedRange = $state<{ startBar: number; endBar: number; snapshot: string } | null>(null);
+
+	const selectionToBars = (text: string, start: number, end: number): { startBar: number; endBar: number; snapshot: string } => {
+		const snapshot = text.substring(start, end);
+		let startBar = 0;
+		let endBar = 0;
+		for (let i = 0; i < text.length; i++) {
+			if (text[i] === '|') {
+				if (i < start) startBar++;
+				if (i < end) endBar++;
+			}
+		}
+		return { startBar, endBar: Math.max(endBar, startBar), snapshot };
+	};
+
+	const handleMouseUp = (e: MouseEvent) => {
+		if (!textareaEl) return;
+		const selected = textareaEl.value.substring(textareaEl.selectionStart, textareaEl.selectionEnd).trim();
+		if (!selected) {
+			floatingBar = { visible: false, x: 0, y: 0 };
+			selectedRange = null;
+			return;
+		}
+		const rect = textareaEl.getBoundingClientRect();
+		// Position above the click, within the textarea area
+		const barX = Math.min(Math.max(e.clientX - 80, rect.left), rect.right - 200);
+		const barY = e.clientY - 50;
+		selectedRange = selectionToBars(textareaEl.value, textareaEl.selectionStart, textareaEl.selectionEnd);
+		floatingBar = { visible: true, x: barX, y: barY };
+	};
+
+	const hideFloatingBar = () => {
+		floatingBar = { visible: false, x: 0, y: 0 };
+		selectedRange = null;
+	};
+
+	const handleFloatingReaction = (emoji: string) => {
+		if (!selectedRange) return;
+		onReaction?.(emoji, selectedRange.startBar, selectedRange.endBar, selectedRange.snapshot);
+		hideFloatingBar();
+	};
+
+	const handleFloatingComment = () => {
+		if (!selectedRange) return;
+		onRangeComment?.(selectedRange.startBar, selectedRange.endBar, selectedRange.snapshot);
+		hideFloatingBar();
+	};
+
+	const handleFloatingAiAnalyze = () => {
+		if (!selectedRange) return;
+		onAiAnalyze?.(selectedRange.snapshot);
+		hideFloatingBar();
+	};
+
+	// Build annotation badges per bar for preview overlay
+	const annotationBadges = $derived.by(() => {
+		const badges: Record<number, Record<string, number>> = {};
+		for (const ann of annotations) {
+			if (ann.type !== 'reaction' || !ann.emoji) continue;
+			for (let bar = ann.startBar; bar <= ann.endBar; bar++) {
+				if (!badges[bar]) badges[bar] = {};
+				badges[bar][ann.emoji] = (badges[bar][ann.emoji] || 0) + 1;
+			}
+		}
+		return badges;
+	});
+
 	// Double-click chord preview
 	const handleDblClick = async () => {
 		if (!textareaEl) return;
@@ -319,6 +416,7 @@
 			onscroll={handleScroll}
 			oncontextmenu={handleContextMenu}
 			ondblclick={handleDblClick}
+			onmouseup={handleMouseUp}
 			readonly={readonly || displayMode === 'degree'}
 			autocomplete="off"
 			spellcheck="false"
@@ -329,6 +427,15 @@
 		<div class="se-preview" bind:this={previewEl}>{@html highlighted}&nbsp;</div>
 	</div>
 </div>
+
+<FloatingActionBar
+	visible={floatingBar.visible}
+	x={floatingBar.x}
+	y={floatingBar.y}
+	onReaction={handleFloatingReaction}
+	onComment={handleFloatingComment}
+	onAiAnalyze={handleFloatingAiAnalyze}
+/>
 
 {#if aiTransform}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -725,5 +832,19 @@
 
 	@keyframes spin {
 		to { transform: rotate(360deg); }
+	}
+
+	/* Annotation badges */
+	:global(.se-badges) {
+		display: inline;
+		margin-right: 2px;
+	}
+
+	:global(.se-badge) {
+		font-size: 0.7rem;
+		background: rgba(167, 139, 250, 0.15);
+		border-radius: 3px;
+		padding: 0 3px;
+		margin-right: 1px;
 	}
 </style>

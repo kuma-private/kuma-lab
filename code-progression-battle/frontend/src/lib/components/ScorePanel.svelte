@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Thread } from '$lib/api';
+	import type { Thread, Annotation } from '$lib/api';
 	import ScoreEditor, { type DisplayMode } from '$lib/components/ScoreEditor.svelte';
 
 	interface Props {
@@ -9,6 +9,7 @@
 		scoreDisplayMode: DisplayMode;
 		transposeSemitones: number;
 		pendingInsertText: string;
+		annotations?: Annotation[];
 		onScoreChange: (value: string) => void;
 		onImport: () => void;
 		onTransposeUp: () => void;
@@ -17,6 +18,9 @@
 		onInsertBar: () => void;
 		onInsertNewline: () => void;
 		onDeleteLastLine: () => void;
+		onReaction?: (emoji: string, startBar: number, endBar: number, snapshot: string) => void;
+		onRangeComment?: (startBar: number, endBar: number, snapshot: string) => void;
+		onAiAnalyze?: (selectedChords: string) => void;
 	}
 
 	let {
@@ -26,6 +30,7 @@
 		scoreDisplayMode,
 		transposeSemitones,
 		pendingInsertText,
+		annotations = [],
 		onScoreChange,
 		onImport,
 		onTransposeUp,
@@ -34,6 +39,9 @@
 		onInsertBar,
 		onInsertNewline,
 		onDeleteLastLine,
+		onReaction,
+		onRangeComment,
+		onAiAnalyze,
 	}: Props = $props();
 
 	let scoreEditorRef: ReturnType<typeof ScoreEditor> | undefined = $state();
@@ -118,7 +126,11 @@
 			musicalKeyFull={thread.key}
 			timeSignature={thread.timeSignature}
 			bpm={thread.bpm}
+			{annotations}
 			onchange={onScoreChange}
+			{onReaction}
+			{onRangeComment}
+			{onAiAnalyze}
 		/>
 	</div>
 
