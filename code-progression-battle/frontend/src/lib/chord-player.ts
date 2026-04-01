@@ -365,20 +365,28 @@ export const playChordPreview = async (chordName: string): Promise<void> => {
  */
 let _selectionTimers: ReturnType<typeof setTimeout>[] = [];
 let _globalMetronome = false;
+let _selectionPlaying = false;
+let _selectionPlayingCallback: ((playing: boolean) => void) | null = null;
 let _selectionNotesCallback: ((notes: string[]) => void) | null = null;
 
 export const setGlobalMetronome = (on: boolean) => { _globalMetronome = on; };
 export const getGlobalMetronome = () => _globalMetronome;
 export const onSelectionNotes = (cb: ((notes: string[]) => void) | null) => { _selectionNotesCallback = cb; };
+export const onSelectionPlaying = (cb: ((playing: boolean) => void) | null) => { _selectionPlayingCallback = cb; };
+export const isSelectionPlaying = () => _selectionPlaying;
 
 export const stopSelection = () => {
   _selectionTimers.forEach(clearTimeout);
   _selectionTimers = [];
+  _selectionPlaying = false;
+  _selectionPlayingCallback?.(false);
   _selectionNotesCallback?.([]); // clear highlights
 };
 
 export const playSelection = async (text: string, config: PlayerConfig): Promise<void> => {
   stopSelection();
+  _selectionPlaying = true;
+  _selectionPlayingCallback?.(true);
   resetVoiceLeading();
   await Tone.start();
   const { bars } = parseProgression(text);
@@ -436,6 +444,8 @@ export const playSelection = async (text: string, config: PlayerConfig): Promise
       if (!isShared) synth.dispose();
       metSynth?.dispose();
       _selectionTimers = [];
+      _selectionPlaying = false;
+      _selectionPlayingCallback?.(false);
       _selectionNotesCallback?.([]);
       resolve();
     }, totalDuration * 1000 + 500));

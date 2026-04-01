@@ -3,7 +3,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { createAppStore } from '$lib/stores/app.svelte';
 	import { parseProgression, transpose, parseChord } from '$lib/chord-parser';
-	import { ChordPlayer, type PlayerState, type OscPreset, type VoicingMode, setGlobalOscPreset, setVoicingMode, chordToNotes, onSelectionNotes, stopSelection } from '$lib/chord-player';
+	import { ChordPlayer, type PlayerState, type OscPreset, type VoicingMode, setGlobalOscPreset, setVoicingMode, chordToNotes, onSelectionNotes, onSelectionPlaying, stopSelection } from '$lib/chord-player';
 	import type { DisplayMode } from '$lib/components/ScoreEditor.svelte';
 	import type { SaveHistory, Comment, Annotation } from '$lib/api';
 	import { getComments, addComment, deleteComment, getAnnotations, addAnnotation, analyzeSelection } from '$lib/api';
@@ -29,6 +29,7 @@
 	let playerMetronome = $state(false);
 	let playerVoicingMode = $state<VoicingMode>('normal');
 	let selectionNotes = $state<string[]>([]);
+	let selectionPlaying = $state(false);
 
 	// Save state
 	let commentInput = $state('');
@@ -112,6 +113,7 @@
 		store.checkLogin();
 		store.loadThread(threadId);
 		onSelectionNotes((notes) => { selectionNotes = notes; });
+		onSelectionPlaying((playing) => { selectionPlaying = playing; });
 		// Load annotations for score display
 		getAnnotations(threadId).then(a => { annotations = a; }).catch(() => {});
 	});
@@ -119,6 +121,7 @@
 	onDestroy(() => {
 		player?.dispose();
 		onSelectionNotes(null);
+		onSelectionPlaying(null);
 	});
 
 	// Ctrl+S / Cmd+S to save
@@ -485,7 +488,7 @@
 {/if}
 
 <PlayerBar
-	state={playerState}
+	state={selectionPlaying ? 'playing' : playerState}
 	{currentTime}
 	{totalDuration}
 	bpm={store.currentThread?.bpm ?? 120}
