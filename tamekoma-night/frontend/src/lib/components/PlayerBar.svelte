@@ -4,7 +4,7 @@
 	import PianoKeyboard from './PianoKeyboard.svelte';
 
 	let {
-		state = 'stopped',
+		playerState = 'stopped',
 		currentTime = 0,
 		totalDuration = 0,
 		bpm = 120,
@@ -25,7 +25,7 @@
 		onVoicingModeChange,
 		onOscPresetChange
 	}: {
-		state?: PlayerState;
+		playerState?: PlayerState;
 		currentTime?: number;
 		totalDuration?: number;
 		bpm?: number;
@@ -68,7 +68,7 @@
 	};
 
 	let progress = $derived(totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0);
-	let isPlaying = $derived(state === 'playing');
+	let isPlaying = $derived(playerState === 'playing');
 
 	const handleProgressClick = (e: MouseEvent) => {
 		const bar = e.currentTarget as HTMLElement;
@@ -78,12 +78,25 @@
 	};
 
 	const handlePlayPause = () => {
-		if (state === 'playing') {
+		if (playerState === 'playing') {
 			onpause?.();
 		} else {
+			if (!audioInitialized) {
+				audioLoading = true;
+				// Clear loading state after audio starts or after timeout
+				setTimeout(() => { audioLoading = false; audioInitialized = true; }, 2000);
+			}
 			onplay?.();
 		}
 	};
+
+	// Clear loading state when playback actually starts
+	$effect(() => {
+		if (playerState === 'playing' && audioLoading) {
+			audioLoading = false;
+			audioInitialized = true;
+		}
+	});
 
 	const handleVolumeInput = (e: Event) => {
 		const val = Number((e.target as HTMLInputElement).value);
@@ -93,6 +106,26 @@
 	const handleLoopToggle = () => {
 		onLoopChange?.(!loop);
 	};
+
+	let settingsOpen = $state(false);
+	let audioLoading = $state(false);
+	let audioInitialized = $state(false);
+
+	// Chord change animation
+	let chordBounce = $state(false);
+	let prevChord = $state<string | null>(null);
+
+	$effect(() => {
+		if (currentChord && currentChord !== prevChord) {
+			chordBounce = true;
+			const timer = setTimeout(() => { chordBounce = false; }, 200);
+			prevChord = currentChord;
+			return () => clearTimeout(timer);
+		}
+		if (!currentChord) {
+			prevChord = null;
+		}
+	});
 
 	// Volume icon state
 	let volumeIcon = $derived.by(() => {
@@ -108,13 +141,13 @@
 	<div class="player-controls-section">
 		<div class="player-row-top">
 			<div class="player-controls">
-				<button class="player-btn" onclick={onstop} title="Stop" disabled={state === 'stopped'}>
+				<button class="player-btn" onclick={onstop} title="停止" aria-label="停止">
 					<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
 						<rect x="3" y="3" width="10" height="10" rx="1" />
 					</svg>
 				</button>
 
-				<button class="player-btn player-btn--play" onclick={handlePlayPause} title={isPlaying ? 'Pause' : 'Play'}>
+				<button class="player-btn player-btn--play" class:player-btn--loading={audioLoading} onclick={handlePlayPause} title={isPlaying ? '一時停止 (Space)' : '再生 (Space)'} aria-label={isPlaying ? '一時停止' : '再生'} aria-busy={audioLoading}>
 					{#if isPlaying}
 						<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
 							<rect x="4" y="3" width="4" height="14" rx="1" />
@@ -132,6 +165,7 @@
 					class:player-btn--active={loop}
 					onclick={handleLoopToggle}
 					title="ループ"
+					aria-label="ループ"
 				>
 					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
 						<polyline points="17 1 21 5 17 9" />
@@ -144,8 +178,11 @@
 				<button
 					class="player-btn"
 					class:player-btn--active={metronome}
+					class:player-btn--metronome-active={metronome}
 					onclick={() => onMetronomeChange?.(!metronome)}
 					title="メトロノーム"
+					aria-label="メトロノーム"
+					style="position: relative; --beat-duration: {60 / bpm}s"
 				>
 					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
 						<path d="M12 2L8 22h8L12 2z" />
@@ -158,7 +195,7 @@
 			<div class="player-info">
 				<div class="player-chord" class:player-chord--active={currentChord !== null && isPlaying}>
 					{#if currentChord}
-						<span class="chord-name">{currentChord}</span>
+						<span class="chord-name" class:chord-name--bounce={chordBounce}>{currentChord}</span>
 					{:else}
 						<span class="chord-name chord-name--idle">---</span>
 					{/if}
@@ -197,37 +234,19 @@
 				/>
 			</div>
 
-			<div class="player-sep"></div>
-
-			<!-- Tone + Voicing -->
-			<div class="player-tone">
-				<select class="tone-select" value={oscPreset} onchange={handleOscChange} title="音色">
-					{#each OSC_OPTIONS as opt}
-						<option value={opt}>{OSC_LABELS[opt]}</option>
-					{/each}
-				</select>
-			</div>
-
+			<!-- Auto Voicing toggle -->
 			<div class="voicing-toggle">
-				<button
-					class="voicing-btn"
-					class:voicing-btn--active={voicingMode === 'normal'}
-					onclick={() => onVoicingModeChange?.('normal')}
-					title="そのまま再生"
-				>OFF</button>
-				<button
-					class="voicing-btn"
-					class:voicing-btn--active={voicingMode === 'harmonic'}
-					onclick={() => onVoicingModeChange?.('harmonic')}
-					title="オートボイシング"
-				>Auto V.</button>
+				<button class="voicing-btn" class:voicing-btn--active={voicingMode === 'normal'} onclick={() => onVoicingModeChange?.('normal')} title="そのまま再生">OFF</button>
+				<button class="voicing-btn" class:voicing-btn--active={voicingMode === 'harmonic'} onclick={() => onVoicingModeChange?.('harmonic')} title="オートボイシング">Auto V.</button>
 			</div>
 
-			<div class="player-sep"></div>
+			<button class="player-btn player-btn--settings" onclick={() => { settingsOpen = !settingsOpen; }} title="設定" aria-label="設定">
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<circle cx="12" cy="12" r="3" />
+					<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+				</svg>
+			</button>
 
-			<div class="player-bpm">
-				<span class="badge">BPM {bpm}</span>
-			</div>
 		</div>
 
 		<!-- Progress bar (full width of controls section) -->
@@ -246,12 +265,33 @@
 	<div class="piano-section">
 		<PianoKeyboard {playingNotes} />
 	</div>
+
+	{#if settingsOpen}
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="psp-overlay" onclick={() => { settingsOpen = false; }}></div>
+		<div class="player-settings-popover">
+			<div class="psp-row psp-row--volume">
+				<span class="psp-label">音量</span>
+				<input type="range" class="volume-slider psp-volume-slider" min="-30" max="0" value={volume} oninput={handleVolumeInput} />
+				<span class="psp-value">{volume}dB</span>
+			</div>
+			<div class="psp-row">
+				<span class="psp-label">音色</span>
+				<select class="tone-select" value={oscPreset} onchange={handleOscChange}>
+					{#each OSC_OPTIONS as opt}
+						<option value={opt}>{OSC_LABELS[opt]}</option>
+					{/each}
+				</select>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
 	.player-dock {
 		position: fixed;
-		bottom: 8px;
+		bottom: max(8px, env(safe-area-inset-bottom, 8px));
 		left: 50%;
 		transform: translateX(-50%);
 		width: calc(100% - 16px);
@@ -342,6 +382,16 @@
 		background: #9374e8;
 	}
 
+	.player-btn--loading {
+		animation: play-btn-pulse 0.8s ease-in-out infinite;
+		pointer-events: none;
+	}
+
+	@keyframes play-btn-pulse {
+		0%, 100% { opacity: 0.6; transform: scale(1); }
+		50% { opacity: 1; transform: scale(1.08); }
+	}
+
 	.player-btn--active {
 		color: var(--accent-primary);
 		background: rgba(167, 139, 250, 0.2);
@@ -368,6 +418,16 @@
 		text-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
 	}
 
+	.chord-name--bounce {
+		animation: chord-pop 0.2s ease-out;
+	}
+
+	@keyframes chord-pop {
+		0% { transform: scale(1); opacity: 0.6; }
+		50% { transform: scale(1.2); opacity: 1; }
+		100% { transform: scale(1); opacity: 1; }
+	}
+
 	.chord-name--idle {
 		color: var(--text-muted);
 		font-weight: 400;
@@ -376,9 +436,9 @@
 
 	/* Progress */
 	.player-progress {
-		height: 4px;
+		height: 8px;
 		background: var(--bg-elevated);
-		border-radius: 2px;
+		border-radius: 4px;
 		cursor: pointer;
 		position: relative;
 		min-width: 80px;
@@ -394,8 +454,8 @@
 	.player-progress-handle {
 		position: absolute;
 		top: 50%;
-		width: 10px;
-		height: 10px;
+		width: 16px;
+		height: 16px;
 		border-radius: 50%;
 		background: var(--text-primary);
 		transform: translate(-50%, -50%);
@@ -428,7 +488,7 @@
 	.volume-slider {
 		-webkit-appearance: none;
 		appearance: none;
-		width: 44px;
+		width: 60px;
 		height: 3px;
 		border-radius: 2px;
 		background: var(--bg-elevated);
@@ -483,10 +543,6 @@
 		color: #fff;
 	}
 
-	.player-tone {
-		flex-shrink: 0;
-	}
-
 	.tone-select {
 		-webkit-appearance: none;
 		appearance: none;
@@ -512,9 +568,26 @@
 		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
 	}
 
-	/* BPM */
-	.player-bpm {
-		flex-shrink: 0;
+	/* Metronome pulsing dot */
+	.player-btn--metronome-active {
+		position: relative;
+	}
+
+	.player-btn--metronome-active::after {
+		content: '';
+		position: absolute;
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--accent-warm);
+		top: 2px;
+		right: 2px;
+		animation: metronome-pulse var(--beat-duration, 0.5s) ease-in-out infinite;
+	}
+
+	@keyframes metronome-pulse {
+		0%, 100% { opacity: 0.3; transform: scale(0.8); }
+		50% { opacity: 1; transform: scale(1.2); }
 	}
 
 	/* Dock divider */
@@ -529,9 +602,80 @@
 	.piano-section {
 		flex: 1;
 		min-width: 0;
+		position: relative;
+		overflow: hidden;
+		border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+	}
+
+	/* Settings button */
+	.player-btn--settings {
+		display: flex;
+	}
+
+	/* Settings popover */
+	.psp-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 59;
+	}
+
+	.player-settings-popover {
+		position: absolute;
+		bottom: calc(100% + 8px);
+		left: 50%;
+		transform: translateX(-50%);
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-elevated);
+		padding: var(--space-md);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		min-width: 240px;
+		z-index: 60;
+	}
+
+	.psp-row {
 		display: flex;
 		align-items: center;
-		padding: 8px 0;
+		gap: var(--space-sm);
+	}
+
+	.psp-label {
+		font-size: 0.72rem;
+		font-weight: 600;
+		color: var(--text-secondary);
+		min-width: 56px;
+		flex-shrink: 0;
+	}
+
+	.psp-value {
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		color: var(--text-muted);
+		min-width: 36px;
+		text-align: right;
+	}
+
+	.psp-row--volume {
+		flex-wrap: wrap;
+	}
+
+	.psp-volume-slider {
+		width: 100%;
+		flex: 1;
+		height: 6px;
+	}
+
+	.psp-volume-slider::-webkit-slider-thumb {
+		width: 20px !important;
+		height: 20px !important;
+	}
+
+	.psp-volume-slider::-moz-range-thumb {
+		width: 20px !important;
+		height: 20px !important;
 	}
 
 	/* Responsive */
@@ -548,9 +692,8 @@
 
 		.player-visualizer { display: none; }
 		.player-volume { display: none; }
-		.player-tone { display: none; }
-		.player-bpm { display: none; }
 		.player-chord { min-width: 36px; }
+		.voicing-btn { padding: 1px 5px; font-size: 0.6rem; }
 		.chord-name { font-size: 0.85rem; }
 	}
 
@@ -578,10 +721,6 @@
 			display: none;
 		}
 
-		.voicing-toggle {
-			display: none;
-		}
-
 		.player-row-top {
 			flex-wrap: wrap;
 			gap: 4px;
@@ -589,7 +728,35 @@
 	}
 
 	@media (max-width: 500px) {
-		.piano-section { display: none; }
 		.dock-divider { display: none; }
+		.player-progress-fill {
+			background: var(--accent-primary);
+		}
+		.player-progress {
+			height: 6px;
+			border-radius: 3px;
+		}
+		.player-dock {
+			height: auto;
+			flex-wrap: wrap;
+		}
+		.player-controls-section {
+			width: 100%;
+			flex: none;
+			padding: 4px var(--space-sm);
+		}
+		.player-row-top {
+			justify-content: center;
+		}
+		.piano-section {
+			width: 100%;
+			flex: none;
+			height: 40px;
+			border-top: 1px solid var(--border-subtle);
+			padding: 0;
+		}
+		.player-settings-popover {
+			max-width: calc(100vw - 16px);
+		}
 	}
 </style>

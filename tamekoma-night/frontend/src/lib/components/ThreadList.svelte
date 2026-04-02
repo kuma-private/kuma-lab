@@ -1,14 +1,56 @@
 <script lang="ts">
 	import type { Thread } from '$lib/api';
 	import { extractRoot } from '$lib/chord-parser';
+	import { showToast } from '$lib/stores/toast.svelte';
 
 	interface Props {
 		threads: Thread[];
 		filter: string;
 		onFilterChange: (filter: string) => void;
+		onCreate?: () => void;
 	}
 
-	let { threads, filter = 'all', onFilterChange = () => {} }: Props = $props();
+	let { threads, filter = 'all', onFilterChange = () => {}, onCreate }: Props = $props();
+
+	// Favorites (client-side only, persisted in localStorage)
+	let favorites = $state<Set<string>>(new Set());
+
+	$effect(() => {
+		try {
+			const stored = localStorage.getItem('favorites');
+			if (stored) favorites = new Set(JSON.parse(stored));
+		} catch { /* ignore */ }
+	});
+
+	const toggleFavorite = (e: Event, threadId: string) => {
+		e.preventDefault();
+		e.stopPropagation();
+		const next = new Set(favorites);
+		if (next.has(threadId)) next.delete(threadId);
+		else next.add(threadId);
+		favorites = next;
+		try { localStorage.setItem('favorites', JSON.stringify([...next])); } catch { /* ignore */ }
+	};
+
+	const displayedThreads = $derived.by(() => {
+		if (filter === 'favorites') return threads.filter(t => favorites.has(t.id));
+		return threads;
+	});
+
+	const handleCopyScore = async (e: Event, thread: Thread) => {
+		e.preventDefault();
+		e.stopPropagation();
+		if (!thread.score) {
+			showToast('スコアが空です', 'error');
+			return;
+		}
+		try {
+			await navigator.clipboard.writeText(thread.score);
+			showToast('コピーしました', 'success');
+		} catch {
+			showToast('コピーに失敗しました', 'error');
+		}
+	};
 
 	const formatDate = (iso: string): string => {
 		try {
@@ -22,7 +64,7 @@
 			if (hours < 24) return `${hours}時間前`;
 			const days = Math.floor(hours / 24);
 			if (days < 7) return `${days}日前`;
-			return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+			return `${d.getMonth() + 1}/${d.getDate()}`;
 		} catch {
 			return '';
 		}
@@ -64,17 +106,25 @@
 	<button class="filter-tab" class:filter-tab--active={filter === 'all'} onclick={() => onFilterChange('all')}>すべて</button>
 	<button class="filter-tab" class:filter-tab--active={filter === 'mine'} onclick={() => onFilterChange('mine')}>自分の</button>
 	<button class="filter-tab" class:filter-tab--active={filter === 'shared'} onclick={() => onFilterChange('shared')}>共有</button>
+	<button class="filter-tab" class:filter-tab--active={filter === 'favorites'} onclick={() => onFilterChange('favorites')}>
+		<span class="filter-star">&#9733;</span> お気に入り
+	</button>
 </div>
 
-{#if threads.length === 0}
+{#if displayedThreads.length === 0}
 	<div class="empty">
 		<div class="empty-chords" aria-hidden="true">| Cmaj7 | Dm7 | G7 | Cmaj7 |</div>
 		<p class="empty-title">まだスコアがありません</p>
 		<p class="empty-sub">新規作成してコードを放とう</p>
+		{#if onCreate}
+			<button class="empty-cta" onclick={onCreate}>
+				コードを書き始める
+			</button>
+		{/if}
 	</div>
 {:else}
 	<div class="grid">
-		{#each threads as thread, i}
+		{#each displayedThreads as thread, i}
 			{@const chords = previewChords(thread.score)}
 			{@const color = keyColor(thread.key)}
 			<a
@@ -83,7 +133,7 @@
 				style="animation-delay: {Math.min(i * 0.04, 0.6)}s"
 				aria-label="{thread.title} - {thread.key} {thread.bpm}BPM"
 			>
-				<div class="card-accent" style="background: {color}"></div>
+				<div class="card-accent" style="background: linear-gradient(90deg, {color}, {color}00)"></div>
 
 				<div class="card-body">
 					<h3 class="card-title">{thread.title}</h3>
@@ -106,7 +156,28 @@
 
 					<div class="card-footer">
 						<span class="card-author">{thread.createdByName}</span>
-						<span class="card-time">{formatDate(thread.lastEditedAt)}</span>
+						<span class="card-footer-right">
+							<span class="card-visibility" title={thread.visibility === 'public' ? '公開' : thread.visibility === 'shared' ? '共有' : '非公開'}>{thread.visibility === 'public' ? '🌐' : thread.visibility === 'shared' ? '👥' : '🔒'}</span>
+							<span class="card-time">{formatDate(thread.lastEditedAt)}</span>
+						</span>
+					</div>
+
+					<div class="card-actions">
+						<button
+							class="card-action card-action--fav"
+							class:card-action--fav-active={favorites.has(thread.id)}
+							title={favorites.has(thread.id) ? 'お気に入り解除' : 'お気に入り'}
+							onclick={(e) => toggleFavorite(e, thread.id)}
+						>
+							<span class="fav-star">{favorites.has(thread.id) ? '★' : '☆'}</span>
+						</button>
+						<button class="card-action" title="スコアをコピー" onclick={(e) => handleCopyScore(e, thread)}>
+							<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+								<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+							</svg>
+							<span class="action-label">コピー</span>
+						</button>
 					</div>
 				</div>
 			</a>
@@ -176,6 +247,25 @@
 		margin: 0;
 	}
 
+	.empty-cta {
+		margin-top: var(--space-lg);
+		padding: 10px 28px;
+		border: none;
+		border-radius: var(--radius-md);
+		background: var(--accent-primary);
+		color: #fff;
+		font-size: 0.88rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.empty-cta:hover {
+		background: #9374e8;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
+	}
+
 	/* Grid */
 	.grid {
 		display: grid;
@@ -192,7 +282,7 @@
 		border-radius: var(--radius-lg);
 		background: var(--bg-surface);
 		overflow: hidden;
-		transition: transform 0.2s, box-shadow 0.2s;
+		transition: all 0.2s ease;
 		position: relative;
 		animation: card-in 0.35s ease both;
 		border: 1px solid var(--border-subtle);
@@ -205,8 +295,8 @@
 
 	.card:hover {
 		transform: translateY(-2px);
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-		border-color: rgba(167, 139, 250, 0.3);
+		box-shadow: 0 4px 16px rgba(167, 139, 250, 0.1), 0 8px 24px rgba(0, 0, 0, 0.35);
+		border-color: var(--accent-primary);
 	}
 
 	.card:focus-visible {
@@ -297,10 +387,80 @@
 		color: var(--text-muted);
 	}
 
+	.card-footer-right {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.card-visibility {
+		font-size: 0.7rem;
+		opacity: 0.5;
+	}
+
 	.card-time {
 		font-size: 0.65rem;
 		color: var(--text-muted);
 		opacity: 0.6;
+	}
+
+	/* Quick actions */
+	.card-actions {
+		display: flex;
+		gap: 4px;
+		padding-top: 6px;
+		border-top: 1px solid var(--border-subtle);
+		margin-top: 4px;
+		opacity: 0;
+		transition: opacity 0.15s;
+	}
+
+	.card:hover .card-actions {
+		opacity: 1;
+	}
+
+	.card-action {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 3px 8px;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 0.65rem;
+		cursor: pointer;
+		transition: all 0.15s;
+		text-decoration: none;
+	}
+
+	.card-action:hover {
+		color: var(--accent-primary);
+		border-color: var(--accent-primary);
+		background: rgba(167, 139, 250, 0.08);
+	}
+
+	.action-label {
+		pointer-events: none;
+	}
+
+	.filter-star {
+		color: var(--accent-warm);
+		font-size: 0.72rem;
+	}
+
+	.card-action--fav .fav-star {
+		font-size: 0.85rem;
+		line-height: 1;
+	}
+
+	.card-action--fav-active {
+		color: var(--accent-warm) !important;
+		border-color: rgba(251, 191, 36, 0.3) !important;
+	}
+
+	.card-action--fav-active:hover {
+		background: rgba(251, 191, 36, 0.1) !important;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -311,6 +471,20 @@
 		.grid {
 			grid-template-columns: 1fr;
 			gap: var(--space-md);
+		}
+
+		.filter-tab {
+			min-height: 44px;
+			padding: 8px 14px;
+		}
+
+		.card-actions {
+			opacity: 1;
+		}
+
+		.card-action {
+			padding: 6px 10px;
+			min-height: 32px;
 		}
 	}
 </style>

@@ -8,7 +8,9 @@
 		comments: Comment[];
 		onAddComment: (text: string) => void;
 		onDeleteComment: (commentId: string) => void;
+		onRestoreVersion?: (score: string) => void;
 		currentUserId: string;
+		currentScore?: string;
 	}
 
 	let {
@@ -18,11 +20,32 @@
 		comments = [],
 		onAddComment,
 		onDeleteComment,
+		onRestoreVersion,
 		currentUserId = '',
+		currentScore = '',
 	}: Props = $props();
 
 	let commentText = $state('');
 	let timelineEl: HTMLDivElement | undefined = $state();
+	let previewVersion = $state<SaveHistory | null>(null);
+
+	const computeDiff = (oldScore: string, newScore: string): { kind: 'same' | 'add' | 'del'; text: string }[] => {
+		const oldLines = oldScore.split('\n');
+		const newLines = newScore.split('\n');
+		const result: { kind: 'same' | 'add' | 'del'; text: string }[] = [];
+		const max = Math.max(oldLines.length, newLines.length);
+		for (let i = 0; i < max; i++) {
+			const o = oldLines[i];
+			const n = newLines[i];
+			if (o === n) {
+				result.push({ kind: 'same', text: o ?? '' });
+			} else {
+				if (o !== undefined) result.push({ kind: 'del', text: o });
+				if (n !== undefined) result.push({ kind: 'add', text: n });
+			}
+		}
+		return result;
+	};
 
 	const handleSendComment = () => {
 		const text = commentText.trim();
@@ -70,6 +93,30 @@
 	const initials = (name: string): string =>
 		name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
+	const countBars = (score: string): number => {
+		if (!score) return 0;
+		return (score.match(/\|/g) || []).length;
+	};
+
+	// Build a map from save history index to bar diff vs previous save
+	const saveDiffs = $derived.by(() => {
+		const diffs = new Map<number, number>();
+		const saves = history.filter(h => h.comment || h.score);
+		for (let i = 1; i < saves.length; i++) {
+			const prevBars = countBars(saves[i - 1].score);
+			const currBars = countBars(saves[i].score);
+			const diff = currBars - prevBars;
+			diffs.set(i, diff);
+		}
+		return { saves, diffs };
+	});
+
+	const getDiffForSave = (s: SaveHistory): number | null => {
+		const idx = saveDiffs.saves.indexOf(s);
+		if (idx <= 0) return null;
+		return saveDiffs.diffs.get(idx) ?? null;
+	};
+
 	const relativeTime = (dateStr: string): string => {
 		try {
 			const d = new Date(dateStr);
@@ -107,7 +154,9 @@
 		{#each timeline as item}
 			{#if item.kind === 'save'}
 				{@const s = item.data}
-				<div class="tl-item tl-save">
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div class="tl-item tl-save tl-save--clickable" class:tl-save--selected={previewVersion === s} onclick={() => { previewVersion = previewVersion === s ? null : s; }}>
 					<div class="tl-avatar" style="background: {avatarColor(s.userName)}">
 						{initials(s.userName)}
 					</div>
@@ -120,8 +169,30 @@
 						{#if s.comment}
 							<div class="tl-text">{s.comment}</div>
 						{/if}
+						{#if getDiffForSave(s) !== null && getDiffForSave(s) !== 0}
+							<div class="tl-diff" class:tl-diff--add={(getDiffForSave(s) ?? 0) > 0} class:tl-diff--remove={(getDiffForSave(s) ?? 0) < 0}>
+								{(getDiffForSave(s) ?? 0) > 0 ? `コード追加: +${getDiffForSave(s)}` : `コード削除: ${getDiffForSave(s)}`}
+							</div>
+						{/if}
 					</div>
 				</div>
+				{#if previewVersion === s}
+					<div class="version-preview">
+						<div class="version-diff">
+							{#each computeDiff(s.score, currentScore) as line}
+								<div class="diff-line" class:diff-add={line.kind === 'add'} class:diff-del={line.kind === 'del'}>
+									<span class="diff-marker">{line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}</span>
+									<span class="diff-text">{line.text || '\u00A0'}</span>
+								</div>
+							{/each}
+						</div>
+						{#if onRestoreVersion}
+							<button class="btn-restore" onclick={() => { onRestoreVersion(s.score); previewVersion = null; }}>
+								この版を復元
+							</button>
+						{/if}
+					</div>
+				{/if}
 			{:else}
 				{@const c = item.data}
 				<div class="tl-item tl-comment">
@@ -147,7 +218,11 @@
 
 		{#if timeline.length === 0}
 			<div class="tl-empty">
+				<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+					<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+				</svg>
 				<p>まだアクティビティがありません</p>
+				<p class="tl-empty-sub">保存やコメントがここに表示されます</p>
 			</div>
 		{/if}
 	</div>
@@ -236,16 +311,17 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 28px;
-		height: 28px;
-		border: none;
+		width: 32px;
+		height: 32px;
+		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
-		background: transparent;
-		color: var(--text-muted);
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
 		cursor: pointer;
+		transition: all 0.15s;
 	}
 
-	.drawer-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+	.drawer-close:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--accent-primary); }
 
 	/* Timeline */
 	.timeline {
@@ -335,6 +411,109 @@
 		opacity: 0.6;
 	}
 
+	.tl-diff {
+		font-size: 0.65rem;
+		font-family: var(--font-mono);
+		padding: 1px 6px;
+		border-radius: var(--radius-sm);
+		margin-top: 2px;
+		display: inline-block;
+	}
+
+	.tl-diff--add {
+		color: rgb(34, 197, 94);
+		background: rgba(34, 197, 94, 0.1);
+	}
+
+	.tl-diff--remove {
+		color: rgb(249, 115, 22);
+		background: rgba(249, 115, 22, 0.1);
+	}
+
+	.tl-save--clickable {
+		cursor: pointer;
+		border-radius: var(--radius-md);
+	}
+
+	.tl-save--clickable:hover {
+		opacity: 0.85;
+		background: rgba(167, 139, 250, 0.06);
+	}
+
+	.tl-save--selected {
+		opacity: 1;
+		background: rgba(167, 139, 250, 0.08);
+		border-left: 2px solid var(--accent-primary);
+	}
+
+	.version-preview {
+		margin: 0 var(--space-md) var(--space-sm);
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-md);
+		overflow: hidden;
+	}
+
+	.version-diff {
+		max-height: 200px;
+		overflow-y: auto;
+		padding: var(--space-xs) 0;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		line-height: 1.6;
+	}
+
+	.diff-line {
+		display: flex;
+		padding: 0 var(--space-sm);
+	}
+
+	.diff-marker {
+		width: 16px;
+		flex-shrink: 0;
+		color: var(--text-muted);
+		user-select: none;
+	}
+
+	.diff-text {
+		white-space: pre-wrap;
+		word-break: break-all;
+	}
+
+	.diff-add {
+		background: rgba(34, 197, 94, 0.1);
+		color: rgb(74, 222, 128);
+	}
+
+	.diff-add .diff-marker { color: rgb(34, 197, 94); }
+
+	.diff-del {
+		background: rgba(248, 113, 113, 0.1);
+		color: rgb(252, 165, 165);
+		text-decoration: line-through;
+		opacity: 0.7;
+	}
+
+	.diff-del .diff-marker { color: rgb(248, 113, 113); }
+
+	.btn-restore {
+		display: block;
+		width: 100%;
+		padding: var(--space-sm);
+		border: none;
+		border-top: 1px solid var(--border-subtle);
+		background: rgba(167, 139, 250, 0.06);
+		color: var(--accent-primary);
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.btn-restore:hover {
+		background: rgba(167, 139, 250, 0.15);
+	}
+
 	.tl-delete {
 		border: none;
 		background: transparent;
@@ -351,14 +530,21 @@
 
 	.tl-empty {
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
 		padding: var(--space-2xl);
 		color: var(--text-muted);
 		font-size: 0.85rem;
+		gap: var(--space-sm);
 	}
 
 	.tl-empty p { margin: 0; }
+
+	.tl-empty-sub {
+		font-size: 0.72rem;
+		opacity: 0.6;
+	}
 
 	/* Input */
 	.drawer-input {

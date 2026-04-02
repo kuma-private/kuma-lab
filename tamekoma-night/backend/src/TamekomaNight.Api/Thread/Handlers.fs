@@ -18,7 +18,7 @@ module ThreadHandlers =
 
     let private getUserInfo (ctx: HttpContext) =
         if devMode && (ctx.User = null || ctx.User.Identity = null || not ctx.User.Identity.IsAuthenticated) then
-            ("dev-user", "Dev User")
+            ("dev-user", "Dev User", "")
         else
             let userId =
                 ctx.User.FindFirst(ClaimTypes.NameIdentifier)
@@ -32,7 +32,13 @@ module ThreadHandlers =
                 |> Option.map (fun c -> c.Value)
                 |> Option.defaultValue "Anonymous"
 
-            (userId, userName)
+            let email =
+                ctx.User.FindFirst(ClaimTypes.Email)
+                |> Option.ofObj
+                |> Option.map (fun c -> c.Value)
+                |> Option.defaultValue ""
+
+            (userId, userName, email)
 
     let private getHttpClient (ctx: HttpContext) =
         let factory = ctx.RequestServices.GetRequiredService<IHttpClientFactory>()
@@ -40,8 +46,8 @@ module ThreadHandlers =
 
     let listThreads (repo: IThreadRepository) (ctx: HttpContext) : Task =
         task {
-            let (userId, _) = getUserInfo ctx
-            let! threads = repo.GetByUser(userId)
+            let (userId, _, email) = getUserInfo ctx
+            let! threads = repo.GetByUser userId email
 
             let result =
                 threads
@@ -74,7 +80,7 @@ module ThreadHandlers =
                 do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
             else
 
-            let (userId, userName) = getUserInfo ctx
+            let (userId, userName, email) = getUserInfo ctx
 
             let thread =
                 { Id = Guid.NewGuid().ToString("N")
@@ -102,7 +108,7 @@ module ThreadHandlers =
     let deleteThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, _) = getUserInfo ctx
+            let (userId, _, email) = getUserInfo ctx
 
             match thread with
             | Some t when t.CreatedBy = userId ->
@@ -119,10 +125,10 @@ module ThreadHandlers =
     let getThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, _) = getUserInfo ctx
+            let (userId, _, email) = getUserInfo ctx
 
             match thread with
-            | Some t when Repository.canAccess userId t ->
+            | Some t when Repository.canAccessWithEmail userId email t ->
                 do! ctx.Response.WriteAsJsonAsync(t)
             | Some _ ->
                 ctx.Response.StatusCode <- 403
@@ -135,13 +141,13 @@ module ThreadHandlers =
     let saveScore (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, userName) = getUserInfo ctx
+            let (userId, userName, email) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccess userId t) ->
+            | Some t when not (Repository.canAccessWithEmail userId email t) ->
                 ctx.Response.StatusCode <- 403
                 do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some _ ->
@@ -177,7 +183,7 @@ module ThreadHandlers =
     let updateSettings (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, _) = getUserInfo ctx
+            let (userId, _, email) = getUserInfo ctx
 
             match thread with
             | None ->
@@ -211,13 +217,13 @@ module ThreadHandlers =
     let reviewScore (repo: IThreadRepository) (config: AppConfig) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, _) = getUserInfo ctx
+            let (userId, _, email) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccess userId t) ->
+            | Some t when not (Repository.canAccessWithEmail userId email t) ->
                 ctx.Response.StatusCode <- 403
                 do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some t ->
@@ -338,8 +344,12 @@ module ThreadHandlers =
     let getHistory (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
+            let (userId, _, email) = getUserInfo ctx
 
             match thread with
+            | Some t when not (Repository.canAccessWithEmail userId email t) ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some t -> do! ctx.Response.WriteAsJsonAsync(t.History)
             | None ->
                 ctx.Response.StatusCode <- 404
@@ -349,8 +359,12 @@ module ThreadHandlers =
     let exportThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
+            let (userId, _, email) = getUserInfo ctx
 
             match thread with
+            | Some t when not (Repository.canAccessWithEmail userId email t) ->
+                ctx.Response.StatusCode <- 403
+                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some t ->
                 let sb = StringBuilder()
                 sb.AppendLine($"# {t.Title}") |> ignore
@@ -375,7 +389,7 @@ module ThreadHandlers =
     let shareThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, _) = getUserInfo ctx
+            let (userId, _, email) = getUserInfo ctx
 
             match thread with
             | None ->
@@ -409,13 +423,13 @@ module ThreadHandlers =
     let addComment (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, userName) = getUserInfo ctx
+            let (userId, userName, email) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccess userId t) ->
+            | Some t when not (Repository.canAccessWithEmail userId email t) ->
                 ctx.Response.StatusCode <- 403
                 do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some _ ->
@@ -449,13 +463,13 @@ module ThreadHandlers =
     let listComments (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, _) = getUserInfo ctx
+            let (userId, _, email) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccess userId t) ->
+            | Some t when not (Repository.canAccessWithEmail userId email t) ->
                 ctx.Response.StatusCode <- 403
                 do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some _ ->
@@ -466,13 +480,13 @@ module ThreadHandlers =
     let deleteComment (repo: IThreadRepository) (threadId: string) (commentId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, _) = getUserInfo ctx
+            let (userId, _, email) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccess userId t) ->
+            | Some t when not (Repository.canAccessWithEmail userId email t) ->
                 ctx.Response.StatusCode <- 403
                 do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some t ->
@@ -494,13 +508,13 @@ module ThreadHandlers =
     let addAnnotation (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, userName) = getUserInfo ctx
+            let (userId, userName, email) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccess userId t) ->
+            | Some t when not (Repository.canAccessWithEmail userId email t) ->
                 ctx.Response.StatusCode <- 403
                 do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some _ ->
@@ -535,13 +549,13 @@ module ThreadHandlers =
     let listAnnotations (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, _) = getUserInfo ctx
+            let (userId, _, email) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccess userId t) ->
+            | Some t when not (Repository.canAccessWithEmail userId email t) ->
                 ctx.Response.StatusCode <- 403
                 do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some _ ->
@@ -552,13 +566,13 @@ module ThreadHandlers =
     let deleteAnnotation (repo: IThreadRepository) (threadId: string) (annotationId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, _) = getUserInfo ctx
+            let (userId, _, email) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccess userId t) ->
+            | Some t when not (Repository.canAccessWithEmail userId email t) ->
                 ctx.Response.StatusCode <- 403
                 do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some _ ->
@@ -580,13 +594,13 @@ module ThreadHandlers =
     let analyzeSelection (repo: IThreadRepository) (config: AppConfig) (threadId: string) (ctx: HttpContext) : Task =
         task {
             let! thread = repo.GetById(threadId)
-            let (userId, userName) = getUserInfo ctx
+            let (userId, userName, email) = getUserInfo ctx
 
             match thread with
             | None ->
                 ctx.Response.StatusCode <- 404
                 do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccess userId t) ->
+            | Some t when not (Repository.canAccessWithEmail userId email t) ->
                 ctx.Response.StatusCode <- 403
                 do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
             | Some _ ->

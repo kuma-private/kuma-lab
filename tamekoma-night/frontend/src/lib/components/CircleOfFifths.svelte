@@ -9,12 +9,13 @@
 
 	let { currentKey = 'C', onSelect }: Props = $props();
 
-	let selectedRoot = $state<string | null>(null);
+	let selectedRoot = $state<string | null>(currentKey.split(' ')[0] || 'C');
 	let selectedQuality = $state('');
 	let onMode = $state(false);
 	let selectedBass = $state<string | null>(null);
 	let synthModule: typeof import('$lib/chord-player') | null = null;
 	let pressedLabel = $state<string | null>(null);
+	let flashedQuality = $state<string | null>(null);
 
 	const ensureSynth = async () => {
 		if (!synthModule) {
@@ -108,10 +109,10 @@
 	// SVG geometry
 	const CX = 200;
 	const CY = 200;
-	const R_OUTER = 180;
-	const R_MID = 135;
-	const R_INNER = 95;
-	const R_CENTER = 55;
+	const R_OUTER = 160;
+	const R_MID = 120;
+	const R_INNER = 85;
+	const R_CENTER = 50;
 	const SEGMENT_COUNT = 12;
 	const ANGLE_STEP = (2 * Math.PI) / SEGMENT_COUNT;
 	const START_OFFSET = -Math.PI / 2 - ANGLE_STEP / 2; // Start so C is at top
@@ -153,12 +154,17 @@
 		return name;
 	});
 
-	// Click: select root + play preview sound
+	// Click: select root + play preview sound (desktop only uses this for sound)
 	const handleChordClick = async (label: string, isMinor: boolean) => {
 		if (onMode && selectedRoot) {
 			const bassNote = getRootFromLabel(label);
 			selectedBass = bassNote;
 			onMode = false;
+			// On mobile, auto-insert the slash chord
+			if (isCoarse) {
+				const chordName = currentChordName;
+				if (chordName) onSelect?.(chordName);
+			}
 			return;
 		}
 
@@ -170,7 +176,10 @@
 			selectedQuality = '';
 		}
 
-		// Play sound preview
+		// On mobile, only select root — no sound
+		if (isCoarse) return;
+
+		// Play sound preview (desktop)
 		const chordName = buildChordName(label);
 		try {
 			const mod = await ensureSynth();
@@ -183,7 +192,29 @@
 		} catch {}
 	};
 
-	// Button: add to score
+	// Mobile: tap circle segment = select root only
+	const handleMobileSegmentTap = (label: string, isMinor: boolean) => {
+		if (onMode && selectedRoot) {
+			const bassNote = getRootFromLabel(label);
+			selectedBass = bassNote;
+			onMode = false;
+			// Auto-insert the slash chord
+			const chordName = currentChordName;
+			if (chordName) onSelect?.(chordName);
+			return;
+		}
+
+		selectedRoot = label;
+		selectedBass = null;
+		if (isMinor && selectedQuality === '') {
+			// Keep as minor
+		} else if (isMinor && selectedQuality === 'm') {
+			selectedQuality = '';
+		}
+		// No sound, no insertion — just select the root
+	};
+
+	// Button: add to score (desktop)
 	const handleAddToScore = () => {
 		if (!selectedRoot) return;
 		const chordName = currentChordName;
@@ -238,6 +269,78 @@
 	let hovered = $state<string | null>(null);
 	let svgEl: SVGSVGElement | undefined = $state();
 
+	// Mobile: tap = preview sound, long press = add to score
+	const isCoarse = typeof window !== 'undefined' && (window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 600);
+
+	// Mobile segment touch: simple tap = select root only (no long press logic)
+	let mobileSegStart = { x: 0, y: 0 };
+	let mobileSegMoved = false;
+
+	const onMobileSegTouchStart = (label: string, isMinor: boolean, e: TouchEvent) => {
+		const t = e.touches[0];
+		mobileSegStart = { x: t.clientX, y: t.clientY };
+		mobileSegMoved = false;
+	};
+
+	const onMobileSegTouchEnd = (label: string, isMinor: boolean, e: TouchEvent) => {
+		const t = e.changedTouches[0];
+		if (Math.abs(t.clientX - mobileSegStart.x) > 10 || Math.abs(t.clientY - mobileSegStart.y) > 10) return;
+		handleMobileSegmentTap(label, isMinor);
+	};
+
+	// Mobile quality button touch handlers
+	let qLpTimer: ReturnType<typeof setTimeout> | null = null;
+	let qLpFired = false;
+	let qTouchStart = { x: 0, y: 0 };
+
+	const onQualityTouchStart = (q: string, qlabel: string, e: TouchEvent) => {
+		if (!selectedRoot) return;
+		const t = e.touches[0];
+		qTouchStart = { x: t.clientX, y: t.clientY };
+		qLpFired = false;
+
+		// Set quality immediately for preview
+		selectedQuality = selectedQuality === q ? '' : q;
+
+		qLpTimer = setTimeout(() => {
+			qLpFired = true;
+			// Long press: insert chord
+			const chordName = buildChordName(selectedRoot!);
+			if (chordName) onSelect?.(chordName);
+			if (navigator.vibrate) navigator.vibrate(30);
+			// Flash green
+			flashedQuality = q;
+			setTimeout(() => { flashedQuality = null; }, 400);
+		}, 500);
+	};
+
+	const onQualityTouchEnd = (q: string, qlabel: string, e: TouchEvent) => {
+		if (qLpTimer) { clearTimeout(qLpTimer); qLpTimer = null; }
+		if (!selectedRoot) return;
+		const t = e.changedTouches[0];
+		if (Math.abs(t.clientX - qTouchStart.x) > 10 || Math.abs(t.clientY - qTouchStart.y) > 10) {
+			return;
+		}
+		if (qLpFired) return;
+		// Short tap: preview chord sound (quality already set in touchstart)
+		const chordName = buildChordName(selectedRoot!);
+		(async () => {
+			try {
+				const mod = await ensureSynth();
+				const parsed = parseChord(chordName);
+				const notes = chordToNotes(parsed);
+				await mod.keyboardAttack(notes);
+				setTimeout(async () => {
+					try { await mod.keyboardRelease(notes); } catch {}
+				}, 400);
+			} catch {}
+		})();
+	};
+
+	const onQualityTouchCancel = () => {
+		if (qLpTimer) { clearTimeout(qLpTimer); qLpTimer = null; }
+	};
+
 	// Swipe handling for mobile
 	let touchStartX = $state(0);
 	let touchStartY = $state(0);
@@ -276,11 +379,20 @@
 
 		// Determine if we should select major or minor based on current selection
 		const isMinor = selectedRoot ? selectedRoot.endsWith('m') && !selectedRoot.endsWith('dim') : false;
-		if (isMinor) {
-			const minorLabel = newRoot + 'm';
-			handleChordClick(minorLabel, true);
+		if (isCoarse) {
+			// On mobile, swipe just selects root (no sound)
+			if (isMinor) {
+				handleMobileSegmentTap(newRoot + 'm', true);
+			} else {
+				handleMobileSegmentTap(newRoot, false);
+			}
 		} else {
-			handleChordClick(newRoot, false);
+			if (isMinor) {
+				const minorLabel = newRoot + 'm';
+				handleChordClick(minorLabel, true);
+			} else {
+				handleChordClick(newRoot, false);
+			}
 		}
 	};
 
@@ -326,124 +438,247 @@
 </script>
 
 <div class="cof-container">
-	<!-- Quality selector -->
-	<div class="cof-qualities">
-		{#each QUALITIES as q, i}
-			<button
-				class="cof-q-btn"
-				class:cof-q-btn--active={selectedQuality === q}
-				onclick={() => handleQualityClick(q)}
-			>
-				{QUALITY_LABELS[i]}
-			</button>
-		{/each}
-		<button
-			class="cof-q-btn cof-q-btn--on"
-			class:cof-q-btn--active={onMode}
-			onclick={handleOnToggle}
-			disabled={!selectedRoot}
-			title="分数コード（Am7/G のようにベース音を指定）"
-		>
-			/
-		</button>
-	</div>
+	{#if isCoarse}
+		<!-- MOBILE LAYOUT: hint → circle → qualities (no add button) -->
+		<div class="cof-hint">コードを選択 → クオリティで試聴（長押しで追加）</div>
 
-	<!-- SVG Circle wrapper -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="cof-svg-wrapper" ontouchstart={handleTouchStart} ontouchend={handleTouchEnd}>
-		<svg bind:this={svgEl} viewBox="0 0 400 400" class="cof-svg" xmlns="http://www.w3.org/2000/svg">
-			<g class="cof-ring" style="transform: rotate({swipeRotation}deg); transform-origin: {CX}px {CY}px; transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);">
-			<!-- Outer ring: Major chords -->
-			{#each MAJOR_ROOTS as label, i}
-				{@const root = getRootFromLabel(label)}
-				{@const diatonic = isDiatonic(label)}
-				{@const isSelected = selectedRoot === label}
-				{@const isHovered = hovered === label}
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<path
-					d={arcPath(i, R_OUTER, R_MID)}
-					class="cof-segment cof-segment--outer"
-					class:cof-segment--diatonic={diatonic}
-					class:cof-segment--selected={isSelected}
-					class:cof-segment--hovered={isHovered}
-					style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
-					onclick={() => handleChordClick(label, false)}
-					onpointerleave={() => { hovered = null; }}
-					onpointerenter={() => { hovered = label; }}
-					role="button"
-					tabindex="0"
-				/>
-				{@const pos = labelPos(i, (R_OUTER + R_MID) / 2)}
-				<text
-					x={pos.x}
-					y={pos.y}
-					class="cof-label cof-label--outer"
-					class:cof-label--diatonic={diatonic}
-					class:cof-label--selected={isSelected}
-					style={isHovered || isSelected ? `fill: ${ROOT_COLOR_MAP[root] ?? 'var(--text-primary)'}` : ''}
-					dominant-baseline="central"
-					text-anchor="middle"
-					pointer-events="none"
-				>{label}</text>
-			{/each}
+		<!-- SVG Circle wrapper -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="cof-svg-wrapper" ontouchstart={handleTouchStart} ontouchend={handleTouchEnd}>
+			<svg bind:this={svgEl} viewBox="0 0 400 400" class="cof-svg" xmlns="http://www.w3.org/2000/svg">
+				<g class="cof-ring" style="transform: rotate({swipeRotation}deg); transform-origin: {CX}px {CY}px; transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);">
+				<!-- Outer ring: Major chords -->
+				{#each MAJOR_ROOTS as label, i}
+					{@const root = getRootFromLabel(label)}
+					{@const diatonic = isDiatonic(label)}
+					{@const isSelected = selectedRoot === label}
+					{@const isOnModeHighlight = onMode}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<path
+						d={arcPath(i, R_OUTER, R_MID)}
+						class="cof-segment cof-segment--outer"
+						class:cof-segment--diatonic={diatonic}
+						class:cof-segment--selected={isSelected}
+						class:cof-segment--on-mode={isOnModeHighlight}
+						style={isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
+						onclick={() => handleChordClick(label, false)}
+						ontouchstart={(e) => onMobileSegTouchStart(label, false, e)}
+						ontouchend={(e) => onMobileSegTouchEnd(label, false, e)}
+						role="button"
+						tabindex="0"
+					/>
+					{@const pos = labelPos(i, (R_OUTER + R_MID) / 2)}
+					<text
+						x={pos.x}
+						y={pos.y}
+						class="cof-label cof-label--outer"
+						class:cof-label--diatonic={diatonic}
+						class:cof-label--selected={isSelected}
+						style={isSelected ? `fill: ${ROOT_COLOR_MAP[root] ?? 'var(--text-primary)'}` : ''}
+						dominant-baseline="central"
+						text-anchor="middle"
+						pointer-events="none"
+					>{label}</text>
+				{/each}
 
-			<!-- Inner ring: Minor chords -->
-			{#each MINOR_ROOTS as label, i}
-				{@const root = getRootFromLabel(label)}
-				{@const diatonic = isDiatonic(label)}
-				{@const isSelected = selectedRoot === label}
-				{@const isHovered = hovered === label}
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<path
-					d={arcPath(i, R_MID, R_INNER)}
-					class="cof-segment cof-segment--inner"
-					class:cof-segment--diatonic={diatonic}
-					class:cof-segment--selected={isSelected}
-					class:cof-segment--hovered={isHovered}
-					style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
-					onclick={() => handleChordClick(label, true)}
-					onpointerleave={() => { hovered = null; }}
-					onpointerenter={() => { hovered = label; }}
-					role="button"
-					tabindex="0"
-				/>
-				{@const pos = labelPos(i, (R_MID + R_INNER) / 2)}
-				<text
-					x={pos.x}
-					y={pos.y}
-					class="cof-label cof-label--inner"
-					class:cof-label--diatonic={diatonic}
-					class:cof-label--selected={isSelected}
-					style={isHovered || isSelected ? `fill: ${ROOT_COLOR_MAP[root] ?? 'var(--text-primary)'}` : ''}
-					dominant-baseline="central"
-					text-anchor="middle"
-					pointer-events="none"
-				>{label}</text>
-			{/each}
+				<!-- Inner ring: Minor chords -->
+				{#each MINOR_ROOTS as label, i}
+					{@const root = getRootFromLabel(label)}
+					{@const diatonic = isDiatonic(label)}
+					{@const isSelected = selectedRoot === label}
+					{@const isOnModeHighlight = onMode}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<path
+						d={arcPath(i, R_MID, R_INNER)}
+						class="cof-segment cof-segment--inner"
+						class:cof-segment--diatonic={diatonic}
+						class:cof-segment--selected={isSelected}
+						class:cof-segment--on-mode={isOnModeHighlight}
+						style={isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
+						onclick={() => handleChordClick(label, true)}
+						ontouchstart={(e) => onMobileSegTouchStart(label, true, e)}
+						ontouchend={(e) => onMobileSegTouchEnd(label, true, e)}
+						role="button"
+						tabindex="0"
+					/>
+					{@const pos = labelPos(i, (R_MID + R_INNER) / 2)}
+					<text
+						x={pos.x}
+						y={pos.y}
+						class="cof-label cof-label--inner"
+						class:cof-label--diatonic={diatonic}
+						class:cof-label--selected={isSelected}
+						style={isSelected ? `fill: ${ROOT_COLOR_MAP[root] ?? 'var(--text-primary)'}` : ''}
+						dominant-baseline="central"
+						text-anchor="middle"
+						pointer-events="none"
+					>{label}</text>
+				{/each}
 
-			</g>
-			<!-- Center circle: current selection -->
-			<circle cx={CX} cy={CY} r={R_CENTER} class="cof-center" />
-			<text x={CX} y={CY - 8} class="cof-center-text" dominant-baseline="central" text-anchor="middle">
-				{currentChordName || currentKey}
-			</text>
-			<text x={CX} y={CY + 16} class="cof-center-sub" dominant-baseline="central" text-anchor="middle">
-				Key: {currentKey}
-			</text>
-		</svg>
-
-		<!-- Click on segment plays preview sound -->
-	</div>
-
-	<!-- Add button (always visible) -->
-	{#if onMode}
-		<div class="cof-on-hint">
-			ベース音を選択してください
+				</g>
+				<!-- Center circle: current selection -->
+				<circle cx={CX} cy={CY} r={R_CENTER} class="cof-center" />
+				<text x={CX} y={CY - 8} class="cof-center-text" dominant-baseline="central" text-anchor="middle">
+					{currentChordName || currentKey}
+				</text>
+				<text x={CX} y={CY + 16} class="cof-center-sub" dominant-baseline="central" text-anchor="middle">
+					Key: {currentKey}
+				</text>
+			</svg>
 		</div>
+
+		<!-- Quality selector (mobile: below circle) -->
+		<div class="cof-qualities" class:cof-qualities--disabled={!selectedRoot}>
+			{#each QUALITIES as q, i}
+				<button
+					class="cof-q-btn"
+					class:cof-q-btn--active={selectedQuality === q}
+					class:cof-q-btn--flash={flashedQuality === q}
+					disabled={!selectedRoot}
+					ontouchstart={(e) => onQualityTouchStart(q, QUALITY_LABELS[i], e)}
+					ontouchend={(e) => onQualityTouchEnd(q, QUALITY_LABELS[i], e)}
+					ontouchcancel={onQualityTouchCancel}
+					onclick={(e) => e.preventDefault()}
+				>
+					{QUALITY_LABELS[i]}
+				</button>
+			{/each}
+			<button
+				class="cof-q-btn cof-q-btn--on"
+				class:cof-q-btn--active={onMode}
+				onclick={handleOnToggle}
+				disabled={!selectedRoot}
+				title="分数コード（Am7/G のようにベース音を指定）"
+			>
+				/
+			</button>
+		</div>
+
+		{#if onMode}
+			<div class="cof-on-hint">
+				ベース音を選択してください
+			</div>
+		{/if}
 	{:else}
-		<button class="cof-add-btn" onclick={handleAddToScore}>
-			{currentChordName || 'C'} をスコアに追加
-		</button>
+		<!-- DESKTOP LAYOUT: hint → qualities → circle → add button -->
+
+		<!-- Quality selector -->
+		<div class="cof-qualities">
+			{#each QUALITIES as q, i}
+				<button
+					class="cof-q-btn"
+					class:cof-q-btn--active={selectedQuality === q}
+					onclick={() => handleQualityClick(q)}
+				>
+					{QUALITY_LABELS[i]}
+				</button>
+			{/each}
+			<button
+				class="cof-q-btn cof-q-btn--on"
+				class:cof-q-btn--active={onMode}
+				onclick={handleOnToggle}
+				disabled={!selectedRoot}
+				title="分数コード（Am7/G のようにベース音を指定）"
+			>
+				/
+			</button>
+		</div>
+
+		<!-- SVG Circle wrapper -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="cof-svg-wrapper" ontouchstart={handleTouchStart} ontouchend={handleTouchEnd}>
+			<svg bind:this={svgEl} viewBox="0 0 400 400" class="cof-svg" xmlns="http://www.w3.org/2000/svg">
+				<g class="cof-ring" style="transform: rotate({swipeRotation}deg); transform-origin: {CX}px {CY}px; transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);">
+				<!-- Outer ring: Major chords -->
+				{#each MAJOR_ROOTS as label, i}
+					{@const root = getRootFromLabel(label)}
+					{@const diatonic = isDiatonic(label)}
+					{@const isSelected = selectedRoot === label}
+					{@const isHovered = hovered === label}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<path
+						d={arcPath(i, R_OUTER, R_MID)}
+						class="cof-segment cof-segment--outer"
+						class:cof-segment--diatonic={diatonic}
+						class:cof-segment--selected={isSelected}
+						class:cof-segment--hovered={isHovered}
+						style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
+						onclick={() => handleChordClick(label, false)}
+						onpointerleave={() => { hovered = null; }}
+						onpointerenter={() => { hovered = label; }}
+						role="button"
+						tabindex="0"
+					/>
+					{@const pos = labelPos(i, (R_OUTER + R_MID) / 2)}
+					<text
+						x={pos.x}
+						y={pos.y}
+						class="cof-label cof-label--outer"
+						class:cof-label--diatonic={diatonic}
+						class:cof-label--selected={isSelected}
+						style={isHovered || isSelected ? `fill: ${ROOT_COLOR_MAP[root] ?? 'var(--text-primary)'}` : ''}
+						dominant-baseline="central"
+						text-anchor="middle"
+						pointer-events="none"
+					>{label}</text>
+				{/each}
+
+				<!-- Inner ring: Minor chords -->
+				{#each MINOR_ROOTS as label, i}
+					{@const root = getRootFromLabel(label)}
+					{@const diatonic = isDiatonic(label)}
+					{@const isSelected = selectedRoot === label}
+					{@const isHovered = hovered === label}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<path
+						d={arcPath(i, R_MID, R_INNER)}
+						class="cof-segment cof-segment--inner"
+						class:cof-segment--diatonic={diatonic}
+						class:cof-segment--selected={isSelected}
+						class:cof-segment--hovered={isHovered}
+						style={isHovered || isSelected ? `fill: ${ROOT_BG_MAP[root] ?? 'var(--bg-hover)'}` : ''}
+						onclick={() => handleChordClick(label, true)}
+						onpointerleave={() => { hovered = null; }}
+						onpointerenter={() => { hovered = label; }}
+						role="button"
+						tabindex="0"
+					/>
+					{@const pos = labelPos(i, (R_MID + R_INNER) / 2)}
+					<text
+						x={pos.x}
+						y={pos.y}
+						class="cof-label cof-label--inner"
+						class:cof-label--diatonic={diatonic}
+						class:cof-label--selected={isSelected}
+						style={isHovered || isSelected ? `fill: ${ROOT_COLOR_MAP[root] ?? 'var(--text-primary)'}` : ''}
+						dominant-baseline="central"
+						text-anchor="middle"
+						pointer-events="none"
+					>{label}</text>
+				{/each}
+
+				</g>
+				<!-- Center circle: current selection -->
+				<circle cx={CX} cy={CY} r={R_CENTER} class="cof-center" />
+				<text x={CX} y={CY - 8} class="cof-center-text" dominant-baseline="central" text-anchor="middle">
+					{currentChordName || currentKey}
+				</text>
+				<text x={CX} y={CY + 16} class="cof-center-sub" dominant-baseline="central" text-anchor="middle">
+					Key: {currentKey}
+				</text>
+			</svg>
+		</div>
+
+		<!-- Add button (desktop only) -->
+		{#if onMode}
+			<div class="cof-on-hint">
+				ベース音を選択してください
+			</div>
+		{:else}
+			<button class="cof-add-btn" onclick={handleAddToScore} disabled={!selectedRoot}>
+				{currentChordName || 'C'} をスコアに追加
+			</button>
+		{/if}
 	{/if}
 </div>
 
@@ -464,6 +699,11 @@
 		padding: 0 var(--space-xs);
 	}
 
+	.cof-qualities--disabled {
+		opacity: 0.4;
+		pointer-events: none;
+	}
+
 	.cof-q-btn {
 		padding: 4px 8px;
 		border: 1px solid var(--border-subtle);
@@ -475,6 +715,10 @@
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.12s;
+		-webkit-touch-callout: none;
+		-webkit-user-select: none;
+		user-select: none;
+		touch-action: manipulation;
 	}
 
 	.cof-q-btn:hover {
@@ -489,10 +733,18 @@
 		border-color: var(--accent-primary);
 	}
 
+	.cof-q-btn--flash {
+		background: rgba(74, 222, 128, 0.35) !important;
+		border-color: rgb(74, 222, 128) !important;
+		color: rgb(74, 222, 128) !important;
+		transition: none;
+	}
+
 	.cof-svg-wrapper {
 		position: relative;
 		width: 100%;
 		max-width: 280px;
+		box-sizing: border-box;
 	}
 
 	.cof-svg {
@@ -532,7 +784,14 @@
 		stroke: var(--border-subtle);
 		stroke-width: 1;
 		cursor: pointer;
-		transition: fill 0.12s, opacity 0.12s;
+		transition: fill 0.12s, opacity 0.12s, transform 0.05s;
+		transform-origin: center;
+		transform-box: fill-box;
+	}
+
+	.cof-segment:active {
+		transform: scale(0.95);
+		transition: transform 0.05s;
 	}
 
 	.cof-segment--inner {
@@ -558,6 +817,16 @@
 		opacity: 1;
 		stroke: var(--border-strong);
 		stroke-width: 1.5;
+	}
+
+	.cof-segment--on-mode {
+		stroke: var(--accent-primary);
+		stroke-width: 0.5;
+		stroke-dasharray: 3 2;
+	}
+
+	.cof-segment--on-mode.cof-segment--selected {
+		stroke-dasharray: none;
 	}
 
 	.cof-label {
@@ -612,6 +881,14 @@
 		cursor: default;
 	}
 
+	.cof-hint {
+		text-align: right;
+		font-size: 0.68rem;
+		color: var(--text-muted);
+		padding: 0 var(--space-sm);
+		margin-bottom: -4px;
+	}
+
 	.cof-on-hint {
 		font-family: var(--font-mono);
 		font-size: 0.75rem;
@@ -645,27 +922,27 @@
 	}
 
 	@media (max-width: 600px) {
+		.cof-container {
+			padding: var(--space-xs) 0;
+		}
+
 		.cof-qualities {
 			display: flex;
-			overflow-x: auto;
-			-webkit-overflow-scrolling: touch;
-			scroll-snap-type: x mandatory;
+			flex-wrap: wrap;
+			justify-content: center;
 			gap: 4px;
-			padding: 4px 0;
-			flex-wrap: nowrap;
+			padding: 4px var(--space-md);
 		}
 
 		.cof-q-btn {
 			flex-shrink: 0;
 			min-width: 44px;
 			height: 36px;
-			scroll-snap-align: center;
 			padding: 4px 10px;
 		}
 
-		.cof-svg-wrapper, .cof-svg-wrapper svg {
+		.cof-svg-wrapper {
 			max-width: 100%;
-			width: 100%;
 		}
 
 		.cof-add-btn {

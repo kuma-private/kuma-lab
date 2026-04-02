@@ -6,6 +6,14 @@
 	const store = createAppStore();
 	let threadFilter = $state('all');
 	let authChecked = $state(false);
+	let sortMode = $state<'latest' | 'name'>('latest');
+	let templateMenuOpen = $state(false);
+
+	const TEMPLATES: { label: string; score: string }[] = [
+		{ label: '空のスコア', score: '' },
+		{ label: 'カノン進行', score: '| C | G | Am | Em |\n| F | C | F | G |' },
+		{ label: 'ブルース進行', score: '| C7 | C7 | C7 | C7 |\n| F7 | F7 | C7 | C7 |\n| G7 | F7 | C7 | G7 |' },
+	];
 
 	onMount(async () => {
 		await store.checkLogin();
@@ -15,19 +23,55 @@
 		}
 	});
 
+	const formatTime = (iso: string): string => {
+		try {
+			const d = new Date(iso);
+			const diff = Date.now() - d.getTime();
+			const mins = Math.floor(diff / 60000);
+			if (mins < 1) return 'たった今';
+			if (mins < 60) return `${mins}分前`;
+			const hours = Math.floor(mins / 60);
+			if (hours < 24) return `${hours}時間前`;
+			const days = Math.floor(hours / 24);
+			if (days < 7) return `${days}日前`;
+			return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+		} catch { return ''; }
+	};
+
 	const filteredThreads = $derived.by(() => {
-		if (threadFilter === 'all') return store.threads;
+		let list = store.threads;
 		const userId = store.user?.sub || '';
-		if (threadFilter === 'mine') return store.threads.filter(t => t.createdBy === userId);
-		if (threadFilter === 'shared') return store.threads.filter(t => t.visibility === 'shared' || t.visibility === 'public');
-		return store.threads;
+		if (threadFilter === 'mine') list = list.filter(t => t.createdBy === userId);
+		if (threadFilter === 'shared') list = list.filter(t => t.visibility === 'shared' || t.visibility === 'public');
+
+		if (sortMode === 'name') {
+			list = [...list].sort((a, b) => a.title.localeCompare(b.title, 'ja'));
+		} else {
+			list = [...list].sort((a, b) => new Date(b.lastEditedAt).getTime() - new Date(a.lastEditedAt).getTime());
+		}
+		return list;
 	});
 
-	const handleNewSession = async () => {
+	const recentThreads = $derived(
+		[...store.threads].sort((a, b) => new Date(b.lastEditedAt).getTime() - new Date(a.lastEditedAt).getTime()).slice(0, 3)
+	);
+
+	const handleNewSession = async (initialScore?: string) => {
+		templateMenuOpen = false;
 		const result = await store.createThread({ title: '無題のスコア' });
 		if (result) {
+			if (initialScore) {
+				try {
+					const { saveScore } = await import('$lib/api');
+					await saveScore(result.id, { score: initialScore, comment: 'テンプレートから作成' });
+				} catch { /* proceed even if save fails */ }
+			}
 			window.location.href = `/thread/${result.id}`;
 		}
+	};
+
+	const toggleTemplateMenu = () => {
+		templateMenuOpen = !templateMenuOpen;
 	};
 </script>
 
@@ -59,6 +103,7 @@
 				</div>
 				<h1 class="login-title">Tamekoma Night</h1>
 				<p class="login-sub">溜め込まないで、コードを放て。</p>
+				<p class="login-tagline">コード進行エディタ</p>
 				<a href="/auth/google" class="btn-google">
 					<svg width="18" height="18" viewBox="0 0 24 24">
 						<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
@@ -71,7 +116,20 @@
 			</div>
 		</div>
 	{:else}
+
 		<div class="slogan">溜め込まないで、コードを放て。</div>
+
+		{#if recentThreads.length > 0}
+			<div class="recent-activity">
+				<h3 class="recent-title">最近の編集</h3>
+				{#each recentThreads as thread}
+					<a href="/thread/{thread.id}" class="recent-item">
+						<span class="recent-name">{thread.title}</span>
+						<span class="recent-time">{formatTime(thread.lastEditedAt)}</span>
+					</a>
+				{/each}
+			</div>
+		{/if}
 
 		<div class="top-bar">
 			<div class="top-left">
@@ -79,11 +137,26 @@
 				{#if store.threads.length > 0}
 					<span class="top-count">{store.threads.length}</span>
 				{/if}
+				<div class="sort-pills">
+					<button class="sort-pill" class:sort-pill--active={sortMode === 'latest'} onclick={() => sortMode = 'latest'}>最新順</button>
+					<button class="sort-pill" class:sort-pill--active={sortMode === 'name'} onclick={() => sortMode = 'name'}>名前順</button>
+				</div>
 			</div>
-			<button class="btn-new" onclick={handleNewSession}>
-				<span class="btn-new-icon">+</span>
-				新規作成
-			</button>
+			<div class="btn-new-wrap">
+				<button class="btn-new" onclick={toggleTemplateMenu}>
+					<span class="btn-new-icon">+</span>
+					新規作成
+				</button>
+				{#if templateMenuOpen}
+					<div class="template-menu">
+						{#each TEMPLATES as tmpl}
+							<button class="template-option" onclick={() => handleNewSession(tmpl.score || undefined)}>
+								{tmpl.label}
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
 		</div>
 
 		{#if store.error}
@@ -92,13 +165,24 @@
 
 		<main class="main">
 			{#if store.loading}
-				<div class="loading" role="status" aria-label="読み込み中">
-					<div class="loading-spinner"></div>
+				<div class="skeleton-cards" role="status" aria-label="読み込み中">
+					{#each [1,2,3] as _}
+						<div class="skeleton-card">
+							<div class="skeleton-line skeleton-title"></div>
+							<div class="skeleton-line skeleton-meta"></div>
+						</div>
+					{/each}
 				</div>
 			{:else}
-				<ThreadList threads={filteredThreads} filter={threadFilter} onFilterChange={(f) => { threadFilter = f; }} />
+				<ThreadList threads={filteredThreads} filter={threadFilter} onFilterChange={(f) => { threadFilter = f; }} onCreate={() => handleNewSession()} />
 			{/if}
 		</main>
+
+		<footer class="app-footer">
+			<span>Tamekoma Night</span>
+			<span>·</span>
+			<span>コード進行エディタ</span>
+		</footer>
 	{/if}
 </div>
 
@@ -140,7 +224,7 @@
 	}
 
 	@keyframes twinkle {
-		0% { opacity: 0.6; }
+		0% { opacity: 0.8; }
 		100% { opacity: 1; }
 	}
 
@@ -230,6 +314,12 @@
 	.login-icon {
 		color: var(--accent-primary);
 		opacity: 0.8;
+		animation: float-note 3s ease-in-out infinite;
+	}
+
+	@keyframes float-note {
+		0%, 100% { transform: translateY(0); }
+		50% { transform: translateY(-6px); }
 	}
 
 	.login-title {
@@ -246,11 +336,19 @@
 		margin: 0;
 	}
 
+	.login-tagline {
+		color: var(--text-muted);
+		font-size: 0.72rem;
+		margin: 0;
+		opacity: 0.5;
+		letter-spacing: 0.08em;
+	}
+
 	.btn-google {
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		padding: 10px 24px;
+		padding: 12px 32px;
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-md);
 		background: #fff;
@@ -259,12 +357,22 @@
 		font-weight: 500;
 		text-decoration: none;
 		transition: all 0.2s;
-		margin-top: var(--space-sm);
+		margin-top: var(--space-md);
 	}
 
 	.btn-google:hover {
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-		transform: translateY(-1px);
+		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+		transform: translateY(-2px);
+		background: #f8f8ff;
+	}
+
+	.welcome-msg {
+		text-align: center;
+		font-size: 0.78rem;
+		color: var(--text-muted);
+		margin: 0;
+		padding: var(--space-md) 0 0;
+		opacity: 0.7;
 	}
 
 	.slogan {
@@ -274,6 +382,94 @@
 		padding: var(--space-lg) 0 var(--space-sm);
 		letter-spacing: 0.15em;
 		opacity: 0.6;
+	}
+
+	/* Recent activity */
+	.recent-activity {
+		margin-bottom: var(--space-lg);
+		padding: var(--space-md);
+		background: rgba(167, 139, 250, 0.04);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
+	}
+
+	.recent-title {
+		font-size: 0.72rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		margin: 0 0 var(--space-sm);
+	}
+
+	.recent-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--space-xs) var(--space-sm);
+		border-radius: var(--radius-sm);
+		text-decoration: none;
+		color: inherit;
+		transition: background 0.15s;
+	}
+
+	.recent-item:not(:last-child) {
+		border-bottom: 1px solid var(--border-subtle);
+	}
+
+	.recent-item:hover {
+		background: rgba(167, 139, 250, 0.08);
+	}
+
+	.recent-item:hover .recent-name {
+		color: var(--accent-primary);
+	}
+
+	.recent-name {
+		font-size: 0.82rem;
+		color: var(--text-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		transition: color 0.15s;
+	}
+
+	.recent-time {
+		font-size: 0.68rem;
+		color: var(--text-muted);
+		opacity: 0.6;
+		flex-shrink: 0;
+		margin-left: var(--space-md);
+	}
+
+	/* Sort pills */
+	.sort-pills {
+		display: flex;
+		gap: 2px;
+		margin-left: var(--space-sm);
+	}
+
+	.sort-pill {
+		padding: 2px 10px;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 0.68rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.sort-pill:hover {
+		color: var(--text-secondary);
+		border-color: var(--border-default);
+	}
+
+	.sort-pill--active {
+		color: var(--accent-primary);
+		border-color: var(--accent-primary);
+		background: rgba(167, 139, 250, 0.08);
 	}
 
 	.top-bar {
@@ -369,8 +565,96 @@
 		to { transform: rotate(360deg); }
 	}
 
+	.app-footer {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-2xl) 0 var(--space-lg);
+		font-size: 0.7rem;
+		color: var(--text-muted);
+		opacity: 0.4;
+	}
+
 	@media (prefers-reduced-motion: reduce) {
-		.orb, .loading-spinner { animation: none; }
+		.orb, .loading-spinner, .login-icon { animation: none; }
+	}
+
+	/* Skeleton loading */
+	.skeleton-cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		gap: var(--space-md);
+	}
+
+	.skeleton-card {
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
+		padding: var(--space-lg);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+
+	.skeleton-line {
+		border-radius: var(--radius-sm);
+		background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-hover) 50%, var(--bg-elevated) 75%);
+		background-size: 200% 100%;
+		animation: skeleton-shimmer 1.5s infinite;
+	}
+
+	.skeleton-title { height: 20px; width: 60%; }
+	.skeleton-meta { height: 14px; width: 40%; }
+
+	@keyframes skeleton-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+
+	.btn-new-wrap {
+		position: relative;
+	}
+
+	.template-menu {
+		position: absolute;
+		top: calc(100% + 6px);
+		right: 0;
+		min-width: 180px;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+		z-index: 20;
+		overflow: hidden;
+		animation: menu-in 0.15s ease;
+	}
+
+	@keyframes menu-in {
+		from { opacity: 0; transform: translateY(-4px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+
+	.template-option {
+		display: block;
+		width: 100%;
+		padding: 10px 16px;
+		border: none;
+		background: transparent;
+		color: var(--text-secondary);
+		font-size: 0.82rem;
+		text-align: left;
+		cursor: pointer;
+		transition: all 0.12s;
+	}
+
+	.template-option:hover {
+		background: rgba(167, 139, 250, 0.1);
+		color: var(--accent-primary);
+	}
+
+	.template-option:not(:last-child) {
+		border-bottom: 1px solid var(--border-subtle);
 	}
 
 	@media (max-width: 600px) {
@@ -388,6 +672,10 @@
 
 		.btn-new {
 			justify-content: center;
+		}
+
+		.skeleton-cards {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>

@@ -45,7 +45,12 @@
 		{#each PATTERNS as pattern, idx}
 			<div class="pattern-item">
 				<div class="pattern-top">
-					<span class="pattern-name">{pattern.nameJa}</span>
+					<div class="pattern-info">
+						<span class="pattern-name">{pattern.nameJa}</span>
+						{#if pattern.descJa}
+							<span class="pattern-desc">{pattern.descJa}</span>
+						{/if}
+					</div>
 					<div class="pattern-actions">
 						{#if previewingIdx === idx}
 							<button
@@ -100,16 +105,33 @@
 		background: var(--bg-hover);
 	}
 
+	.pattern-item:hover .pattern-preview {
+		color: var(--text-secondary);
+		white-space: normal;
+	}
+
 	.pattern-top {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 	}
 
+	.pattern-info {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+
 	.pattern-name {
 		font-size: 0.75rem;
 		font-weight: 600;
 		color: var(--text-primary);
+	}
+
+	.pattern-desc {
+		font-size: 0.62rem;
+		color: var(--text-muted);
+		opacity: 0.7;
 	}
 
 	.pattern-preview {
@@ -120,6 +142,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		margin-top: 1px;
+		transition: color 0.15s;
 	}
 
 	.pattern-actions {
@@ -147,11 +170,13 @@
 
 	.pattern-btn--play {
 		color: var(--accent-primary);
+		border-color: var(--accent-primary);
+		background: transparent;
+		font-size: 0.55rem;
 	}
 
 	.pattern-btn--play:hover:not(:disabled) {
 		background: rgba(167, 139, 250, 0.15);
-		border-color: var(--accent-primary);
 	}
 
 	.pattern-btn--stop {
@@ -165,12 +190,14 @@
 	}
 
 	.pattern-btn--insert {
-		color: var(--success);
+		color: #fff;
+		background: var(--success);
+		border-color: var(--success);
+		font-weight: 700;
 	}
 
 	.pattern-btn--insert:hover {
-		background: rgba(52, 211, 153, 0.15);
-		border-color: var(--success);
+		filter: brightness(1.15);
 	}
 
 	.mini-spinner {

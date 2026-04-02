@@ -11,8 +11,8 @@
 	let scrollContainer: HTMLDivElement | undefined = $state();
 
 	const OCTAVE_START = 1;
-	const OCTAVE_END = 7; // C1 to B6 + C7
-	const OCTAVE_COUNT = OCTAVE_END - OCTAVE_START; // 6 octaves
+	const OCTAVE_END = 9; // C1 to B8 + C9
+	const OCTAVE_COUNT = OCTAVE_END - OCTAVE_START; // 8 octaves
 
 	const WHITE_NOTES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 	const BLACK_NOTE_MAP: Record<string, { label: string; offsetIndex: number }> = {
@@ -23,10 +23,26 @@
 		'A#': { label: 'A#', offsetIndex: 6 },
 	};
 
-	const WHITE_KEY_WIDTH = 26; // px - narrower to show more range
+	const WHITE_KEY_WIDTH = 26; // px - narrower to show more range (desktop)
 	const BLACK_KEY_WIDTH = WHITE_KEY_WIDTH * 0.6;
 	const TOTAL_WHITE_KEYS = OCTAVE_COUNT * 7 + 1; // +1 for final C7
 	const TOTAL_WIDTH = TOTAL_WHITE_KEYS * WHITE_KEY_WIDTH;
+
+	// Mobile: detect narrow viewport and use halved key widths
+	let isMobile = $state(false);
+
+	onMount(() => {
+		const mq = window.matchMedia('(max-width: 500px)');
+		isMobile = mq.matches;
+		const handler = (e: MediaQueryListEvent) => { isMobile = e.matches; };
+		mq.addEventListener('change', handler);
+		return () => mq.removeEventListener('change', handler);
+	});
+
+	const mobileScale = 0.5;
+	const effectiveWhiteWidth = $derived(isMobile ? WHITE_KEY_WIDTH * mobileScale : WHITE_KEY_WIDTH);
+	const effectiveBlackWidth = $derived(isMobile ? BLACK_KEY_WIDTH * mobileScale : BLACK_KEY_WIDTH);
+	const effectiveTotalWidth = $derived(isMobile ? TOTAL_WIDTH * mobileScale : TOTAL_WIDTH);
 
 	const buildKeys = () => {
 		const whites: { note: string; label: string; left: number }[] = [];
@@ -105,7 +121,7 @@
 	const scrollToCenter = () => {
 		if (!scrollContainer) return;
 		const c3WhiteIndex = (3 - OCTAVE_START) * 7;
-		const c3Left = c3WhiteIndex * WHITE_KEY_WIDTH;
+		const c3Left = c3WhiteIndex * effectiveWhiteWidth;
 		const containerWidth = scrollContainer.clientWidth;
 		scrollContainer.scrollLeft = c3Left - containerWidth * 0.3;
 	};
@@ -129,8 +145,8 @@
 		const indices = playingNotes.map(noteToWhiteIndex);
 		const minIdx = Math.min(...indices);
 		const maxIdx = Math.max(...indices);
-		const minLeft = minIdx * WHITE_KEY_WIDTH;
-		const maxRight = (maxIdx + 1) * WHITE_KEY_WIDTH;
+		const minLeft = minIdx * effectiveWhiteWidth;
+		const maxRight = (maxIdx + 1) * effectiveWhiteWidth;
 		const containerWidth = scrollContainer.clientWidth;
 		const scrollLeft = scrollContainer.scrollLeft;
 		// Only scroll if notes are out of view
@@ -143,13 +159,15 @@
 </script>
 
 <div class="piano-scroll" bind:this={scrollContainer}>
-	<div class="piano-keys" style="width: {TOTAL_WIDTH}px">
+	<div class="piano-keys" style="width: {effectiveTotalWidth}px">
 		{#each keys.whites as key}
+			{@const scale = isMobile ? mobileScale : 1}
 			<button
 				class="wk"
 				class:wk--active={activeKeys.has(key.note)}
 				class:wk--playing={playingSet.has(key.note)}
-				style="left: {key.left}px; width: {WHITE_KEY_WIDTH}px"
+				style="left: {key.left * scale}px; width: {effectiveWhiteWidth}px"
+				aria-label={key.note}
 				onpointerdown={() => handleKeyDown(key.note)}
 				onpointerup={() => handleKeyUp(key.note)}
 				onpointerleave={() => handlePointerLeave(key.note)}
@@ -159,11 +177,13 @@
 		{/each}
 
 		{#each keys.blacks as key}
+			{@const scale = isMobile ? mobileScale : 1}
 			<button
 				class="bk"
 				class:bk--active={activeKeys.has(key.note)}
 				class:bk--playing={playingSet.has(key.note)}
-				style="left: {key.left}px; width: {BLACK_KEY_WIDTH}px"
+				style="left: {key.left * scale}px; width: {effectiveBlackWidth}px"
+				aria-label={key.note}
 				onpointerdown={() => handleKeyDown(key.note)}
 				onpointerup={() => handleKeyUp(key.note)}
 				onpointerleave={() => handlePointerLeave(key.note)}
@@ -176,11 +196,11 @@
 
 <style>
 	.piano-scroll {
-		flex: 1;
+		width: 100%;
+		height: 100%;
 		overflow-x: auto;
 		overflow-y: hidden;
 		-webkit-overflow-scrolling: touch;
-		min-width: 0;
 	}
 
 	/* Hide scrollbar but keep scrolling */
@@ -197,7 +217,7 @@
 
 	.piano-keys {
 		position: relative;
-		height: 64px;
+		height: 100%;
 		user-select: none;
 		touch-action: none;
 	}
@@ -252,7 +272,7 @@
 	.bk {
 		position: absolute;
 		top: 0;
-		height: 40px;
+		height: 62%;
 		background: #2a2a2a;
 		border: 1px solid #111;
 		border-top: none;
@@ -295,14 +315,6 @@
 	}
 
 	@media (max-width: 700px) {
-		.piano-keys {
-			height: 56px;
-		}
-
-		.bk {
-			height: 35px;
-		}
-
 		.wk-label {
 			display: none;
 		}

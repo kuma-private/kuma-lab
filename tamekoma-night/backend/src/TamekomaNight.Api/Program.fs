@@ -137,7 +137,7 @@ module Program =
         |> ignore
 
         app.MapGet("/api/threads/{id}/export", Func<string, HttpContext, Task>(fun id ctx ->
-            (ThreadHandlers.exportThread repo id) ctx))
+            (requireLogin (ThreadHandlers.exportThread repo id)) ctx))
         |> ignore
 
         app.MapPut("/api/threads/{id}/share", Func<string, HttpContext, Task>(fun id ctx ->

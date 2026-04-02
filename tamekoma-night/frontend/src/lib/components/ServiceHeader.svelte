@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { UserInfo } from '$lib/api';
+	import HelpModal from '$lib/components/HelpModal.svelte';
 
 	let user = $state<UserInfo | null>(null);
 	let loaded = $state(false);
+	let helpOpen = $state(false);
 
 	onMount(async () => {
 		try {
@@ -35,6 +37,7 @@
 		Tamekoma Night
 	</a>
 	<div class="service-right">
+		<button class="btn-help" onclick={() => helpOpen = true} title="ヘルプ">?</button>
 		{#if loaded}
 			{#if user}
 				<span class="user-name">{user.name}</span>
@@ -46,6 +49,8 @@
 	</div>
 </nav>
 
+<HelpModal open={helpOpen} onclose={() => helpOpen = false} />
+
 <style>
 	.service-header {
 		display: flex;
@@ -55,6 +60,7 @@
 		height: 44px;
 		background: var(--bg-deepest);
 		border-bottom: 1px solid var(--border-subtle);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 		flex-shrink: 0;
 	}
 
@@ -122,9 +128,53 @@
 		background: rgba(167, 139, 250, 0.1);
 	}
 
+	.btn-help {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border: 1px solid var(--border-default);
+		border-radius: 50%;
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 0.75rem;
+		font-weight: 700;
+		cursor: pointer;
+		transition: all 0.15s;
+		flex-shrink: 0;
+	}
+
+	.btn-help:hover {
+		border-color: var(--accent-primary);
+		color: var(--accent-primary);
+		background: rgba(167, 139, 250, 0.08);
+	}
+
 	@media (max-width: 600px) {
-		.service-header { padding: 0 var(--space-sm); }
-		.service-logo { font-size: 0.78rem; }
-		.btn-logout, .btn-login { padding: 6px 12px; }
+		.service-header {
+			padding: 0 var(--space-md);
+			height: 42px;
+		}
+		.service-logo { font-size: 0.74rem; }
+		.btn-logout, .btn-login {
+			padding: 6px 12px;
+			min-height: 44px;
+		}
+		.btn-help {
+			width: 40px;
+			height: 40px;
+			font-size: 0.85rem;
+			margin-right: 2px;
+		}
+		.service-right {
+			gap: var(--space-sm);
+		}
+		.user-name {
+			max-width: 80px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
 	}
 </style>

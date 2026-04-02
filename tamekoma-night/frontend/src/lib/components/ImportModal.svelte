@@ -35,6 +35,7 @@
 	let resultChords = $state('');
 	let error = $state<string | null>(null);
 	let fileInputEl = $state<HTMLInputElement | undefined>(undefined);
+	let abortController = $state<AbortController | null>(null);
 
 	// Reset state when modal opens
 	$effect(() => {
@@ -100,10 +101,19 @@
 		}
 	};
 
+	const handleCancel = () => {
+		if (abortController) {
+			abortController.abort();
+			abortController = null;
+		}
+		step = 'input';
+	};
+
 	const handleSubmit = async () => {
 		if (imagePreviews.length === 0) return;
 		step = 'loading';
 		error = null;
+		abortController = new AbortController();
 		try {
 			const result = await importChordChart(threadId, {
 				images: imagePreviews,
@@ -114,11 +124,15 @@
 				timeSignature,
 				key,
 			});
+			if (abortController?.signal.aborted) return;
 			resultChords = result.chords;
 			step = 'preview';
 		} catch (e) {
+			if (abortController?.signal.aborted) return;
 			error = e instanceof Error ? e.message : 'インポートに失敗しました';
 			step = 'input';
+		} finally {
+			abortController = null;
 		}
 	};
 
@@ -130,6 +144,8 @@
 	const tsTop = $derived(Number(timeSignature.split('/')[0]) || 4);
 	const tsBottom = $derived(Number(timeSignature.split('/')[1]) || 4);
 </script>
+
+<svelte:window onkeydown={(e) => { if (open && e.key === 'Escape') onclose(); }} />
 
 {#if open}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -196,7 +212,7 @@
 					<div class="meta-row">
 						<label class="meta-label" style="flex:2">
 							<span>曲名（任意）</span>
-							<input type="text" class="meta-input" bind:value={songName} placeholder="曲名で精度向上" />
+							<input type="text" class="meta-input" bind:value={songName} placeholder="曲名で精度向上" autofocus />
 						</label>
 						<label class="meta-label" style="flex:1">
 							<span>アーティスト（任意）</span>
@@ -269,9 +285,12 @@
 
 		{:else if step === 'loading'}
 			<div class="modal-body loading-body">
-				<div class="loading-spinner"></div>
-				<p>AI がコード譜を読み取り中...</p>
+				<div class="loading-progress">
+					<div class="loading-progress-bar"></div>
+				</div>
+				<p class="loading-main">画像を解析中...</p>
 				<p class="loading-sub">10〜30秒ほどかかる場合があります</p>
+				<button class="btn-cancel loading-cancel" onclick={handleCancel} type="button">キャンセル</button>
 			</div>
 
 		{:else if step === 'preview'}
@@ -627,16 +646,43 @@
 		align-items: center;
 		justify-content: center;
 		padding: var(--space-2xl);
-		gap: var(--space-sm);
+		gap: var(--space-md);
 	}
 
-	.loading-spinner {
-		width: 28px;
-		height: 28px;
-		border: 3px solid var(--border-default);
-		border-top-color: var(--accent-primary);
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
+	.loading-progress {
+		width: 100%;
+		max-width: 280px;
+		height: 4px;
+		background: var(--border-default);
+		border-radius: 2px;
+		overflow: hidden;
+	}
+
+	.loading-progress-bar {
+		height: 100%;
+		width: 40%;
+		background: var(--accent-primary);
+		border-radius: 2px;
+		animation: progress-slide 1.8s ease-in-out infinite;
+	}
+
+	@keyframes progress-slide {
+		0% { transform: translateX(-100%); width: 40%; }
+		50% { width: 60%; }
+		100% { transform: translateX(350%); width: 40%; }
+	}
+
+	.loading-main {
+		font-size: 0.88rem;
+		color: var(--text-primary);
+		font-weight: 600;
+		margin: 0;
+		animation: pulse-text 2s ease-in-out infinite;
+	}
+
+	@keyframes pulse-text {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.6; }
 	}
 
 	.loading-body p {
@@ -650,8 +696,8 @@
 		color: var(--text-muted) !important;
 	}
 
-	@keyframes spin {
-		to { transform: rotate(360deg); }
+	.loading-cancel {
+		margin-top: var(--space-sm);
 	}
 
 	/* Preview */

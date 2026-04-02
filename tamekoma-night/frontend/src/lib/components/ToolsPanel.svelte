@@ -19,7 +19,10 @@
 		onPatternInsert,
 	}: Props = $props();
 
-	let patternOpen = $state(true);
+	let patternOpen = $state(typeof window !== 'undefined' && window.innerWidth > 900);
+
+	let cofOpen = $state(true);
+	const toggleCof = () => { cofOpen = !cofOpen; };
 
 	const togglePattern = () => {
 		patternOpen = !patternOpen;
@@ -28,18 +31,29 @@
 
 <div class="panel panel-tools">
 	{#if thread.key}
-		<div class="tool-section">
-			<div class="tool-header">
+		<div class="tool-section tool-section--collapsible">
+			<button class="tool-collapse-btn" onclick={toggleCof}>
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<circle cx="12" cy="12" r="10" />
 					<path d="M12 2 L12 12 L18 18" />
 				</svg>
 				<span>五度圏</span>
-			</div>
-			<CircleOfFifths currentKey={thread.key} onSelect={(chord) => {
-				if (scoreReadonly) return;
-				onChordSelect(chord);
-			}} />
+				<svg
+					class="tool-chevron"
+					class:tool-chevron--open={cofOpen}
+					width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+				>
+					<polyline points="4,6 8,10 12,6" />
+				</svg>
+			</button>
+			{#if cofOpen}
+				<div class="tool-collapse-content">
+					<CircleOfFifths currentKey={thread.key} onSelect={(chord) => {
+						if (scoreReadonly) return;
+						onChordSelect(chord);
+					}} />
+				</div>
+			{/if}
 		</div>
 
 		<div class="tool-section tool-section--collapsible">
@@ -70,9 +84,8 @@
 <style>
 	.panel {
 		background: var(--bg-base);
-		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
-		overflow: hidden;
+		box-sizing: border-box;
 	}
 
 	.panel-tools {
@@ -85,6 +98,7 @@
 	.tool-section {
 		padding: var(--space-sm) var(--space-md);
 		border-bottom: 1px solid var(--border-subtle);
+		box-sizing: border-box;
 	}
 
 	.tool-section:last-child {
@@ -141,6 +155,7 @@
 		.panel-tools {
 			position: static;
 			max-height: none;
+			overflow: visible;
 		}
 	}
 </style>

@@ -12,17 +12,24 @@ module Repository =
         || thread.Visibility = "public"
         || (thread.Visibility = "shared" && thread.SharedWith |> List.contains userId)
 
+    let canAccessWithEmail (userId: string) (email: string) (thread: Thread) : bool =
+        thread.CreatedBy = userId
+        || thread.Visibility = "public"
+        || (thread.Visibility = "shared" &&
+            (thread.SharedWith |> List.contains userId
+             || (email <> "" && thread.SharedWith |> List.contains email)))
+
     module InMemory =
 
         let private threads = ConcurrentDictionary<string, Thread>()
         let private comments = ConcurrentDictionary<string, ConcurrentDictionary<string, Comment>>()
         let private annotations = ConcurrentDictionary<string, ConcurrentDictionary<string, Annotation>>()
 
-        let getByUser (userId: string) : Task<Thread list> =
+        let getByUser (userId: string) (email: string) : Task<Thread list> =
             task {
                 return
                     threads.Values
-                    |> Seq.filter (fun t -> canAccess userId t)
+                    |> Seq.filter (fun t -> canAccessWithEmail userId email t)
                     |> Seq.toList
                     |> List.sortByDescending (fun t -> t.CreatedAt)
             }
@@ -231,7 +238,7 @@ module Repository =
               Visibility = visibility
               SharedWith = sharedWith }
 
-        let getByUser (userId: string) : Task<Thread list> =
+        let getByUser (userId: string) (email: string) : Task<Thread list> =
             task {
                 let collection = db.Value.Collection("threads")
 
@@ -241,11 +248,17 @@ module Repository =
                 let! publicSnapshot =
                     collection.WhereEqualTo("visibility", "public").GetSnapshotAsync()
 
-                let! sharedSnapshot =
+                let! sharedByIdSnapshot =
                     collection.WhereArrayContains("sharedWith", userId).GetSnapshotAsync()
 
+                let! sharedByEmailSnapshot =
+                    if email <> "" then
+                        collection.WhereArrayContains("sharedWith", email).GetSnapshotAsync()
+                    else
+                        task { return ownedSnapshot } // dummy, will be deduped
+
                 let allDocs =
-                    [ ownedSnapshot.Documents; publicSnapshot.Documents; sharedSnapshot.Documents ]
+                    [ ownedSnapshot.Documents; publicSnapshot.Documents; sharedByIdSnapshot.Documents; sharedByEmailSnapshot.Documents ]
                     |> Seq.concat
                     |> Seq.distinctBy (fun d -> d.Id)
                     |> Seq.map toThread
@@ -522,7 +535,7 @@ module Repository =
             }
 
     type IThreadRepository =
-        { GetByUser: string -> Task<Thread list>
+        { GetByUser: string -> string -> Task<Thread list>
           GetById: string -> Task<Thread option>
           Create: Thread -> Task<Thread>
           Update: Thread -> Task<Thread>

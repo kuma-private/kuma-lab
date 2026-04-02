@@ -1,0 +1,10 @@
+{
+    "name": "Tamekoma Night",
+    "short_name": "Tamekoma",
+    "description": "コード進行エディタ",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#030010",
+    "theme_color": "#0c0c1e",
+    "icons": []
+}

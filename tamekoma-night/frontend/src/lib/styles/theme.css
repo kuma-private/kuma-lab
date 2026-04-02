@@ -20,7 +20,7 @@
   /* ---- Text ---- */
   --text-primary: #e8e8f0;
   --text-secondary: #9090b0;
-  --text-muted: #606080;
+  --text-muted: #8888a8;
 
   /* ---- Accent ---- */
   --accent-primary: #a78bfa;
@@ -66,6 +66,17 @@
 }
 
 /* ============================================
+   OLED Dark Mode (enable via data-theme="oled" on <html>)
+   ============================================ */
+
+[data-theme="oled"] {
+  --bg-deepest: #000000;
+  --bg-base: #050508;
+  --bg-surface: #0a0a12;
+  --bg-elevated: #101020;
+}
+
+/* ============================================
    Reset & Base
    ============================================ */
 
@@ -81,6 +92,7 @@ html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -91,6 +103,7 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   padding-bottom: var(--player-height);
+  overscroll-behavior-y: contain;
 }
 
 /* ============================================
@@ -343,4 +356,68 @@ textarea.chord-input {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-default);
+}
+
+/* ============================================
+   Reduced Motion
+   ============================================ */
+
+/* Responsive font sizing for small screens */
+@media (max-width: 600px) {
+    :root {
+        font-size: 15px;
+    }
+
+    /* iOS Safari zoom prevention (font-size < 16px causes zoom on focus) */
+    input, textarea, select {
+        font-size: 16px !important;
+    }
+}
+
+@media (max-width: 380px) {
+    :root {
+        font-size: 14px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+
+@media print {
+    body {
+        background: white !important;
+        color: black !important;
+        padding: 0 !important;
+    }
+    .player-dock, .panel-tools, .service-header,
+    .thread-header .header-actions,
+    .player-bar, .fab-scroll-tools,
+    .score-toolbar, .page-bg {
+        display: none !important;
+    }
+    .se-preview {
+        color: black !important;
+        background: white !important;
+    }
+    .panel-score {
+        border: none !important;
+        box-shadow: none !important;
+        background: white !important;
+    }
+    .editor-layout {
+        display: block !important;
+    }
+    .page {
+        padding-bottom: 0 !important;
+        max-width: none !important;
+    }
 }

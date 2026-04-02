@@ -11,6 +11,7 @@
 		onDelete?: () => void;
 		onOpenLog: () => void;
 		onExport: () => void;
+		onExportText?: () => void;
 		onSave: () => void;
 		onShare: () => void;
 		onUpdateSettings: (data: { title?: string; key?: string; timeSignature?: string; bpm?: number }) => void;
@@ -25,6 +26,7 @@
 		visibility = 'private',
 		onOpenLog,
 		onExport,
+		onExportText,
 		onSave,
 		onShare,
 		onDelete,
@@ -106,6 +108,9 @@
 		}
 	};
 
+	let moreMenuOpen = $state(false);
+	let exportMenuOpen = $state(false);
+
 	let editingTitle = $state(false);
 	let editTitle = $state('');
 
@@ -152,7 +157,7 @@
 				onblur={saveTitle}
 			/>
 		{:else}
-			<h1 class="thread-title" onclick={startEditTitle} title="クリックして変更">{thread.title}</h1>
+			<h1 class="thread-title" onclick={startEditTitle} title="クリックして変更">{thread.title}{#if hasChanges}<span class="unsaved-dot" title="未保存の変更があります"></span>{/if}</h1>
 		{/if}
 		<div class="thread-meta">
 			<!-- Key badge: click to edit -->
@@ -202,6 +207,11 @@
 				<button class="badge badge-editable" onclick={startEditBpm} title="クリックして変更">BPM {thread.bpm}</button>
 			{/if}
 		</div>
+		{#if visibility === 'shared'}
+			<span class="visibility-badge visibility-badge--shared">&#x1F7E2; 共有中</span>
+		{:else if visibility === 'public'}
+			<span class="visibility-badge visibility-badge--public">&#x1F310; 公開中</span>
+		{/if}
 	</div>
 	<div class="header-actions">
 		<button
@@ -209,6 +219,7 @@
 			class:btn-save-header--saved={!hasChanges && !submitting}
 			onclick={onSave}
 			disabled={submitting || !hasChanges}
+			title="保存 (Ctrl+S)"
 		>
 			{#if submitting}
 				<span class="save-spinner"></span>
@@ -237,10 +248,51 @@
 			<span class="share-icon">{visibilityIcon}</span>
 			共有
 		</button>
-		<button class="btn btn-ghost" onclick={onExport}>エクスポート</button>
+		<div class="export-menu-wrap">
+			<button class="btn btn-ghost btn-export" onclick={() => exportMenuOpen = !exportMenuOpen}>エクスポート</button>
+			{#if exportMenuOpen}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<div class="export-menu-backdrop" onclick={() => exportMenuOpen = false}></div>
+				<div class="export-menu-dropdown">
+					<button class="export-menu-item" onclick={() => { onExport(); exportMenuOpen = false; }}>
+						Markdown (.md)
+					</button>
+					<button class="export-menu-item" onclick={() => { onExportText?.(); exportMenuOpen = false; }}>
+						テキスト (.txt)
+					</button>
+				</div>
+			{/if}
+		</div>
 		{#if onDelete}
-			<button class="btn btn-ghost btn-ghost--danger" onclick={onDelete}>削除</button>
+			<button class="btn btn-ghost btn-ghost--danger btn-delete-desktop" onclick={onDelete}>削除</button>
 		{/if}
+		<!-- Mobile overflow menu -->
+		<div class="more-menu-wrap">
+			<button class="btn-more" onclick={() => moreMenuOpen = !moreMenuOpen} type="button">&#x22EF;</button>
+			{#if moreMenuOpen}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<div class="more-menu-backdrop" onclick={() => moreMenuOpen = false}></div>
+				<div class="more-menu-dropdown">
+					<button class="more-menu-item" onclick={() => { onOpenLog(); moreMenuOpen = false; }}>
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+						</svg>
+						履歴
+					</button>
+					{#if onDelete}
+						<button class="more-menu-item more-menu-item--danger" onclick={() => { onDelete(); moreMenuOpen = false; }}>
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="3 6 5 6 21 6" />
+								<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+							</svg>
+							削除
+						</button>
+					{/if}
+				</div>
+			{/if}
+		</div>
 	</div>
 </header>
 
@@ -284,6 +336,22 @@
 
 	.thread-title:hover {
 		border-bottom-color: var(--border-default);
+	}
+
+	.unsaved-dot {
+		display: inline-block;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--accent-warm);
+		margin-left: 6px;
+		vertical-align: middle;
+		animation: unsaved-pulse 2s ease-in-out infinite;
+	}
+
+	@keyframes unsaved-pulse {
+		0%, 100% { opacity: 0.4; }
+		50% { opacity: 1; }
 	}
 
 	.title-input {
@@ -499,11 +567,157 @@
 		margin-bottom: var(--space-md);
 	}
 
+	/* Visibility badge */
+	.visibility-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 2px 8px;
+		border-radius: var(--radius-full, 9999px);
+		font-size: 0.68rem;
+		font-weight: 600;
+		flex-shrink: 0;
+	}
+
+	.visibility-badge--shared {
+		background: rgba(52, 211, 153, 0.1);
+		color: rgb(52, 211, 153);
+		border: 1px solid rgba(52, 211, 153, 0.25);
+	}
+
+	.visibility-badge--public {
+		background: rgba(96, 165, 250, 0.1);
+		color: rgb(96, 165, 250);
+		border: 1px solid rgba(96, 165, 250, 0.25);
+	}
+
+	/* Export dropdown */
+	.export-menu-wrap {
+		position: relative;
+	}
+
+	.export-menu-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 80;
+	}
+
+	.export-menu-dropdown {
+		position: absolute;
+		right: 0;
+		top: calc(100% + 4px);
+		z-index: 81;
+		background: rgba(20, 20, 50, 0.95);
+		backdrop-filter: blur(8px);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-elevated);
+		padding: 4px;
+		min-width: 160px;
+	}
+
+	.export-menu-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		padding: 8px 14px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-primary);
+		font-size: 0.8rem;
+		cursor: pointer;
+		transition: background 0.1s;
+	}
+
+	.export-menu-item:hover {
+		background: var(--bg-hover);
+	}
+
+	/* More menu (mobile overflow) */
+	.more-menu-wrap {
+		display: none;
+		position: relative;
+	}
+
+	.btn-more {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		font-size: 1.2rem;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.btn-more:hover {
+		border-color: var(--accent-primary);
+		color: var(--accent-primary);
+	}
+
+	.more-menu-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 80;
+	}
+
+	.more-menu-dropdown {
+		position: absolute;
+		right: 0;
+		top: calc(100% + 4px);
+		z-index: 81;
+		background: rgba(20, 20, 50, 0.95);
+		backdrop-filter: blur(8px);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-elevated);
+		padding: 4px;
+		min-width: 140px;
+	}
+
+	.more-menu-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		padding: 10px 14px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--text-primary);
+		font-size: 0.82rem;
+		cursor: pointer;
+		transition: background 0.1s;
+	}
+
+	.more-menu-item:hover {
+		background: var(--bg-hover);
+	}
+
+	.more-menu-item--danger {
+		color: var(--error);
+	}
+
 	/* Responsive */
 	@media (max-width: 600px) {
 		.thread-header {
-			flex-wrap: wrap;
-			gap: var(--space-sm);
+			flex-direction: column;
+			align-items: stretch;
+			gap: 6px;
+			padding-left: var(--space-md);
+			padding-bottom: var(--space-md);
+			margin-bottom: var(--space-md);
+		}
+
+		.back-link {
+			font-size: 0.75rem;
+			padding: 2px 0;
 		}
 
 		.thread-title {
@@ -515,22 +729,50 @@
 			font-size: 1.1rem;
 		}
 
+		.thread-meta {
+			overflow-x: auto;
+			-webkit-overflow-scrolling: touch;
+			flex-wrap: nowrap;
+		}
+
 		.badge-editable {
 			padding: 4px 10px;
-			min-height: 32px;
+			min-height: 44px;
+			white-space: nowrap;
+			flex-shrink: 0;
+			font-size: 0.72rem;
 		}
 
 		.header-actions {
-			width: 100%;
-			justify-content: flex-end;
+			display: flex;
 			flex-wrap: wrap;
+			gap: 4px;
+			width: 100%;
 		}
 
 		.btn-save-header,
 		.btn-log,
 		.btn-share,
 		.btn.btn-ghost {
-			min-height: 36px;
+			min-height: 44px;
+			padding: 6px 10px;
+			font-size: 0.75rem;
+		}
+
+		.btn-export {
+			display: none;
+		}
+
+		.btn-log {
+			display: none;
+		}
+
+		.btn-delete-desktop {
+			display: none;
+		}
+
+		.more-menu-wrap {
+			display: block;
 		}
 	}
 </style>

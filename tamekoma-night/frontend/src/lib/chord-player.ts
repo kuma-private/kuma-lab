@@ -364,6 +364,8 @@ export const playChordPreview = async (chordName: string): Promise<void> => {
  * Returns a promise that resolves when playback completes.
  */
 let _selectionTimers: ReturnType<typeof setTimeout>[] = [];
+let _selectionSynth: Tone.PolySynth | Tone.Sampler | null = null;
+let _selectionMetSynth: Tone.MembraneSynth | null = null;
 let _globalMetronome = false;
 let _selectionPlaying = false;
 let _selectionPlayingCallback: ((playing: boolean) => void) | null = null;
@@ -378,6 +380,9 @@ export const isSelectionPlaying = () => _selectionPlaying;
 export const stopSelection = () => {
   _selectionTimers.forEach(clearTimeout);
   _selectionTimers = [];
+  try { _selectionSynth?.releaseAll?.(); } catch {}
+  try { _selectionMetSynth?.dispose(); } catch {}
+  _selectionMetSynth = null;
   _selectionPlaying = false;
   _selectionPlayingCallback?.(false);
   _selectionNotesCallback?.([]); // clear highlights
@@ -408,11 +413,12 @@ export const playSelection = async (text: string, config: PlayerConfig): Promise
         volume: -10,
       }).toDestination();
   const isShared = _currentOscPreset === 'piano';
+  _selectionSynth = synth;
 
   // Metronome synth for selection playback
-  let metSynth: Tone.MembraneSynth | null = null;
+  _selectionMetSynth = null;
   if (_globalMetronome) {
-    metSynth = new Tone.MembraneSynth({
+    _selectionMetSynth = new Tone.MembraneSynth({
       pitchDecay: 0.008, octaves: 2,
       envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.05 },
       volume: -16,
@@ -424,7 +430,7 @@ export const playSelection = async (text: string, config: PlayerConfig): Promise
       const isDownbeat = beat % config.timeSignature.beats === 0;
       const note = isDownbeat ? 'C5' : 'C4';
       _selectionTimers.push(setTimeout(() => {
-        try { metSynth?.triggerAttackRelease(note, '32n', Tone.now()); } catch {}
+        try { _selectionMetSynth?.triggerAttackRelease(note, '32n', Tone.now()); } catch {}
       }, time * 1000));
     }
   }
@@ -442,7 +448,9 @@ export const playSelection = async (text: string, config: PlayerConfig): Promise
   return new Promise<void>((resolve) => {
     _selectionTimers.push(setTimeout(() => {
       if (!isShared) synth.dispose();
-      metSynth?.dispose();
+      _selectionMetSynth?.dispose();
+      _selectionMetSynth = null;
+      _selectionSynth = null;
       _selectionTimers = [];
       _selectionPlaying = false;
       _selectionPlayingCallback?.(false);
@@ -799,9 +807,10 @@ export class ChordPlayer {
     // Wait for piano sampler to load if needed
     if (_currentOscPreset === 'piano' && !_pianoSamplerLoaded) {
       await new Promise<void>((resolve) => {
+        let elapsed = 0;
         const check = () => {
-          if (_pianoSamplerLoaded) resolve();
-          else setTimeout(check, 100);
+          if (_pianoSamplerLoaded || elapsed >= 10000) resolve();
+          else { elapsed += 100; setTimeout(check, 100); }
         };
         check();
       });

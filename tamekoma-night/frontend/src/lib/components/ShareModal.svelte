@@ -22,7 +22,14 @@
 	let visibility = $state('private');
 	let sharedWith = $state<string[]>([]);
 	let emailInput = $state('');
+	let emailError = $state('');
 	let saving = $state(false);
+	let urlCopied = $state(false);
+	let canNativeShare = $state(false);
+
+	$effect(() => {
+		canNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+	});
 
 	$effect(() => {
 		if (open) {
@@ -34,10 +41,33 @@
 
 	const addEmail = () => {
 		const email = emailInput.trim();
-		if (email && !sharedWith.includes(email)) {
+		if (!email) { emailInput = ''; return; }
+		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+			emailError = '有効なメールアドレスを入力してください';
+			return;
+		}
+		emailError = '';
+		if (!sharedWith.includes(email)) {
 			sharedWith = [...sharedWith, email];
 		}
 		emailInput = '';
+	};
+
+	const copyUrl = async () => {
+		const url = window.location.origin + '/thread/' + threadId;
+		await navigator.clipboard.writeText(url);
+		urlCopied = true;
+		setTimeout(() => { urlCopied = false; }, 2000);
+	};
+
+	const nativeShare = async () => {
+		const url = window.location.origin + '/thread/' + threadId;
+		try {
+			await navigator.share({ title: 'Tamekoma Night', url });
+		} catch {
+			// User cancelled or share failed, fall back to copy
+			await copyUrl();
+		}
 	};
 
 	const removeEmail = (email: string) => {
@@ -55,6 +85,10 @@
 		}
 	};
 
+	const handleEscape = (e: KeyboardEvent) => {
+		if (open && e.key === 'Escape') onclose();
+	};
+
 	const handleKeydown = (e: KeyboardEvent) => {
 		if (e.key === 'Enter' && !e.isComposing) {
 			e.preventDefault();
@@ -62,6 +96,8 @@
 		}
 	};
 </script>
+
+<svelte:window onkeydown={handleEscape} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -81,21 +117,47 @@
 		<div class="modal-body">
 			<div class="radio-group">
 				<label class="radio-option" class:radio-option--active={visibility === 'private'}>
-					<input type="radio" bind:group={visibility} value="private" />
+					<input type="radio" bind:group={visibility} value="private" autofocus />
 					<span class="radio-icon">&#128274;</span>
-					<span class="radio-label">自分だけ</span>
+					<div class="radio-text">
+						<span class="radio-label">自分だけ</span>
+						<span class="radio-desc">あなたのみ閲覧・編集できます</span>
+					</div>
 				</label>
 				<label class="radio-option" class:radio-option--active={visibility === 'shared'}>
 					<input type="radio" bind:group={visibility} value="shared" />
 					<span class="radio-icon">&#128101;</span>
-					<span class="radio-label">特定ユーザー</span>
+					<div class="radio-text">
+						<span class="radio-label">特定ユーザー</span>
+						<span class="radio-desc">指定したユーザーが閲覧・編集できます</span>
+					</div>
 				</label>
 				<label class="radio-option" class:radio-option--active={visibility === 'public'}>
 					<input type="radio" bind:group={visibility} value="public" />
 					<span class="radio-icon">&#127760;</span>
-					<span class="radio-label">全員に公開</span>
+					<div class="radio-text">
+						<span class="radio-label">全員に公開</span>
+						<span class="radio-desc">リンクを知っている全員が閲覧できます</span>
+					</div>
 				</label>
 			</div>
+
+			{#if visibility === 'public'}
+				<div class="url-copy-section">
+					{#if canNativeShare}
+						<button class="btn-copy-url btn-native-share" onclick={nativeShare}>
+							共有...
+						</button>
+					{/if}
+					<button class="btn-copy-url" onclick={copyUrl}>
+						{#if urlCopied}
+							コピーしました
+						{:else}
+							URLをコピー
+						{/if}
+					</button>
+				</div>
+			{/if}
 
 			{#if visibility === 'shared'}
 				<div class="shared-section">
@@ -109,6 +171,9 @@
 						/>
 						<button class="btn-add" onclick={addEmail} disabled={!emailInput.trim()}>追加</button>
 					</div>
+					{#if emailError}
+						<p class="email-error">{emailError}</p>
+					{/if}
 					{#if sharedWith.length > 0}
 						<ul class="shared-list">
 							{#each sharedWith as email}
@@ -249,10 +314,62 @@
 		flex-shrink: 0;
 	}
 
+	.radio-text {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
 	.radio-label {
 		font-size: 0.85rem;
 		color: var(--text-primary);
 		font-weight: 500;
+	}
+
+	.radio-desc {
+		font-size: 0.72rem;
+		color: var(--text-muted);
+		font-weight: 400;
+	}
+
+	.url-copy-section {
+		margin-top: var(--space-sm);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+
+	.btn-native-share {
+		background: var(--accent-primary);
+		color: #fff;
+		border-color: var(--accent-primary);
+	}
+
+	.btn-native-share:hover {
+		background: var(--accent-secondary);
+	}
+
+	.btn-copy-url {
+		width: 100%;
+		padding: 8px 16px;
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-md);
+		background: rgba(167, 139, 250, 0.1);
+		color: var(--accent-primary);
+		font-size: 0.82rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.btn-copy-url:hover {
+		background: rgba(167, 139, 250, 0.2);
+	}
+
+	.email-error {
+		font-size: 0.72rem;
+		color: var(--error, #f87171);
+		margin: 2px 0 0;
 	}
 
 	.shared-section {

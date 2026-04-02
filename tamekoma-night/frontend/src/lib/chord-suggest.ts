@@ -6,6 +6,7 @@
 export interface ChordPattern {
   name: string;
   nameJa: string;
+  descJa?: string;
   degrees: string[];
 }
 
@@ -43,12 +44,12 @@ const DEGREE_MAP: Record<string, number> = {
 };
 
 export const PATTERNS: ChordPattern[] = [
-  { name: "Canon", nameJa: "カノン進行", degrees: ["I", "V", "vi", "iii", "IV", "I", "IV", "V"] },
-  { name: "Komuro", nameJa: "小室進行", degrees: ["vi", "IV", "V", "I"] },
-  { name: "Just the Two", nameJa: "おしゃれ進行", degrees: ["IVmaj7", "III7", "vi", "V"] },
-  { name: "Royal Road", nameJa: "王道進行", degrees: ["IV", "V", "iii", "vi"] },
-  { name: "Blues", nameJa: "ブルース", degrees: ["I7", "I7", "I7", "I7", "IV7", "IV7", "I7", "I7", "V7", "IV7", "I7", "V7"] },
-  { name: "ii-V-I", nameJa: "ツーファイブワン", degrees: ["ii7", "V7", "Imaj7"] },
+  { name: "Canon", nameJa: "カノン進行", descJa: "明るく定番の進行", degrees: ["I", "V", "vi", "iii", "IV", "I", "IV", "V"] },
+  { name: "Komuro", nameJa: "小室進行", descJa: "哀愁のあるポップ進行", degrees: ["vi", "IV", "V", "I"] },
+  { name: "Just the Two", nameJa: "おしゃれ進行", descJa: "都会的で洗練された響き", degrees: ["IVmaj7", "III7", "vi", "V"] },
+  { name: "Royal Road", nameJa: "王道進行", descJa: "感動的なJ-POP定番", degrees: ["IV", "V", "iii", "vi"] },
+  { name: "Blues", nameJa: "ブルース", descJa: "12小節の基本ブルース", degrees: ["I7", "I7", "I7", "I7", "IV7", "IV7", "I7", "I7", "V7", "IV7", "I7", "V7"] },
+  { name: "ii-V-I", nameJa: "ツーファイブワン", descJa: "ジャズの基本終止形", degrees: ["ii7", "V7", "Imaj7"] },
 ];
 
 // ── Helpers ────────────────────────────────────────────
