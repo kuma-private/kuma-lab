@@ -172,7 +172,7 @@ module ThreadHandlers =
                       AiScores = ""
                       CreatedAt = DateTime.UtcNow }
 
-                let pianoRollData = if obj.ReferenceEquals(req.pianoRollData, null) then "" else req.pianoRollData
+                let pianoRollData = if obj.ReferenceEquals(req.pianoRollData, null) then None else Some req.pianoRollData
                 let! result = repo.SaveScore threadId req.score pianoRollData history
 
                 match result with

@@ -59,14 +59,14 @@ module Repository =
                 return removed
             }
 
-        let saveScore (threadId: string) (score: string) (pianoRollData: string) (history: SaveHistory) : Task<Thread option> =
+        let saveScore (threadId: string) (score: string) (pianoRollData: string option) (history: SaveHistory) : Task<Thread option> =
             task {
                 match threads.TryGetValue(threadId) with
                 | true, thread ->
                     let updated =
                         { thread with
                             Score = score
-                            PianoRollData = pianoRollData
+                            PianoRollData = pianoRollData |> Option.defaultValue thread.PianoRollData
                             LastEditedBy = history.UserId
                             LastEditedAt = history.CreatedAt
                             History = thread.History @ [ history ] }
@@ -375,11 +375,11 @@ module Repository =
                     return Some result
             }
 
-        let saveScore (threadId: string) (score: string) (pianoRollData: string) (history: SaveHistory) : Task<Thread option> =
+        let saveScore (threadId: string) (score: string) (pianoRollData: string option) (history: SaveHistory) : Task<Thread option> =
             updateThread threadId (fun thread ->
                 { thread with
                     Score = score
-                    PianoRollData = pianoRollData
+                    PianoRollData = pianoRollData |> Option.defaultValue thread.PianoRollData
                     LastEditedBy = history.UserId
                     LastEditedAt = history.CreatedAt
                     History = thread.History @ [ history ] })
@@ -548,7 +548,7 @@ module Repository =
           Create: Thread -> Task<Thread>
           Update: Thread -> Task<Thread>
           Delete: string -> Task<bool>
-          SaveScore: string -> string -> string -> SaveHistory -> Task<Thread option>
+          SaveScore: string -> string -> string option -> SaveHistory -> Task<Thread option>
           UpdateSettings: string -> string -> string -> int -> string -> Task<Thread option>
           UpdateShare: string -> string -> string list -> Task<Thread option>
           AddComment: string -> Comment -> Task<Comment>

@@ -313,6 +313,8 @@
 				}
 			} catch { /* fall through */ }
 		}
+		// Don't lock in empty score — wait for the real score to arrive
+		if (!score.trim()) return;
 		bars = scoreToPianoRoll(score, parsedTimeSignature, bpm);
 		pianoRollIsSourceOfTruth = true;
 	});
