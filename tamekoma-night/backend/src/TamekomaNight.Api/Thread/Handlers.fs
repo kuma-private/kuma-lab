@@ -92,6 +92,7 @@ module ThreadHandlers =
                   CreatedByName = userName
                   CreatedAt = DateTime.UtcNow
                   Score = ""
+                  PianoRollData = ""
                   LastEditedBy = userId
                   LastEditedAt = DateTime.UtcNow
                   Members = [ userId ]
@@ -171,7 +172,8 @@ module ThreadHandlers =
                       AiScores = ""
                       CreatedAt = DateTime.UtcNow }
 
-                let! result = repo.SaveScore threadId req.score history
+                let pianoRollData = if obj.ReferenceEquals(req.pianoRollData, null) then "" else req.pianoRollData
+                let! result = repo.SaveScore threadId req.score pianoRollData history
 
                 match result with
                 | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)

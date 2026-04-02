@@ -35,7 +35,7 @@ export interface PlayerCallbacks {
 // ── Note mapping ───────────────────────────────────────
 
 // Interval semitones from root for each quality
-const QUALITY_INTERVALS: Record<string, number[]> = {
+export const QUALITY_INTERVALS: Record<string, number[]> = {
   // Triads
   '':       [0, 4, 7],
   'M':      [0, 4, 7],
@@ -160,14 +160,14 @@ const ENHARMONIC: Record<string, string> = {
   'Cb': 'B',
 };
 
-function rootToMidi(root: string, octave: number): number {
+export function rootToMidi(root: string, octave: number): number {
   const normalized = ENHARMONIC[root] ?? root;
   const noteIndex = NOTE_NAMES.indexOf(normalized);
   if (noteIndex === -1) throw new Error(`Unknown root: ${root}`);
   return noteIndex + (octave + 1) * 12; // MIDI: C4 = 60
 }
 
-function midiToNoteName(midi: number): string {
+export function midiToNoteName(midi: number): string {
   const note = NOTE_NAMES[midi % 12];
   const octave = Math.floor(midi / 12) - 1;
   return `${note}${octave}`;
@@ -544,7 +544,7 @@ const createPianoSampler = (): Tone.Sampler => {
   });
 };
 
-const getPianoSampler = (): Tone.Sampler => {
+export const getPianoSampler = (): Tone.Sampler => {
   if (!_pianoSampler) {
     _pianoSampler = createPianoSampler().toDestination();
   }

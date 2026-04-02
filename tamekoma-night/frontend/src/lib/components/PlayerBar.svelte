@@ -23,7 +23,8 @@
 		onLoopChange,
 		onMetronomeChange,
 		onVoicingModeChange,
-		onOscPresetChange
+		onOscPresetChange,
+		hideAutoV = false,
 	}: {
 		playerState?: PlayerState;
 		currentTime?: number;
@@ -45,6 +46,7 @@
 		onMetronomeChange?: (on: boolean) => void;
 		onVoicingModeChange?: (mode: VoicingMode) => void;
 		onOscPresetChange?: (preset: OscPreset) => void;
+		hideAutoV?: boolean;
 	} = $props();
 
 	const OSC_LABELS: Record<OscPreset, string> = {
@@ -235,10 +237,12 @@
 			</div>
 
 			<!-- Auto Voicing toggle -->
+			{#if !hideAutoV}
 			<div class="voicing-toggle">
 				<button class="voicing-btn" class:voicing-btn--active={voicingMode === 'normal'} onclick={() => onVoicingModeChange?.('normal')} title="そのまま再生">OFF</button>
 				<button class="voicing-btn" class:voicing-btn--active={voicingMode === 'harmonic'} onclick={() => onVoicingModeChange?.('harmonic')} title="オートボイシング">Auto V.</button>
 			</div>
+			{/if}
 
 			<button class="player-btn player-btn--settings" onclick={() => { settingsOpen = !settingsOpen; }} title="設定" aria-label="設定">
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

@@ -255,6 +255,18 @@
 				class:score-tab--active={scoreDisplayMode === 'degree'}
 				onclick={() => { onDisplayModeChange('degree'); }}
 			>ディグリー</button>
+			<a
+				class="score-tab score-tab--link"
+				href="/thread/{thread.id}/pianoroll"
+				title="ピアノロールエディタを開く"
+			>
+				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<rect x="2" y="3" width="20" height="4" rx="1" />
+					<rect x="6" y="10" width="12" height="4" rx="1" />
+					<rect x="4" y="17" width="16" height="4" rx="1" />
+				</svg>
+				ピアノロール
+			</a>
 		</div>
 		<div class="panel-header-right">
 			<div class="transpose-controls">
@@ -346,25 +358,25 @@
 	{/if}
 
 	<div class="score-area">
-		<ScoreEditor
-			bind:this={scoreEditorRef}
-			value={scoreEditorValue}
-			readonly={false}
-			{activeBarIndex}
-			displayMode={scoreDisplayMode}
-			musicalKey={thread.key}
-			pendingInsert={pendingInsertText}
-			threadId={thread.id}
-			fullScore={scoreEditorValue}
-			musicalKeyFull={thread.key}
-			timeSignature={thread.timeSignature}
-			bpm={thread.bpm}
-			{annotations}
-			onchange={onScoreChange}
-			{onReaction}
-			{onRangeComment}
-			{onAiAnalyze}
-		/>
+			<ScoreEditor
+				bind:this={scoreEditorRef}
+				value={scoreEditorValue}
+				readonly={false}
+				{activeBarIndex}
+				displayMode={scoreDisplayMode}
+				musicalKey={thread.key}
+				pendingInsert={pendingInsertText}
+				threadId={thread.id}
+				fullScore={scoreEditorValue}
+				musicalKeyFull={thread.key}
+				timeSignature={thread.timeSignature}
+				bpm={thread.bpm}
+				{annotations}
+				onchange={onScoreChange}
+				{onReaction}
+				{onRangeComment}
+				{onAiAnalyze}
+			/>
 	</div>
 
 </div>
@@ -424,6 +436,18 @@
 		color: var(--accent-primary);
 		border-bottom-color: var(--accent-primary);
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+	}
+
+	.score-tab--link {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		text-decoration: none;
+		margin-left: 4px;
+		border-bottom: 1px dashed var(--border-subtle, #2a2a5a);
+	}
+	.score-tab--link:hover {
+		border-bottom-color: var(--accent-primary, #6366f1);
 	}
 
 	.count {

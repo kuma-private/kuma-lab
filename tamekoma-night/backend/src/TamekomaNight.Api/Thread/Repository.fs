@@ -59,13 +59,14 @@ module Repository =
                 return removed
             }
 
-        let saveScore (threadId: string) (score: string) (history: SaveHistory) : Task<Thread option> =
+        let saveScore (threadId: string) (score: string) (pianoRollData: string) (history: SaveHistory) : Task<Thread option> =
             task {
                 match threads.TryGetValue(threadId) with
                 | true, thread ->
                     let updated =
                         { thread with
                             Score = score
+                            PianoRollData = pianoRollData
                             LastEditedBy = history.UserId
                             LastEditedAt = history.CreatedAt
                             History = thread.History @ [ history ] }
@@ -225,6 +226,10 @@ module Repository =
                   match doc.TryGetValue<string>("score") with
                   | true, v -> v
                   | _ -> ""
+              PianoRollData =
+                  match doc.TryGetValue<string>("pianoRollData") with
+                  | true, v when v <> null -> v
+                  | _ -> ""
               LastEditedBy =
                   match doc.TryGetValue<string>("lastEditedBy") with
                   | true, v -> v
@@ -294,6 +299,7 @@ module Repository =
                               "createdByName", thread.CreatedByName :> obj
                               "createdAt", Timestamp.FromDateTime(thread.CreatedAt.ToUniversalTime()) :> obj
                               "score", thread.Score :> obj
+                              "pianoRollData", thread.PianoRollData :> obj
                               "lastEditedBy", thread.LastEditedBy :> obj
                               "lastEditedAt", Timestamp.FromDateTime(thread.LastEditedAt.ToUniversalTime()) :> obj
                               "members", System.Collections.Generic.List<obj>(thread.Members |> List.map (fun m -> m :> obj)) :> obj
@@ -337,6 +343,7 @@ module Repository =
                     "timeSignature", thread.TimeSignature :> obj
                     "bpm", thread.Bpm :> obj
                     "score", thread.Score :> obj
+                    "pianoRollData", thread.PianoRollData :> obj
                     "lastEditedBy", thread.LastEditedBy :> obj
                     "lastEditedAt", Timestamp.FromDateTime(thread.LastEditedAt.ToUniversalTime()) :> obj
                     "members", System.Collections.Generic.List<obj>(thread.Members |> List.map (fun m -> m :> obj)) :> obj
@@ -368,10 +375,11 @@ module Repository =
                     return Some result
             }
 
-        let saveScore (threadId: string) (score: string) (history: SaveHistory) : Task<Thread option> =
+        let saveScore (threadId: string) (score: string) (pianoRollData: string) (history: SaveHistory) : Task<Thread option> =
             updateThread threadId (fun thread ->
                 { thread with
                     Score = score
+                    PianoRollData = pianoRollData
                     LastEditedBy = history.UserId
                     LastEditedAt = history.CreatedAt
                     History = thread.History @ [ history ] })
@@ -540,7 +548,7 @@ module Repository =
           Create: Thread -> Task<Thread>
           Update: Thread -> Task<Thread>
           Delete: string -> Task<bool>
-          SaveScore: string -> string -> SaveHistory -> Task<Thread option>
+          SaveScore: string -> string -> string -> SaveHistory -> Task<Thread option>
           UpdateSettings: string -> string -> string -> int -> string -> Task<Thread option>
           UpdateShare: string -> string -> string list -> Task<Thread option>
           AddComment: string -> Comment -> Task<Comment>

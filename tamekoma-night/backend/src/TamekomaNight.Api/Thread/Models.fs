@@ -23,6 +23,7 @@ module Models =
           CreatedByName: string
           CreatedAt: DateTime
           Score: string
+          PianoRollData: string
           LastEditedBy: string
           LastEditedAt: DateTime
           Members: string list
@@ -32,7 +33,7 @@ module Models =
 
     type CreateThreadRequest = { title: string }
 
-    type SaveScoreRequest = { score: string; comment: string }
+    type SaveScoreRequest = { score: string; comment: string; pianoRollData: string }
 
     type UpdateSettingsRequest = { title: string; key: string; timeSignature: string; bpm: int }
 
