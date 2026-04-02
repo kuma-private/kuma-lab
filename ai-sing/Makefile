@@ -78,7 +78,7 @@ _sing_mix:
 	@echo ""
 	@mkdir -p $(AUDIO_DIR)/final
 	$(eval VC_FILE := $(shell ls -t $(AUDIO_DIR)/output/vc_vocals_* 2>/dev/null | head -1))
-	ffmpeg -i "$(VC_FILE)" -i "$(_STEM_DIR)/no_vocals.wav" -filter_complex amix=inputs=2:duration=longest "$(AUDIO_DIR)/final/$(NAME).wav" -y
+	ffmpeg -i "$(VC_FILE)" -i "$(_STEM_DIR)/no_vocals.wav" -filter_complex "[0:a]volume=$(VOCAL_VOLUME)[v];[1:a]apad[i];[v][i]amix=inputs=2:duration=longest:weights=1 1:normalize=0[out]" -map "[out]" "$(AUDIO_DIR)/final/$(NAME).wav" -y
 
 # ゼロショットTTS（テキスト読み上げ）
 # 使い方:
