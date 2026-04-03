@@ -65,7 +65,7 @@ export const createAppStore = () => {
 			}
 		},
 
-		saveScore: async (threadId: string, data: { score: string; comment: string; pianoRollData?: string }) => {
+		saveScore: async (threadId: string, data: { score: string; comment: string; midiData?: string }) => {
 			error = null;
 			try {
 				await api.saveScore(threadId, data);

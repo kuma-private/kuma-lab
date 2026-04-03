@@ -36,6 +36,50 @@ module Program =
                 do! ctx.Response.WriteAsJsonAsync({| error = "Rate limit exceeded"; retryAfterSeconds = retryAfter |})
         }
 
+    // --- Route registration helpers ---
+
+    let private mapRoute (app: WebApplication) (method: string) (pattern: string) (handler: HttpContext -> Task) =
+        match method with
+        | "GET" -> app.MapGet(pattern, Func<HttpContext, Task>(handler))
+        | "POST" -> app.MapPost(pattern, Func<HttpContext, Task>(handler))
+        | "PUT" -> app.MapPut(pattern, Func<HttpContext, Task>(handler))
+        | "DELETE" -> app.MapDelete(pattern, Func<HttpContext, Task>(handler))
+        | _ -> failwith $"Unsupported HTTP method: {method}"
+        |> ignore
+
+    let private mapRouteWithId (app: WebApplication) (method: string) (pattern: string) (handler: string -> HttpContext -> Task) =
+        let wrapper = Func<string, HttpContext, Task>(fun id ctx -> handler id ctx)
+        match method with
+        | "GET" -> app.MapGet(pattern, wrapper)
+        | "POST" -> app.MapPost(pattern, wrapper)
+        | "PUT" -> app.MapPut(pattern, wrapper)
+        | "DELETE" -> app.MapDelete(pattern, wrapper)
+        | _ -> failwith $"Unsupported HTTP method: {method}"
+        |> ignore
+
+    let private mapRouteWith2Ids (app: WebApplication) (method: string) (pattern: string) (handler: string -> string -> HttpContext -> Task) =
+        let wrapper = Func<string, string, HttpContext, Task>(fun id1 id2 ctx -> handler id1 id2 ctx)
+        match method with
+        | "DELETE" -> app.MapDelete(pattern, wrapper)
+        | _ -> failwith $"Unsupported HTTP method: {method}"
+        |> ignore
+
+    /// Wrap handler with login requirement
+    let private auth handler = requireLogin handler
+
+    /// Wrap handler with login + rate limit
+    let private authRL handler = requireLogin (withRateLimit handler)
+
+    /// Wrap a handler taking (id, ctx) into (ctx) by extracting the id route param
+    let private withId (handler: string -> HttpContext -> Task) (id: string) (ctx: HttpContext) =
+        auth (handler id) ctx
+
+    let private withIdRL (handler: string -> HttpContext -> Task) (id: string) (ctx: HttpContext) =
+        authRL (handler id) ctx
+
+    let private with2Ids (handler: string -> string -> HttpContext -> Task) (id1: string) (id2: string) (ctx: HttpContext) =
+        auth (handler id1 id2) ctx
+
     [<EntryPoint>]
     let main args =
         let config = Config.load ()
@@ -83,94 +127,42 @@ module Program =
         // Health
         app.MapGet("/health", Func<string>(fun () -> "ok")) |> ignore
 
-        // Auth
-        app.MapGet("/auth/google", Func<HttpContext, Task>(AuthHandlers.loginHandler)) |> ignore
+        // Auth routes
+        mapRoute app "GET" "/auth/google" AuthHandlers.loginHandler
+        mapRoute app "GET" "/auth/callback-complete" (AuthHandlers.callbackCompleteHandler config)
+        mapRoute app "POST" "/auth/logout" AuthHandlers.logoutHandler
+        mapRoute app "GET" "/auth/me" (auth (AuthHandlers.meHandler devMode))
 
-        app.MapGet(
-            "/auth/callback-complete",
-            Func<HttpContext, Task>(AuthHandlers.callbackCompleteHandler config)
-        )
-        |> ignore
+        // Thread API - collection routes
+        mapRoute app "GET" "/api/threads" (auth (ThreadHandlers.listThreads repo))
+        mapRoute app "POST" "/api/threads" (authRL (ThreadHandlers.createThread repo))
 
-        app.MapPost("/auth/logout", Func<HttpContext, Task>(AuthHandlers.logoutHandler)) |> ignore
+        // Thread API - single thread routes
+        mapRouteWithId app "GET" "/api/threads/{id}" (withId (ThreadHandlers.getThread repo))
+        mapRouteWithId app "DELETE" "/api/threads/{id}" (withId (ThreadHandlers.deleteThread repo))
+        mapRouteWithId app "PUT" "/api/threads/{id}" (withIdRL (ThreadHandlers.saveScore repo))
+        mapRouteWithId app "PUT" "/api/threads/{id}/settings" (withId (ThreadHandlers.updateSettings repo))
+        mapRouteWithId app "PUT" "/api/threads/{id}/share" (withId (ThreadHandlers.shareThread repo))
 
-        app.MapGet("/auth/me", Func<HttpContext, Task>(requireLogin (AuthHandlers.meHandler devMode)))
-        |> ignore
+        // Thread API - AI routes
+        mapRouteWithId app "POST" "/api/threads/{id}/review" (withIdRL (ThreadHandlers.reviewScore repo config))
+        mapRouteWithId app "POST" "/api/threads/{id}/transform" (withIdRL (ThreadHandlers.transformChords config))
+        mapRouteWithId app "POST" "/api/threads/{id}/import" (fun id ctx -> authRL (ThreadHandlers.importChordChart config) ctx)
+        mapRouteWithId app "POST" "/api/threads/{id}/analyze-selection" (withIdRL (ThreadHandlers.analyzeSelection repo config))
 
-        // Thread API
-        app.MapGet("/api/threads", Func<HttpContext, Task>(requireLogin (ThreadHandlers.listThreads repo)))
-        |> ignore
+        // Thread API - history & export
+        mapRouteWithId app "GET" "/api/threads/{id}/history" (withId (ThreadHandlers.getHistory repo))
+        mapRouteWithId app "GET" "/api/threads/{id}/export" (withId (ThreadHandlers.exportThread repo))
 
-        app.MapPost("/api/threads", Func<HttpContext, Task>(requireLogin (withRateLimit (ThreadHandlers.createThread repo))))
-        |> ignore
+        // Thread API - comments
+        mapRouteWithId app "POST" "/api/threads/{id}/comments" (withId (ThreadHandlers.addComment repo))
+        mapRouteWithId app "GET" "/api/threads/{id}/comments" (withId (ThreadHandlers.listComments repo))
+        mapRouteWith2Ids app "DELETE" "/api/threads/{id}/comments/{commentId}" (with2Ids (ThreadHandlers.deleteComment repo))
 
-        app.MapGet("/api/threads/{id}", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.getThread repo id)) ctx))
-        |> ignore
-
-        app.MapDelete("/api/threads/{id}", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.deleteThread repo id)) ctx))
-        |> ignore
-
-        app.MapPut("/api/threads/{id}", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (withRateLimit (ThreadHandlers.saveScore repo id))) ctx))
-        |> ignore
-
-        app.MapPut("/api/threads/{id}/settings", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.updateSettings repo id)) ctx))
-        |> ignore
-
-        app.MapPost("/api/threads/{id}/review", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (withRateLimit (ThreadHandlers.reviewScore repo config id))) ctx))
-        |> ignore
-
-        app.MapPost("/api/threads/{id}/transform", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (withRateLimit (ThreadHandlers.transformChords config id))) ctx))
-        |> ignore
-
-        app.MapPost("/api/threads/{id}/import", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (withRateLimit (ThreadHandlers.importChordChart config))) ctx))
-        |> ignore
-
-        app.MapGet("/api/threads/{id}/history", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.getHistory repo id)) ctx))
-        |> ignore
-
-        app.MapGet("/api/threads/{id}/export", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.exportThread repo id)) ctx))
-        |> ignore
-
-        app.MapPut("/api/threads/{id}/share", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.shareThread repo id)) ctx))
-        |> ignore
-
-        app.MapPost("/api/threads/{id}/comments", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.addComment repo id)) ctx))
-        |> ignore
-
-        app.MapGet("/api/threads/{id}/comments", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.listComments repo id)) ctx))
-        |> ignore
-
-        app.MapDelete("/api/threads/{id}/comments/{commentId}", Func<string, string, HttpContext, Task>(fun id commentId ctx ->
-            (requireLogin (ThreadHandlers.deleteComment repo id commentId)) ctx))
-        |> ignore
-
-        app.MapPost("/api/threads/{id}/annotations", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.addAnnotation repo id)) ctx))
-        |> ignore
-
-        app.MapGet("/api/threads/{id}/annotations", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (ThreadHandlers.listAnnotations repo id)) ctx))
-        |> ignore
-
-        app.MapDelete("/api/threads/{id}/annotations/{aid}", Func<string, string, HttpContext, Task>(fun id aid ctx ->
-            (requireLogin (ThreadHandlers.deleteAnnotation repo id aid)) ctx))
-        |> ignore
-
-        app.MapPost("/api/threads/{id}/analyze-selection", Func<string, HttpContext, Task>(fun id ctx ->
-            (requireLogin (withRateLimit (ThreadHandlers.analyzeSelection repo config id))) ctx))
-        |> ignore
+        // Thread API - annotations
+        mapRouteWithId app "POST" "/api/threads/{id}/annotations" (withId (ThreadHandlers.addAnnotation repo))
+        mapRouteWithId app "GET" "/api/threads/{id}/annotations" (withId (ThreadHandlers.listAnnotations repo))
+        mapRouteWith2Ids app "DELETE" "/api/threads/{id}/annotations/{aid}" (with2Ids (ThreadHandlers.deleteAnnotation repo))
 
         // SPA fallback
         app.MapFallbackToFile("index.html") |> ignore

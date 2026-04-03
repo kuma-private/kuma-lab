@@ -21,56 +21,87 @@ module AnthropicClient =
           [<JsonPropertyName("content")>]
           Content: ContentBlock array }
 
+    // --- Pure helper functions ---
+
     let private extractText (parsed: AnthropicResponse) : Result<string, string> =
-        match parsed.Content |> Array.tryFind (fun c -> c.Type = "text") with
-        | Some block -> Ok block.Text
-        | None -> Error "No text content in Anthropic response"
+        parsed.Content
+        |> Array.tryFind (fun c -> c.Type = "text")
+        |> Option.map (fun block -> Ok block.Text)
+        |> Option.defaultValue (Error "No text content in Anthropic response")
+
+    let private stripCodeFences (text: string) =
+        text.Trim().Replace("```json", "").Replace("```", "").Trim()
+
+    let private isRetryableStatus (statusCode: int) =
+        statusCode = 503 || statusCode = 529
+
+    // --- Retry abstraction ---
+
+    let private withRetry (maxRetries: int) (delayMs: int) (f: unit -> Async<Result<'a, int * string>>) : Async<Result<'a, string>> =
+        let rec loop attempt =
+            async {
+                let! result = f ()
+                match result with
+                | Ok value ->
+                    return Ok value
+                | Error (status, body) when isRetryableStatus status && attempt < maxRetries ->
+                    do! Async.Sleep delayMs
+                    return! loop (attempt + 1)
+                | Error (status, body) ->
+                    return Error $"Anthropic API error ({status}): {body}"
+            }
+        loop 0
+
+    // --- HTTP layer ---
+
+    let private makeRequest (apiKey: string) (json: string) =
+        let req = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages")
+        req.Content <- new StringContent(json, Encoding.UTF8, "application/json")
+        req.Headers.Add("x-api-key", apiKey)
+        req.Headers.Add("anthropic-version", "2023-06-01")
+        req
+
+    let private parseResponse (response: HttpResponseMessage) : Async<Result<string, int * string>> =
+        async {
+            let! body = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            if response.IsSuccessStatusCode then
+                return
+                    body
+                    |> JsonSerializer.Deserialize<AnthropicResponse>
+                    |> extractText
+                    |> Result.mapError (fun e -> (0, e))
+            else
+                return Error (int response.StatusCode, body)
+        }
 
     let private sendRequest (httpClient: HttpClient) (apiKey: string) (json: string) : Async<Result<string, string>> =
-        async {
-            let makeRequest () =
-                let req = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages")
-                req.Content <- new StringContent(json, Encoding.UTF8, "application/json")
-                req.Headers.Add("x-api-key", apiKey)
-                req.Headers.Add("anthropic-version", "2023-06-01")
-                req
-
-            let parseResponse (response: HttpResponseMessage) = async {
-                let! body = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-                if response.IsSuccessStatusCode then
-                    return Ok(JsonSerializer.Deserialize<AnthropicResponse>(body) |> extractText)
-                else
-                    return Error(int response.StatusCode, body)
-            }
-
-            try
-                let! firstResult = httpClient.SendAsync(makeRequest()) |> Async.AwaitTask
-                let! parsed = parseResponse firstResult
-                match parsed with
-                | Ok result -> return result
-                | Error(status, body) when status = 529 || status = 503 ->
-                    do! Async.Sleep 2000
-                    let! retryResult = httpClient.SendAsync(makeRequest()) |> Async.AwaitTask
-                    let! retryParsed = parseResponse retryResult
-                    match retryParsed with
-                    | Ok result -> return result
-                    | Error(status, body) -> return Error $"Anthropic API error ({status}): {body}"
-                | Error(status, body) ->
-                    return Error $"Anthropic API error ({status}): {body}"
-            with ex ->
-                return Error $"Exception calling Anthropic API: {ex.Message}"
-        }
+        withRetry 1 2000 (fun () ->
+            async {
+                try
+                    let! response =
+                        httpClient.SendAsync(makeRequest apiKey json)
+                        |> Async.AwaitTask
+                    return! parseResponse response
+                with ex ->
+                    return Error (0, $"Exception calling Anthropic API: {ex.Message}")
+            })
 
     let private jsonOptions = JsonSerializerOptions(PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower)
 
+    // --- API call builders ---
+
+    let private buildPayload (model: string) (systemPrompt: string) (maxTokens: int) (messages: obj) =
+        {| model = model
+           max_tokens = maxTokens
+           system = systemPrompt
+           messages = messages |}
+        |> fun body -> JsonSerializer.Serialize(body, jsonOptions)
+
     let private callApi (httpClient: HttpClient) (apiKey: string) (model: string) (systemPrompt: string) (userMessage: string) (maxTokens: int) : Async<Result<string, string>> =
-        let body =
-            {| model = model
-               max_tokens = maxTokens
-               system = systemPrompt
-               messages = [| {| role = "user"; content = userMessage |} |] |}
-        let json = JsonSerializer.Serialize(body, jsonOptions)
-        sendRequest httpClient apiKey json
+        [| {| role = "user"; content = userMessage |} |]
+        |> box
+        |> fun msgs -> buildPayload model systemPrompt maxTokens msgs
+        |> sendRequest httpClient apiKey
 
     let private callWithImages (httpClient: HttpClient) (apiKey: string) (model: string) (systemPrompt: string) (images: (string * string) list) (userText: string) (maxTokens: int) : Async<Result<string, string>> =
         let imageBlocks =
@@ -82,13 +113,21 @@ module AnthropicClient =
                                data = data |} |} :> obj)
         let textBlock = {| ``type`` = "text"; text = userText |} :> obj
         let contentArray = imageBlocks @ [ textBlock ] |> List.toArray
-        let body =
-            {| model = model
-               max_tokens = maxTokens
-               system = systemPrompt
-               messages = [| {| role = "user"; content = contentArray |} |] |}
-        let json = JsonSerializer.Serialize(body, jsonOptions)
-        sendRequest httpClient apiKey json
+
+        [| {| role = "user"; content = contentArray |} |]
+        |> box
+        |> fun msgs -> buildPayload model systemPrompt maxTokens msgs
+        |> sendRequest httpClient apiKey
+
+    // --- Response parsing with Result pipeline ---
+
+    let private tryDeserialize<'T> (text: string) : Result<'T, string> =
+        try
+            text |> stripCodeFences |> JsonSerializer.Deserialize<'T> |> Ok
+        with ex ->
+            Error $"Failed to parse response: {ex.Message}"
+
+    // --- Domain types ---
 
     [<CLIMutable>]
     type ReviewScores =
@@ -118,6 +157,8 @@ module AnthropicClient =
           Comment: string
           [<JsonPropertyName("chords")>]
           Chords: string }
+
+    // --- Public API functions ---
 
     let transformChords
         (httpClient: HttpClient)
@@ -152,16 +193,10 @@ module AnthropicClient =
 
         async {
             let! result = callApi httpClient apiKey "claude-opus-4-20250514" systemPrompt userMessage 300
-            match result with
-            | Error e -> return Error e
-            | Ok text ->
-                try
-                    let cleanText =
-                        text.Trim().Replace("```json", "").Replace("```", "").Trim()
-                    let parsed = JsonSerializer.Deserialize<TransformResponse>(cleanText)
-                    return Ok {| comment = parsed.Comment; chords = parsed.Chords |}
-                with ex ->
-                    return Error $"Failed to parse transform response: {ex.Message}"
+            return
+                result
+                |> Result.bind (tryDeserialize<TransformResponse>)
+                |> Result.map (fun parsed -> {| comment = parsed.Comment; chords = parsed.Chords |})
         }
 
     let reviewTurn
@@ -204,15 +239,15 @@ module AnthropicClient =
 
         async {
             let! result = callApi httpClient apiKey "claude-sonnet-4-20250514" systemPrompt userMessage 300
-            match result with
-            | Error e -> return Error e
-            | Ok text ->
-                try
-                    let parsed = JsonSerializer.Deserialize<ReviewResponse>(text.Trim())
-                    let scoresJson = JsonSerializer.Serialize(parsed.Scores)
-                    return Ok { Comment = parsed.Comment; ScoresJson = scoresJson }
-                with _ ->
-                    return Ok { Comment = text; ScoresJson = "" }
+            return
+                result
+                |> Result.map (fun text ->
+                    match tryDeserialize<ReviewResponse> text with
+                    | Ok parsed ->
+                        { Comment = parsed.Comment
+                          ScoresJson = JsonSerializer.Serialize(parsed.Scores) }
+                    | Error _ ->
+                        { Comment = text; ScoresJson = "" })
         }
 
     let analyzeSelection
@@ -263,13 +298,14 @@ module AnthropicClient =
             + "❌ 間違い: | C# | D# | Cm | Fm | A#m | D# | G# |\n"
             + "✅ 正解: | C# D# | Cm Fm | A#m D# | G# |（和声機能ペアでグルーピング）"
 
-        let songInfo = if System.String.IsNullOrEmpty(songName) then "不明" else songName
-        let artistInfo = if System.String.IsNullOrEmpty(artist) then "不明" else artist
-        let urlInfo = if System.String.IsNullOrEmpty(sourceUrl) then "" else sourceUrl
-        let bpmInfo = if bpm <= 0 then "不明" else string bpm
-        let tsInfo = if System.String.IsNullOrEmpty(timeSignature) then "4/4" else timeSignature
-        let keyInfo = if System.String.IsNullOrEmpty(key) then "不明" else key
+        let orDefault d s = if System.String.IsNullOrEmpty(s) then d else s
 
+        let songInfo = songName |> orDefault "不明"
+        let artistInfo = artist |> orDefault "不明"
+        let urlInfo = sourceUrl |> orDefault ""
+        let bpmInfo = if bpm <= 0 then "不明" else string bpm
+        let tsInfo = timeSignature |> orDefault "4/4"
+        let keyInfo = key |> orDefault "不明"
         let imageCount = List.length images
 
         let userMessage =
@@ -335,10 +371,5 @@ module AnthropicClient =
 
         async {
             let! result = callWithImages httpClient apiKey "claude-opus-4-20250514" systemPrompt images userMessage 4000
-            match result with
-            | Error e -> return Error e
-            | Ok text ->
-                let cleanText = text.Trim().Replace("```", "").Trim()
-                return Ok cleanText
+            return result |> Result.map stripCodeFences
         }
-

@@ -26,58 +26,49 @@ module Repository =
         let private annotations = ConcurrentDictionary<string, ConcurrentDictionary<string, Annotation>>()
 
         let getByUser (userId: string) (email: string) : Task<Thread list> =
-            task {
-                return
-                    threads.Values
-                    |> Seq.filter (fun t -> canAccessWithEmail userId email t)
-                    |> Seq.toList
-                    |> List.sortByDescending (fun t -> t.CreatedAt)
-            }
+            threads.Values
+            |> Seq.filter (canAccessWithEmail userId email)
+            |> Seq.toList
+            |> List.sortByDescending (fun t -> t.CreatedAt)
+            |> Task.FromResult
 
         let getById (id: string) : Task<Thread option> =
-            task {
-                match threads.TryGetValue(id) with
-                | true, thread -> return Some thread
-                | false, _ -> return None
-            }
+            threads.TryGetValue(id)
+            |> function
+                | true, thread -> Some thread
+                | false, _ -> None
+            |> Task.FromResult
 
         let create (thread: Thread) : Task<Thread> =
-            task {
-                threads.[thread.Id] <- thread
-                return thread
-            }
+            threads.[thread.Id] <- thread
+            Task.FromResult thread
 
         let update (thread: Thread) : Task<Thread> =
-            task {
-                threads.[thread.Id] <- thread
-                return thread
-            }
+            threads.[thread.Id] <- thread
+            Task.FromResult thread
 
         let delete (threadId: string) : Task<bool> =
-            task {
-                let (removed, _) = threads.TryRemove(threadId)
-                return removed
-            }
+            threads.TryRemove(threadId) |> fst |> Task.FromResult
 
-        let saveScore (threadId: string) (score: string) (pianoRollData: string option) (history: SaveHistory) : Task<Thread option> =
-            task {
-                match threads.TryGetValue(threadId) with
+        let saveScore (threadId: string) (score: string) (midiData: string option) (history: SaveHistory) : Task<Thread option> =
+            threads.TryGetValue(threadId)
+            |> function
                 | true, thread ->
                     let updated =
                         { thread with
                             Score = score
-                            PianoRollData = pianoRollData |> Option.defaultValue thread.PianoRollData
+                            MidiData = midiData |> Option.defaultValue thread.MidiData
                             LastEditedBy = history.UserId
                             LastEditedAt = history.CreatedAt
                             History = thread.History @ [ history ] }
                     threads.[threadId] <- updated
-                    return Some updated
-                | false, _ -> return None
-            }
+                    Some updated
+                | false, _ -> None
+            |> Task.FromResult
 
         let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) (title: string) : Task<Thread option> =
-            task {
-                match threads.TryGetValue(threadId) with
+            threads.TryGetValue(threadId)
+            |> function
                 | true, thread ->
                     let updated =
                         { thread with
@@ -86,73 +77,63 @@ module Repository =
                             TimeSignature = timeSignature
                             Bpm = bpm }
                     threads.[threadId] <- updated
-                    return Some updated
-                | false, _ -> return None
-            }
+                    Some updated
+                | false, _ -> None
+            |> Task.FromResult
 
         let updateShare (threadId: string) (visibility: string) (sharedWith: string list) : Task<Thread option> =
-            task {
-                match threads.TryGetValue(threadId) with
+            threads.TryGetValue(threadId)
+            |> function
                 | true, thread ->
                     let updated = { thread with Visibility = visibility; SharedWith = sharedWith }
                     threads.[threadId] <- updated
-                    return Some updated
-                | false, _ -> return None
-            }
+                    Some updated
+                | false, _ -> None
+            |> Task.FromResult
 
         let addComment (threadId: string) (comment: Comment) : Task<Comment> =
-            task {
-                let bag = comments.GetOrAdd(threadId, fun _ -> ConcurrentDictionary<string, Comment>())
-                bag.[comment.Id] <- comment
-                return comment
-            }
+            let bag = comments.GetOrAdd(threadId, fun _ -> ConcurrentDictionary<string, Comment>())
+            bag.[comment.Id] <- comment
+            Task.FromResult comment
 
         let getComments (threadId: string) : Task<Comment list> =
-            task {
-                match comments.TryGetValue(threadId) with
+            comments.TryGetValue(threadId)
+            |> function
                 | true, bag ->
-                    return
-                        bag.Values
-                        |> Seq.toList
-                        |> List.sortBy (fun c -> c.CreatedAt)
-                | false, _ -> return []
-            }
+                    bag.Values
+                    |> Seq.toList
+                    |> List.sortBy (fun c -> c.CreatedAt)
+                | false, _ -> []
+            |> Task.FromResult
 
         let deleteComment (threadId: string) (commentId: string) : Task<bool> =
-            task {
-                match comments.TryGetValue(threadId) with
-                | true, bag ->
-                    let (removed, _) = bag.TryRemove(commentId)
-                    return removed
-                | false, _ -> return false
-            }
+            comments.TryGetValue(threadId)
+            |> function
+                | true, bag -> bag.TryRemove(commentId) |> fst
+                | false, _ -> false
+            |> Task.FromResult
 
         let addAnnotation (threadId: string) (annotation: Annotation) : Task<Annotation> =
-            task {
-                let bag = annotations.GetOrAdd(threadId, fun _ -> ConcurrentDictionary<string, Annotation>())
-                bag.[annotation.Id] <- annotation
-                return annotation
-            }
+            let bag = annotations.GetOrAdd(threadId, fun _ -> ConcurrentDictionary<string, Annotation>())
+            bag.[annotation.Id] <- annotation
+            Task.FromResult annotation
 
         let getAnnotations (threadId: string) : Task<Annotation list> =
-            task {
-                match annotations.TryGetValue(threadId) with
+            annotations.TryGetValue(threadId)
+            |> function
                 | true, bag ->
-                    return
-                        bag.Values
-                        |> Seq.toList
-                        |> List.sortBy (fun a -> a.CreatedAt)
-                | false, _ -> return []
-            }
+                    bag.Values
+                    |> Seq.toList
+                    |> List.sortBy (fun a -> a.CreatedAt)
+                | false, _ -> []
+            |> Task.FromResult
 
         let deleteAnnotation (threadId: string) (annotationId: string) : Task<bool> =
-            task {
-                match annotations.TryGetValue(threadId) with
-                | true, bag ->
-                    let (removed, _) = bag.TryRemove(annotationId)
-                    return removed
-                | false, _ -> return false
-            }
+            annotations.TryGetValue(threadId)
+            |> function
+                | true, bag -> bag.TryRemove(annotationId) |> fst
+                | false, _ -> false
+            |> Task.FromResult
 
     module Firestore =
 
@@ -164,18 +145,45 @@ module Repository =
                 FirestoreDb.Create(projectId)
             )
 
+        // --- Type-safe document field extraction helpers ---
+
         let private tryGetString (dict: System.Collections.Generic.IDictionary<string, obj>) (key: string) =
             match dict.TryGetValue(key) with
             | true, v when v <> null -> v :?> string
             | _ -> ""
 
+        let private tryGetDocString (doc: DocumentSnapshot) (key: string) (defaultValue: string) =
+            match doc.TryGetValue<string>(key) with
+            | true, v when v <> null -> v
+            | _ -> defaultValue
+
+        let private tryGetDocInt (doc: DocumentSnapshot) (key: string) (defaultValue: int) =
+            match doc.TryGetValue<int>(key) with
+            | true, v -> v
+            | _ -> defaultValue
+
+        let private tryGetDocTimestamp (doc: DocumentSnapshot) (key: string) (defaultValue: DateTime) =
+            match doc.TryGetValue<Timestamp>(key) with
+            | true, v -> v.ToDateTime()
+            | _ -> defaultValue
+
+        let private tryGetStringList (doc: DocumentSnapshot) (key: string) =
+            match doc.TryGetValue<obj>(key) with
+            | true, (:? System.Collections.IList as list) ->
+                list |> Seq.cast<obj> |> Seq.map (fun o -> o :?> string) |> Seq.toList
+            | _ -> []
+
+        // --- Firestore document conversion ---
+
         let private toSaveHistory (dict: System.Collections.Generic.IDictionary<string, obj>) : SaveHistory =
-            { UserId = tryGetString dict "userId"
-              UserName = tryGetString dict "userName"
-              Score = let s = tryGetString dict "score" in if s <> "" then s else tryGetString dict "chords"
-              Comment = tryGetString dict "comment"
-              AiComment = tryGetString dict "aiComment"
-              AiScores = tryGetString dict "aiScores"
+            let getString = tryGetString dict
+            { UserId = getString "userId"
+              UserName = getString "userName"
+              Score = getString "score" |> function "" -> getString "chords" | s -> s
+              MidiData = getString "midiData"
+              Comment = getString "comment"
+              AiComment = getString "aiComment"
+              AiScores = getString "aiScores"
               CreatedAt =
                   match dict.TryGetValue("createdAt") with
                   | true, (:? Timestamp as ts) -> ts.ToDateTime()
@@ -191,29 +199,6 @@ module Repository =
                     |> Seq.toList
                 | _ -> []
 
-            let members =
-                match doc.TryGetValue<obj>("members") with
-                | true, (:? System.Collections.IList as list) ->
-                    list
-                    |> Seq.cast<obj>
-                    |> Seq.map (fun o -> o :?> string)
-                    |> Seq.toList
-                | _ -> []
-
-            let visibility =
-                match doc.TryGetValue<string>("visibility") with
-                | true, v when v <> null -> v
-                | _ -> "private"
-
-            let sharedWith =
-                match doc.TryGetValue<obj>("sharedWith") with
-                | true, (:? System.Collections.IList as list) ->
-                    list
-                    |> Seq.cast<obj>
-                    |> Seq.map (fun o -> o :?> string)
-                    |> Seq.toList
-                | _ -> []
-
             { Id = doc.Id
               Title = doc.GetValue<string>("title")
               Key = doc.GetValue<string>("key")
@@ -222,26 +207,87 @@ module Repository =
               CreatedBy = doc.GetValue<string>("createdBy")
               CreatedByName = doc.GetValue<string>("createdByName")
               CreatedAt = doc.GetValue<Timestamp>("createdAt").ToDateTime()
-              Score =
-                  match doc.TryGetValue<string>("score") with
-                  | true, v -> v
-                  | _ -> ""
-              PianoRollData =
-                  match doc.TryGetValue<string>("pianoRollData") with
-                  | true, v when v <> null -> v
-                  | _ -> ""
-              LastEditedBy =
-                  match doc.TryGetValue<string>("lastEditedBy") with
-                  | true, v -> v
-                  | _ -> ""
-              LastEditedAt =
-                  match doc.TryGetValue<Timestamp>("lastEditedAt") with
-                  | true, v -> v.ToDateTime()
-                  | _ -> DateTime.UtcNow
-              Members = members
+              Score = doc |> tryGetDocString <| "score" <| ""
+              MidiData = doc |> tryGetDocString <| "midiData" <| ""
+              LastEditedBy = doc |> tryGetDocString <| "lastEditedBy" <| ""
+              LastEditedAt = doc |> tryGetDocTimestamp <| "lastEditedAt" <| DateTime.UtcNow
+              Members = doc |> tryGetStringList <| "members"
               History = history
-              Visibility = visibility
-              SharedWith = sharedWith }
+              Visibility = doc |> tryGetDocString <| "visibility" <| "private"
+              SharedWith = doc |> tryGetStringList <| "sharedWith" }
+
+        let private toComment (doc: DocumentSnapshot) : Comment =
+            { Id = doc.Id
+              UserId = doc.GetValue<string>("userId")
+              UserName = doc.GetValue<string>("userName")
+              Text = doc.GetValue<string>("text")
+              AnchorType = doc |> tryGetDocString <| "anchorType" <| "global"
+              AnchorStart = doc |> tryGetDocInt <| "anchorStart" <| -1
+              AnchorEnd = doc |> tryGetDocInt <| "anchorEnd" <| -1
+              AnchorSnapshot = doc |> tryGetDocString <| "anchorSnapshot" <| ""
+              CreatedAt = doc.GetValue<Timestamp>("createdAt").ToDateTime() }
+
+        let private toAnnotation (doc: DocumentSnapshot) : Annotation =
+            { Id = doc.Id
+              UserId = doc.GetValue<string>("userId")
+              UserName = doc.GetValue<string>("userName")
+              Type = doc |> tryGetDocString <| "type" <| "reaction"
+              StartBar = doc |> tryGetDocInt <| "startBar" <| 0
+              EndBar = doc |> tryGetDocInt <| "endBar" <| 0
+              Snapshot = doc |> tryGetDocString <| "snapshot" <| ""
+              Emoji = doc |> tryGetDocString <| "emoji" <| ""
+              AiComment = doc |> tryGetDocString <| "aiComment" <| ""
+              CreatedAt = doc.GetValue<Timestamp>("createdAt").ToDateTime() }
+
+        // --- Firestore serialization helpers ---
+
+        let private toStringList (items: string list) =
+            System.Collections.Generic.List<obj>(items |> List.map (fun s -> s :> obj)) :> obj
+
+        let private toTimestamp (dt: DateTime) =
+            Timestamp.FromDateTime(dt.ToUniversalTime()) :> obj
+
+        let private saveHistoryToDict (h: SaveHistory) : System.Collections.Generic.Dictionary<string, obj> =
+            System.Collections.Generic.Dictionary<string, obj>(
+                dict
+                    [ "userId", h.UserId :> obj
+                      "userName", h.UserName :> obj
+                      "score", h.Score :> obj
+                      "midiData", h.MidiData :> obj
+                      "comment", h.Comment :> obj
+                      "aiComment", h.AiComment :> obj
+                      "aiScores", h.AiScores :> obj
+                      "createdAt", toTimestamp h.CreatedAt ])
+
+        let private threadToDict (thread: Thread) : System.Collections.Generic.Dictionary<string, obj> =
+            System.Collections.Generic.Dictionary<string, obj>(
+                dict
+                    [ "title", thread.Title :> obj
+                      "key", thread.Key :> obj
+                      "timeSignature", thread.TimeSignature :> obj
+                      "bpm", thread.Bpm :> obj
+                      "createdBy", thread.CreatedBy :> obj
+                      "createdByName", thread.CreatedByName :> obj
+                      "createdAt", toTimestamp thread.CreatedAt
+                      "score", thread.Score :> obj
+                      "midiData", thread.MidiData :> obj
+                      "lastEditedBy", thread.LastEditedBy :> obj
+                      "lastEditedAt", toTimestamp thread.LastEditedAt
+                      "members", toStringList thread.Members
+                      "history", System.Collections.Generic.List<obj>() :> obj
+                      "visibility", thread.Visibility :> obj
+                      "sharedWith", toStringList thread.SharedWith ])
+
+        let private updateFields (docRef: DocumentReference) (updates: (string * obj) list) =
+            task {
+                let dict = System.Collections.Generic.Dictionary<string, obj>()
+                for (k, v) in updates do
+                    dict.[k] <- v
+                let! _ = docRef.UpdateAsync(dict)
+                ()
+            }
+
+        // --- CRUD operations ---
 
         let getByUser (userId: string) (email: string) : Task<Thread list> =
             task {
@@ -262,75 +308,30 @@ module Repository =
                     else
                         task { return ownedSnapshot } // dummy, will be deduped
 
-                let allDocs =
+                return
                     [ ownedSnapshot.Documents; publicSnapshot.Documents; sharedByIdSnapshot.Documents; sharedByEmailSnapshot.Documents ]
                     |> Seq.concat
                     |> Seq.distinctBy (fun d -> d.Id)
                     |> Seq.map toThread
                     |> Seq.toList
                     |> List.sortByDescending (fun t -> t.CreatedAt)
-
-                return allDocs
             }
 
         let getById (id: string) : Task<Thread option> =
             task {
-                let docRef = db.Value.Collection("threads").Document(id)
-                let! snapshot = docRef.GetSnapshotAsync()
+                let! snapshot =
+                    db.Value.Collection("threads").Document(id).GetSnapshotAsync()
 
-                if snapshot.Exists then
-                    return Some(toThread snapshot)
-                else
-                    return None
+                return
+                    if snapshot.Exists then Some(toThread snapshot)
+                    else None
             }
 
         let create (thread: Thread) : Task<Thread> =
             task {
                 let docRef = db.Value.Collection("threads").Document(thread.Id)
-
-                let data =
-                    System.Collections.Generic.Dictionary<string, obj>(
-                        dict
-                            [ "title", thread.Title :> obj
-                              "key", thread.Key :> obj
-                              "timeSignature", thread.TimeSignature :> obj
-                              "bpm", thread.Bpm :> obj
-                              "createdBy", thread.CreatedBy :> obj
-                              "createdByName", thread.CreatedByName :> obj
-                              "createdAt", Timestamp.FromDateTime(thread.CreatedAt.ToUniversalTime()) :> obj
-                              "score", thread.Score :> obj
-                              "pianoRollData", thread.PianoRollData :> obj
-                              "lastEditedBy", thread.LastEditedBy :> obj
-                              "lastEditedAt", Timestamp.FromDateTime(thread.LastEditedAt.ToUniversalTime()) :> obj
-                              "members", System.Collections.Generic.List<obj>(thread.Members |> List.map (fun m -> m :> obj)) :> obj
-                              "history", System.Collections.Generic.List<obj>() :> obj
-                              "visibility", thread.Visibility :> obj
-                              "sharedWith", System.Collections.Generic.List<obj>(thread.SharedWith |> List.map (fun s -> s :> obj)) :> obj ]
-                    )
-
-                let! _ = docRef.SetAsync(data)
+                let! _ = thread |> threadToDict |> docRef.SetAsync
                 return thread
-            }
-
-        let private saveHistoryToDict (h: SaveHistory) : System.Collections.Generic.Dictionary<string, obj> =
-            System.Collections.Generic.Dictionary<string, obj>(
-                dict
-                    [ "userId", h.UserId :> obj
-                      "userName", h.UserName :> obj
-                      "score", h.Score :> obj
-                      "comment", h.Comment :> obj
-                      "aiComment", h.AiComment :> obj
-                      "aiScores", h.AiScores :> obj
-                      "createdAt", Timestamp.FromDateTime(h.CreatedAt.ToUniversalTime()) :> obj ]
-            )
-
-        let private updateFields (docRef: DocumentReference) (updates: (string * obj) list) =
-            task {
-                let dict = System.Collections.Generic.Dictionary<string, obj>()
-                for (k, v) in updates do
-                    dict.[k] <- v
-                let! _ = docRef.UpdateAsync(dict)
-                ()
             }
 
         let update (thread: Thread) : Task<Thread> =
@@ -343,13 +344,13 @@ module Repository =
                     "timeSignature", thread.TimeSignature :> obj
                     "bpm", thread.Bpm :> obj
                     "score", thread.Score :> obj
-                    "pianoRollData", thread.PianoRollData :> obj
+                    "midiData", thread.MidiData :> obj
                     "lastEditedBy", thread.LastEditedBy :> obj
-                    "lastEditedAt", Timestamp.FromDateTime(thread.LastEditedAt.ToUniversalTime()) :> obj
-                    "members", System.Collections.Generic.List<obj>(thread.Members |> List.map (fun m -> m :> obj)) :> obj
+                    "lastEditedAt", toTimestamp thread.LastEditedAt
+                    "members", toStringList thread.Members
                     "history", (System.Collections.Generic.List<obj>(histDicts) :> obj)
                     "visibility", thread.Visibility :> obj
-                    "sharedWith", System.Collections.Generic.List<obj>(thread.SharedWith |> List.map (fun s -> s :> obj)) :> obj
+                    "sharedWith", toStringList thread.SharedWith
                 ]
                 return thread
             }
@@ -375,11 +376,11 @@ module Repository =
                     return Some result
             }
 
-        let saveScore (threadId: string) (score: string) (pianoRollData: string option) (history: SaveHistory) : Task<Thread option> =
+        let saveScore (threadId: string) (score: string) (midiData: string option) (history: SaveHistory) : Task<Thread option> =
             updateThread threadId (fun thread ->
                 { thread with
                     Score = score
-                    PianoRollData = pianoRollData |> Option.defaultValue thread.PianoRollData
+                    MidiData = midiData |> Option.defaultValue thread.MidiData
                     LastEditedBy = history.UserId
                     LastEditedAt = history.CreatedAt
                     History = thread.History @ [ history ] })
@@ -396,60 +397,34 @@ module Repository =
             updateThread threadId (fun thread ->
                 { thread with Visibility = visibility; SharedWith = sharedWith })
 
+        let private commentToDict (comment: Comment) =
+            System.Collections.Generic.Dictionary<string, obj>(
+                dict
+                    [ "userId", comment.UserId :> obj
+                      "userName", comment.UserName :> obj
+                      "text", comment.Text :> obj
+                      "anchorType", comment.AnchorType :> obj
+                      "anchorStart", comment.AnchorStart :> obj
+                      "anchorEnd", comment.AnchorEnd :> obj
+                      "anchorSnapshot", comment.AnchorSnapshot :> obj
+                      "createdAt", toTimestamp comment.CreatedAt ])
+
         let addComment (threadId: string) (comment: Comment) : Task<Comment> =
             task {
                 let docRef =
                     db.Value.Collection("threads").Document(threadId)
                         .Collection("comments").Document(comment.Id)
-
-                let data =
-                    System.Collections.Generic.Dictionary<string, obj>(
-                        dict
-                            [ "userId", comment.UserId :> obj
-                              "userName", comment.UserName :> obj
-                              "text", comment.Text :> obj
-                              "anchorType", comment.AnchorType :> obj
-                              "anchorStart", comment.AnchorStart :> obj
-                              "anchorEnd", comment.AnchorEnd :> obj
-                              "anchorSnapshot", comment.AnchorSnapshot :> obj
-                              "createdAt", Timestamp.FromDateTime(comment.CreatedAt.ToUniversalTime()) :> obj ]
-                    )
-
-                let! _ = docRef.SetAsync(data)
+                let! _ = comment |> commentToDict |> docRef.SetAsync
                 return comment
             }
 
         let getComments (threadId: string) : Task<Comment list> =
             task {
-                let collection =
-                    db.Value.Collection("threads").Document(threadId).Collection("comments")
-                let! snapshot = collection.OrderBy("createdAt").GetSnapshotAsync()
+                let! snapshot =
+                    db.Value.Collection("threads").Document(threadId)
+                        .Collection("comments").OrderBy("createdAt").GetSnapshotAsync()
 
-                return
-                    snapshot.Documents
-                    |> Seq.map (fun doc ->
-                        { Id = doc.Id
-                          UserId = doc.GetValue<string>("userId")
-                          UserName = doc.GetValue<string>("userName")
-                          Text = doc.GetValue<string>("text")
-                          AnchorType =
-                              match doc.TryGetValue<string>("anchorType") with
-                              | true, v -> v
-                              | _ -> "global"
-                          AnchorStart =
-                              match doc.TryGetValue<int>("anchorStart") with
-                              | true, v -> v
-                              | _ -> -1
-                          AnchorEnd =
-                              match doc.TryGetValue<int>("anchorEnd") with
-                              | true, v -> v
-                              | _ -> -1
-                          AnchorSnapshot =
-                              match doc.TryGetValue<string>("anchorSnapshot") with
-                              | true, v -> v
-                              | _ -> ""
-                          CreatedAt = doc.GetValue<Timestamp>("createdAt").ToDateTime() })
-                    |> Seq.toList
+                return snapshot.Documents |> Seq.map toComment |> Seq.toList
             }
 
         let deleteComment (threadId: string) (commentId: string) : Task<bool> =
@@ -465,68 +440,35 @@ module Repository =
                     return false
             }
 
+        let private annotationToDict (annotation: Annotation) =
+            System.Collections.Generic.Dictionary<string, obj>(
+                dict
+                    [ "userId", annotation.UserId :> obj
+                      "userName", annotation.UserName :> obj
+                      "type", annotation.Type :> obj
+                      "startBar", annotation.StartBar :> obj
+                      "endBar", annotation.EndBar :> obj
+                      "snapshot", annotation.Snapshot :> obj
+                      "emoji", annotation.Emoji :> obj
+                      "aiComment", annotation.AiComment :> obj
+                      "createdAt", toTimestamp annotation.CreatedAt ])
+
         let addAnnotation (threadId: string) (annotation: Annotation) : Task<Annotation> =
             task {
                 let docRef =
                     db.Value.Collection("threads").Document(threadId)
                         .Collection("annotations").Document(annotation.Id)
-
-                let data =
-                    System.Collections.Generic.Dictionary<string, obj>(
-                        dict
-                            [ "userId", annotation.UserId :> obj
-                              "userName", annotation.UserName :> obj
-                              "type", annotation.Type :> obj
-                              "startBar", annotation.StartBar :> obj
-                              "endBar", annotation.EndBar :> obj
-                              "snapshot", annotation.Snapshot :> obj
-                              "emoji", annotation.Emoji :> obj
-                              "aiComment", annotation.AiComment :> obj
-                              "createdAt", Timestamp.FromDateTime(annotation.CreatedAt.ToUniversalTime()) :> obj ]
-                    )
-
-                let! _ = docRef.SetAsync(data)
+                let! _ = annotation |> annotationToDict |> docRef.SetAsync
                 return annotation
             }
 
         let getAnnotations (threadId: string) : Task<Annotation list> =
             task {
-                let collection =
-                    db.Value.Collection("threads").Document(threadId).Collection("annotations")
-                let! snapshot = collection.OrderBy("createdAt").GetSnapshotAsync()
+                let! snapshot =
+                    db.Value.Collection("threads").Document(threadId)
+                        .Collection("annotations").OrderBy("createdAt").GetSnapshotAsync()
 
-                return
-                    snapshot.Documents
-                    |> Seq.map (fun doc ->
-                        { Id = doc.Id
-                          UserId = doc.GetValue<string>("userId")
-                          UserName = doc.GetValue<string>("userName")
-                          Type =
-                              match doc.TryGetValue<string>("type") with
-                              | true, v -> v
-                              | _ -> "reaction"
-                          StartBar =
-                              match doc.TryGetValue<int>("startBar") with
-                              | true, v -> v
-                              | _ -> 0
-                          EndBar =
-                              match doc.TryGetValue<int>("endBar") with
-                              | true, v -> v
-                              | _ -> 0
-                          Snapshot =
-                              match doc.TryGetValue<string>("snapshot") with
-                              | true, v -> v
-                              | _ -> ""
-                          Emoji =
-                              match doc.TryGetValue<string>("emoji") with
-                              | true, v -> v
-                              | _ -> ""
-                          AiComment =
-                              match doc.TryGetValue<string>("aiComment") with
-                              | true, v -> v
-                              | _ -> ""
-                          CreatedAt = doc.GetValue<Timestamp>("createdAt").ToDateTime() })
-                    |> Seq.toList
+                return snapshot.Documents |> Seq.map toAnnotation |> Seq.toList
             }
 
         let deleteAnnotation (threadId: string) (annotationId: string) : Task<bool> =

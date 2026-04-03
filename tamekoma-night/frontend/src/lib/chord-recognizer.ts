@@ -1,5 +1,7 @@
 // chord-recognizer.ts
 // Reverse conversion: MIDI note set → chord name
+//
+// Pipeline: extractPitchClasses → generateCandidates → scoreCandidate → selectBest
 
 import { QUALITY_INTERVALS, midiToNoteName } from './chord-player';
 
@@ -15,34 +17,44 @@ function normalizeRoot(root: string): string {
   return ENHARMONIC[root] ?? root;
 }
 
-// ── Reverse lookup table ───────────────────────────────
+// ── Reverse lookup table (lazy-initialized) ───────────
 
 interface QualityMatch {
   quality: string;
   intervals: number[];
 }
 
-// Build reverse map: sorted interval string → quality names (shortest first)
-const INTERVAL_TO_QUALITIES: Map<string, QualityMatch[]> = new Map();
+let _intervalToQualities: Map<string, QualityMatch[]> | null = null;
 
-for (const [quality, intervals] of Object.entries(QUALITY_INTERVALS)) {
-  // Normalize intervals to within one octave for pitch class comparison
-  const normalized = intervals.map((i) => i % 12);
-  const unique = [...new Set(normalized)].sort((a, b) => a - b);
-  const key = unique.join(',');
+/** Build (or return cached) reverse lookup table: interval key → quality matches. */
+function getIntervalToQualities(): Map<string, QualityMatch[]> {
+  if (_intervalToQualities) return _intervalToQualities;
 
-  if (!INTERVAL_TO_QUALITIES.has(key)) {
-    INTERVAL_TO_QUALITIES.set(key, []);
+  const map = new Map<string, QualityMatch[]>();
+
+  for (const [quality, intervals] of Object.entries(QUALITY_INTERVALS)) {
+    const normalized = intervals.map(i => i % 12);
+    const unique = [...new Set(normalized)].sort((a, b) => a - b);
+    const key = unique.join(',');
+
+    const existing = map.get(key);
+    if (existing) {
+      existing.push({ quality, intervals });
+    } else {
+      map.set(key, [{ quality, intervals }]);
+    }
   }
-  INTERVAL_TO_QUALITIES.get(key)!.push({ quality, intervals });
+
+  // Sort each group: shorter quality name first (simpler = preferred)
+  for (const matches of map.values()) {
+    matches.sort((a, b) => a.quality.length - b.quality.length);
+  }
+
+  _intervalToQualities = map;
+  return map;
 }
 
-// Sort each group: shorter quality name first (simpler = preferred)
-for (const matches of INTERVAL_TO_QUALITIES.values()) {
-  matches.sort((a, b) => a.quality.length - b.quality.length);
-}
-
-// ── Main recognition function ──────────────────────────
+// ── Pure pipeline stages ──────────────────────────────
 
 export interface RecognizedChord {
   root: string;
@@ -51,8 +63,94 @@ export interface RecognizedChord {
   name: string;
 }
 
+interface Candidate {
+  root: string;
+  quality: string;
+  bass: string | null;
+  score: number;
+}
+
+/** Extract deduplicated, sorted pitch classes from MIDI notes. Pure. */
+function extractPitchClasses(midiNotes: ReadonlyArray<number>): number[] {
+  return [...new Set(midiNotes.map(n => n % 12))].sort((a, b) => a - b);
+}
+
+/** Extract original root hint from a chord name string. Pure. */
+function extractOriginalRoot(chordName: string | undefined): string | null {
+  if (!chordName) return null;
+  const m = chordName.match(/^([A-G][#b]?)/);
+  return m ? normalizeRoot(m[1]) : null;
+}
+
+/** Generate a candidate for a given root pitch class. Pure. */
+function candidateForRoot(
+  rootPC: number,
+  pitchClasses: ReadonlyArray<number>,
+  lowestPitchClass: number,
+  originalRoot: string | null,
+): Candidate | null {
+  const intervals = pitchClasses
+    .map(pc => (pc - rootPC + 12) % 12)
+    .sort((a, b) => a - b);
+  const key = intervals.join(',');
+
+  const matches = getIntervalToQualities().get(key);
+  if (!matches || matches.length === 0) return null;
+
+  const rootName = NOTE_NAMES[rootPC];
+  const bestQuality = matches[0];
+  const bass = lowestPitchClass !== rootPC ? NOTE_NAMES[lowestPitchClass] : null;
+
+  return {
+    root: rootName,
+    quality: bestQuality.quality,
+    bass,
+    score: scoreCandidate(rootName, bestQuality.quality.length, bass, originalRoot),
+  };
+}
+
+/** Score a chord candidate. Lower = better. Pure. */
+function scoreCandidate(
+  rootName: string,
+  qualityLength: number,
+  bass: string | null,
+  originalRoot: string | null,
+): number {
+  let score = qualityLength;
+  if (originalRoot && normalizeRoot(rootName) === originalRoot) score -= 100;
+  if (bass === null) score -= 10;
+  return score;
+}
+
+/** Generate all candidates for a set of pitch classes. Pure. */
+function generateCandidates(
+  pitchClasses: ReadonlyArray<number>,
+  lowestPitchClass: number,
+  originalRoot: string | null,
+): Candidate[] {
+  return pitchClasses
+    .map(rootPC => candidateForRoot(rootPC, pitchClasses, lowestPitchClass, originalRoot))
+    .filter((c): c is Candidate => c !== null);
+}
+
+/** Select the best candidate (lowest score). Pure. */
+function selectBest(candidates: ReadonlyArray<Candidate>): RecognizedChord | null {
+  if (candidates.length === 0) return null;
+  const best = candidates.reduce((a, b) => a.score <= b.score ? a : b);
+  return {
+    root: best.root,
+    quality: best.quality,
+    bass: best.bass,
+    name: best.root + best.quality + (best.bass ? `/${best.bass}` : ''),
+  };
+}
+
+// ── Main recognition function ──────────────────────────
+
 /**
  * Recognize a chord from a set of MIDI note numbers.
+ *
+ * Pipeline: extractPitchClasses → generateCandidates → selectBest
  *
  * @param midiNotes - Array of MIDI note numbers (0-127)
  * @param originalChordName - Optional hint for root preference (context preservation)
@@ -64,80 +162,12 @@ export function recognizeChord(
 ): RecognizedChord | null {
   if (midiNotes.length === 0) return null;
 
-  // Extract pitch classes (mod 12, deduplicated)
-  const pitchClasses = [...new Set(midiNotes.map((n) => n % 12))].sort((a, b) => a - b);
+  const pitchClasses = extractPitchClasses(midiNotes);
   if (pitchClasses.length === 0) return null;
 
-  // Find lowest note for bass detection
-  const lowestMidi = Math.min(...midiNotes);
-  const lowestPitchClass = lowestMidi % 12;
+  const lowestPitchClass = Math.min(...midiNotes) % 12;
+  const originalRoot = extractOriginalRoot(originalChordName);
+  const candidates = generateCandidates(pitchClasses, lowestPitchClass, originalRoot);
 
-  // Extract original root hint if provided
-  let originalRoot: string | null = null;
-  if (originalChordName) {
-    const m = originalChordName.match(/^([A-G][#b]?)/);
-    if (m) originalRoot = normalizeRoot(m[1]);
-  }
-
-  // Try each pitch class as potential root
-  interface Candidate {
-    root: string;
-    quality: string;
-    bass: string | null;
-    score: number; // lower = better
-  }
-
-  const candidates: Candidate[] = [];
-
-  for (const rootPC of pitchClasses) {
-    // Compute intervals relative to this root
-    const intervals = pitchClasses
-      .map((pc) => (pc - rootPC + 12) % 12)
-      .sort((a, b) => a - b);
-    const key = intervals.join(',');
-
-    const matches = INTERVAL_TO_QUALITIES.get(key);
-    if (!matches || matches.length === 0) continue;
-
-    const rootName = NOTE_NAMES[rootPC];
-    const bestQuality = matches[0]; // shortest name = simplest
-
-    // Determine bass note
-    const bass = lowestPitchClass !== rootPC ? NOTE_NAMES[lowestPitchClass] : null;
-
-    // Scoring: prefer original root match, then simpler quality, then root=lowest
-    let score = 0;
-    // Penalty for quality complexity
-    score += bestQuality.quality.length;
-    // Bonus for matching original root
-    if (originalRoot && normalizeRoot(rootName) === originalRoot) {
-      score -= 100;
-    }
-    // Slight bonus for root being the lowest note (no slash chord needed)
-    if (bass === null) {
-      score -= 10;
-    }
-
-    candidates.push({
-      root: rootName,
-      quality: bestQuality.quality,
-      bass,
-      score,
-    });
-  }
-
-  if (candidates.length === 0) return null;
-
-  // Pick best candidate (lowest score)
-  candidates.sort((a, b) => a.score - b.score);
-  const best = candidates[0];
-
-  const name = best.root + best.quality + (best.bass ? `/${best.bass}` : '');
-
-  return {
-    root: best.root,
-    quality: best.quality,
-    bass: best.bass,
-    name,
-  };
+  return selectBest(candidates);
 }

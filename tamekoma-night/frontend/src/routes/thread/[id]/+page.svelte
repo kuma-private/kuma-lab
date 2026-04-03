@@ -15,6 +15,8 @@
 	import ImportModal from '$lib/components/ImportModal.svelte';
 	import ShareModal from '$lib/components/ShareModal.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { scoreToPianoRoll } from '$lib/piano-roll-model';
+	import { pianoRollBarsToBase64 } from '$lib/midi-io';
 
 	const store = createAppStore();
 	const threadId = page.params.id as string;
@@ -355,7 +357,13 @@
 		if (submitting) return;
 		submitting = true;
 		try {
-			await store.saveScore(threadId, { score: scoreEditorValue, comment: commentInput.trim() });
+			const thread = store.currentThread;
+			const tsStr = thread?.timeSignature || '4/4';
+			const [beats, beatValue] = tsStr.split('/').map(Number);
+			const ts = { beats: beats || 4, beatValue: beatValue || 4 };
+			const prBars = scoreToPianoRoll(scoreEditorValue, ts, thread?.bpm || 120);
+			const midiData = pianoRollBarsToBase64(prBars, thread?.bpm || 120, ts);
+			await store.saveScore(threadId, { score: scoreEditorValue, comment: commentInput.trim(), midiData });
 			commentInput = '';
 			player?.dispose();
 			player = null;

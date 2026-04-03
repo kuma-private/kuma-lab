@@ -175,12 +175,18 @@ export function midiToNoteName(midi: number): string {
 
 export type VoicingMode = 'normal' | 'harmonic';
 
-let _voicingMode: VoicingMode = 'normal';
-let _lastVoicingMidi: number[] | null = null;
+// ── Voicing state (encapsulated module-level state) ───
+// These are inherently stateful (audio engine context),
+// exposed via getter/setter to keep the boundary explicit.
 
-export const setVoicingMode = (mode: VoicingMode) => { _voicingMode = mode; };
-export const getVoicingMode = () => _voicingMode;
-export const resetVoiceLeading = () => { _lastVoicingMidi = null; };
+const _voicingState = {
+  mode: 'normal' as VoicingMode,
+  lastMidi: null as number[] | null,
+};
+
+export const setVoicingMode = (mode: VoicingMode) => { _voicingState.mode = mode; };
+export const getVoicingMode = (): VoicingMode => _voicingState.mode;
+export const resetVoiceLeading = () => { _voicingState.lastMidi = null; };
 
 /**
  * Convert a parsed chord to an array of note names for Tone.js.
@@ -193,7 +199,7 @@ export function chordToNotes(chord: ParsedChord): string[] {
     throw new Error(`Unknown chord quality: "${chord.quality}" in "${chord.raw}"`);
   }
 
-  if (_voicingMode === 'harmonic') {
+  if (_voicingState.mode === 'harmonic') {
     return chordToNotesHarmonic(chord, intervals);
   }
 
@@ -226,11 +232,11 @@ function chordToNotesHarmonic(chord: ParsedChord, intervals: number[]): string[]
   });
 
   // Voice leading: if we have a previous chord, find closest inversion
-  if (_lastVoicingMidi && _lastVoicingMidi.length > 0) {
-    upperMidi = voiceLead(upperMidi, _lastVoicingMidi);
+  if (_voicingState.lastMidi && _voicingState.lastMidi.length > 0) {
+    upperMidi = voiceLead(upperMidi, _voicingState.lastMidi);
   }
 
-  _lastVoicingMidi = upperMidi;
+  _voicingState.lastMidi = upperMidi;
 
   const allMidi = [bassMidi, ...upperMidi];
   return allMidi.map(midiToNoteName);
@@ -252,26 +258,63 @@ function voiceLead(target: number[], previous: number[]): number[] {
   });
 }
 
-// ── Scheduling ─────────────────────────────────────────
+// ── Scheduling: pure helpers ──────────────────────────
 
-/**
- * Calculate the duration of one beat in seconds.
- */
+/** Calculate the duration of one beat in seconds. Pure. */
 function beatDuration(bpm: number): number {
   return 60 / bpm;
 }
 
-/**
- * Calculate the duration of one bar in seconds.
- */
+/** Calculate the duration of one bar in seconds. Pure. */
 function barDuration(config: PlayerConfig): number {
   return beatDuration(config.bpm) * config.timeSignature.beats;
+}
+
+/** Resolve entry to note names. Pure (except chordToNotes depends on voicing mode). */
+function entryToNotes(entry: BarEntry, lastChordNotes: string[] | null): string[] | null {
+  switch (entry.type) {
+    case 'chord':
+      try { return chordToNotes(entry.chord); }
+      catch { return null; }
+    case 'sustain':
+    case 'repeat':
+      return lastChordNotes;
+    case 'rest':
+      return null;
+  }
+}
+
+/**
+ * Process a single bar entry into a schedule action. Pure.
+ * Returns either a new note event, a sustain extension, or nothing.
+ */
+function processEntry(
+  entry: BarEntry,
+  time: number,
+  entryDur: number,
+  lastChordNotes: string[] | null,
+): { type: 'note'; note: ScheduledNote; newLastChord: string[] | null }
+ | { type: 'sustain'; extraDuration: number }
+ | { type: 'skip' } {
+  if (entry.type === 'sustain') {
+    return { type: 'sustain', extraDuration: entryDur };
+  }
+
+  const notes = entryToNotes(entry, lastChordNotes);
+  if (!notes) return { type: 'skip' };
+
+  return {
+    type: 'note',
+    note: { time, notes, duration: entryDur * 0.9 },
+    newLastChord: entry.type === 'chord' ? notes : lastChordNotes,
+  };
 }
 
 /**
  * Build a schedule of notes from parsed bars.
  * Each bar is divided equally among its entries.
  * Returns scheduled notes with absolute times.
+ * Pure function (builds new array from inputs).
  */
 export function buildSchedule(
   bars: ParsedBar[],
@@ -279,8 +322,8 @@ export function buildSchedule(
 ): ScheduledNote[] {
   const resolved = resolveRepeats(bars);
   const barDur = barDuration(config);
-  const schedule: ScheduledNote[] = [];
 
+  let schedule: ScheduledNote[] = [];
   let lastChordNotes: string[] | null = null;
 
   for (let barIdx = 0; barIdx < resolved.length; barIdx++) {
@@ -290,46 +333,27 @@ export function buildSchedule(
     const entryDur = barDur / entryCount;
 
     for (let entryIdx = 0; entryIdx < bar.entries.length; entryIdx++) {
-      const entry = bar.entries[entryIdx];
       const time = barStart + entryIdx * entryDur;
+      const result = processEntry(bar.entries[entryIdx], time, entryDur, lastChordNotes);
 
-      if (entry.type === 'sustain') {
-        // Extend the previous note's duration instead of re-attacking
-        if (schedule.length > 0) {
-          schedule[schedule.length - 1].duration += entryDur;
-        }
-        continue;
-      }
-
-      const notes = entryToNotes(entry, lastChordNotes);
-      if (notes) {
-        schedule.push({ time, notes, duration: entryDur * 0.9 });
-        if (entry.type === 'chord') {
-          lastChordNotes = notes;
-        }
+      switch (result.type) {
+        case 'note':
+          schedule = [...schedule, result.note];
+          lastChordNotes = result.newLastChord;
+          break;
+        case 'sustain':
+          if (schedule.length > 0) {
+            const last = schedule[schedule.length - 1];
+            schedule = [...schedule.slice(0, -1), { ...last, duration: last.duration + result.extraDuration }];
+          }
+          break;
+        case 'skip':
+          break;
       }
     }
   }
 
   return schedule;
-}
-
-function entryToNotes(entry: BarEntry, lastChordNotes: string[] | null): string[] | null {
-  switch (entry.type) {
-    case 'chord':
-      try {
-        return chordToNotes(entry.chord);
-      } catch (e) {
-        // Unknown chord quality – skip this entry
-        return null;
-      }
-    case 'sustain':
-      return lastChordNotes;
-    case 'repeat':
-      return lastChordNotes;
-    case 'rest':
-      return null;
-  }
 }
 
 // ── Standalone preview functions ──────────────────────

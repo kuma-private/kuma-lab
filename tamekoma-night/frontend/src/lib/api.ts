@@ -7,7 +7,7 @@ export interface Thread {
 	createdBy: string;
 	createdByName: string;
 	score: string;
-	pianoRollData?: string;
+	midiData?: string;
 	lastEditedBy: string;
 	lastEditedAt: string;
 	members: string[];
@@ -71,7 +71,7 @@ export const createThread = async (data: { title: string }): Promise<{ id: strin
 
 export const saveScore = async (
 	threadId: string,
-	data: { score: string; comment: string; pianoRollData?: string }
+	data: { score: string; comment: string; midiData?: string }
 ): Promise<Thread> => {
 	const res = await apiFetch(`/api/threads/${threadId}`, {
 		method: 'PUT',
