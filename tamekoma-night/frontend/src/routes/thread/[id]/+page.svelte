@@ -14,6 +14,7 @@
 	import SessionDrawer from '$lib/components/SessionDrawer.svelte';
 	import ImportModal from '$lib/components/ImportModal.svelte';
 	import ShareModal from '$lib/components/ShareModal.svelte';
+	import EditorModeModal from '$lib/components/EditorModeModal.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 
 	const store = createAppStore();
@@ -48,6 +49,9 @@
 
 	// Share modal state
 	let shareModalOpen = $state(false);
+
+	// Editor mode modal state
+	let editorModeModalOpen = $state(false);
 
 	// Delete confirm dialog state
 	let deleteConfirmOpen = $state(false);
@@ -136,6 +140,33 @@
 		onSelectionNotes(null);
 		if (selectionPollTimer) clearInterval(selectionPollTimer);
 	});
+
+	// Show editor mode modal when editorMode is not set
+	$effect(() => {
+		const thread = store.currentThread;
+		if (thread && !thread.editorMode) {
+			editorModeModalOpen = true;
+		}
+	});
+
+	const handleEditorModeSelect = async (mode: 'chord' | 'pianoroll') => {
+		editorModeModalOpen = false;
+		const thread = store.currentThread;
+		if (!thread) return;
+		try {
+			await store.updateSettings(threadId, {
+				key: thread.key,
+				timeSignature: thread.timeSignature,
+				bpm: thread.bpm,
+				editorMode: mode,
+			});
+		} catch {
+			// settings update failed, continue anyway
+		}
+		if (mode === 'pianoroll') {
+			window.location.href = `/thread/${threadId}/pianoroll`;
+		}
+	};
 
 	// Ctrl+S / Cmd+S to save, Spacebar play/pause, Arrow keys seek
 	const handleKeydown = (e: KeyboardEvent) => {
@@ -645,6 +676,10 @@
 		initialKey={thread2.key}
 		onclose={() => { importModalOpen = false; }}
 		onconfirm={handleImportConfirm}
+	/>
+	<EditorModeModal
+		open={editorModeModalOpen}
+		onSelect={handleEditorModeSelect}
 	/>
 	<ShareModal
 		open={shareModalOpen}

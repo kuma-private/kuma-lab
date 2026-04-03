@@ -3,6 +3,7 @@
 	import * as Tone from 'tone';
 	import { scoreToPianoRoll, pianoRollToScore, applyAutoVoicing } from '$lib/piano-roll-model';
 	import type { PianoRollBar, PianoRollNote, PianoRollBarEntry } from '$lib/piano-roll-model';
+	import { base64ToPianoRollBars } from '$lib/midi-io';
 	import { extractRoot } from '$lib/chord-parser';
 	import { midiToNoteName, getPianoSampler, isPianoLoaded } from '$lib/chord-player';
 	import { recognizeChord } from '$lib/chord-recognizer';
@@ -27,13 +28,14 @@
 		activeBarIndex: number;
 		currentTime?: number;
 		totalDuration?: number;
-		initialPianoRollData?: string;
+		initialMidiData?: string;
 		onScoreChange: (newScore: string) => void;
 		onSeek?: (time: number) => void;
 		onStateExpose?: (state: PianoRollExposedState) => void;
 		velocityUpdate?: { noteIds: string[]; velocity: number; seq: number } | null;
 		scrollUpdate?: { scrollX: number; scrollY: number; seq: number } | null;
 		noteUpdate?: { noteId: string; updates: { midi?: number; velocity?: number; durationTicks?: number; startTick?: number; isChordTone?: boolean }; seq: number } | null;
+		midiDataOverride?: { data: string; seq: number } | null;
 	}
 
 	let {
@@ -45,11 +47,12 @@
 		totalDuration = 0,
 		onScoreChange,
 		onSeek,
-		initialPianoRollData,
+		initialMidiData,
 		onStateExpose,
 		velocityUpdate = null,
 		scrollUpdate = null,
 		noteUpdate = null,
+		midiDataOverride = null,
 	}: Props = $props();
 
 	// ── Constants ────────────────────────────────────────
@@ -291,32 +294,45 @@
 
 	// ── Score → PianoRoll conversion ─────────────────────
 
-	// When pianoRollData exists, the piano roll is the source of truth.
+	// When midiData exists, the piano roll is the source of truth.
 	// Score changes from our own edits are ignored (we already have the bars).
-	// Only convert score→pianoRoll when there's no saved pianoRollData.
-	let pianoRollIsSourceOfTruth = false;
+	// Only convert score→pianoRoll when there's no saved midiData.
+	let midiIsSourceOfTruth = false;
 
-	// Initial load: use pianoRollData if available, otherwise convert from score
+	// Initial load: use midiData if available, otherwise convert from score
 	$effect(() => {
 		void score; // track dependency
-		if (pianoRollIsSourceOfTruth) {
+		if (midiIsSourceOfTruth) {
 			// Piano roll owns the data — don't overwrite from score text
 			return;
 		}
-		if (initialPianoRollData) {
-			try {
-				const parsed = JSON.parse(initialPianoRollData) as PianoRollBar[];
-				if (parsed && parsed.length > 0) {
-					bars = parsed;
-					pianoRollIsSourceOfTruth = true;
-					return;
-				}
-			} catch { /* fall through */ }
+		if (initialMidiData) {
+			const result = base64ToPianoRollBars(initialMidiData);
+			if (result.bars && result.bars.length > 0) {
+				bars = result.bars;
+				midiIsSourceOfTruth = true;
+				return;
+			}
 		}
-		// Don't lock in empty score — wait for the real score to arrive
+		// No midiData: convert from score text (first-time open)
 		if (!score.trim()) return;
 		bars = scoreToPianoRoll(score, parsedTimeSignature, bpm);
-		pianoRollIsSourceOfTruth = true;
+		midiIsSourceOfTruth = true;
+	});
+
+	// midiDataOverride: external MIDI import replaces bars
+	let lastMidiOverrideSeq = -1;
+	$effect(() => {
+		if (midiDataOverride && midiDataOverride.seq !== lastMidiOverrideSeq) {
+			lastMidiOverrideSeq = midiDataOverride.seq;
+			try {
+				const result = base64ToPianoRollBars(midiDataOverride.data);
+				if (result.bars && result.bars.length > 0) {
+					bars = result.bars;
+					midiIsSourceOfTruth = true;
+				}
+			} catch { /* ignore invalid data */ }
+		}
 	});
 
 	// ── Canvas drawing ───────────────────────────────────

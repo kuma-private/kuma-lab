@@ -7,12 +7,13 @@ export interface Thread {
 	createdBy: string;
 	createdByName: string;
 	score: string;
-	pianoRollData?: string;
+	midiData?: string;
 	lastEditedBy: string;
 	lastEditedAt: string;
 	members: string[];
 	visibility: string;
 	sharedWith: string[];
+	editorMode?: string;
 }
 
 export interface SaveHistory {
@@ -71,7 +72,7 @@ export const createThread = async (data: { title: string }): Promise<{ id: strin
 
 export const saveScore = async (
 	threadId: string,
-	data: { score: string; comment: string; pianoRollData?: string }
+	data: { score: string; comment: string; midiData?: string }
 ): Promise<Thread> => {
 	const res = await apiFetch(`/api/threads/${threadId}`, {
 		method: 'PUT',
@@ -83,7 +84,7 @@ export const saveScore = async (
 
 export const updateSettings = async (
 	threadId: string,
-	data: { title?: string; key?: string; timeSignature?: string; bpm?: number }
+	data: { title?: string; key?: string; timeSignature?: string; bpm?: number; editorMode?: string }
 ): Promise<Thread> => {
 	const res = await apiFetch(`/api/threads/${threadId}/settings`, {
 		method: 'PUT',

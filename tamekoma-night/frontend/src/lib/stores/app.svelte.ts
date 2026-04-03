@@ -65,17 +65,18 @@ export const createAppStore = () => {
 			}
 		},
 
-		saveScore: async (threadId: string, data: { score: string; comment: string; pianoRollData?: string }) => {
+		saveScore: async (threadId: string, data: { score: string; comment: string; midiData?: string }) => {
 			error = null;
 			try {
 				await api.saveScore(threadId, data);
 				currentThread = await api.getThread(threadId);
 			} catch (e) {
 				error = e instanceof Error ? e.message : 'Failed to save score';
+				throw e;
 			}
 		},
 
-		updateSettings: async (threadId: string, data: { title?: string; key?: string; timeSignature?: string; bpm?: number }) => {
+		updateSettings: async (threadId: string, data: { title?: string; key?: string; timeSignature?: string; bpm?: number; editorMode?: string }) => {
 			error = null;
 			try {
 				await api.updateSettings(threadId, data);

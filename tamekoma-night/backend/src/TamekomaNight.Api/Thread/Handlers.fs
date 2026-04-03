@@ -16,38 +16,116 @@ module ThreadHandlers =
 
     let private devMode = Config.devMode
 
-    let private getUserInfo (ctx: HttpContext) =
+    // --- Pure helper functions ---
+
+    let private getUserInfo (ctx: HttpContext) : UserInfo =
         if devMode && (ctx.User = null || ctx.User.Identity = null || not ctx.User.Identity.IsAuthenticated) then
-            ("dev-user", "Dev User", "")
+            { UserId = "dev-user"; UserName = "Dev User"; Email = "" }
         else
-            let userId =
-                ctx.User.FindFirst(ClaimTypes.NameIdentifier)
+            let findClaim (claimType: string) defaultValue =
+                ctx.User.FindFirst(claimType)
                 |> Option.ofObj
                 |> Option.map (fun c -> c.Value)
-                |> Option.defaultValue "anonymous"
+                |> Option.defaultValue defaultValue
 
-            let userName =
-                ctx.User.FindFirst(ClaimTypes.Name)
-                |> Option.ofObj
-                |> Option.map (fun c -> c.Value)
-                |> Option.defaultValue "Anonymous"
-
-            let email =
-                ctx.User.FindFirst(ClaimTypes.Email)
-                |> Option.ofObj
-                |> Option.map (fun c -> c.Value)
-                |> Option.defaultValue ""
-
-            (userId, userName, email)
+            { UserId = findClaim ClaimTypes.NameIdentifier "anonymous"
+              UserName = findClaim ClaimTypes.Name "Anonymous"
+              Email = findClaim ClaimTypes.Email "" }
 
     let private getHttpClient (ctx: HttpContext) =
-        let factory = ctx.RequestServices.GetRequiredService<IHttpClientFactory>()
-        factory.CreateClient("Anthropic")
+        ctx.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("Anthropic")
+
+    // --- HTTP response helpers ---
+
+    let private respondJson (ctx: HttpContext) (statusCode: int) (body: obj) : Task =
+        ctx.Response.StatusCode <- statusCode
+        ctx.Response.WriteAsJsonAsync(body)
+
+    let private respond404 ctx = respondJson ctx 404 {| error = "Thread not found" |}
+    let private respond403 ctx msg = respondJson ctx 403 {| error = msg |}
+    let private respond400 ctx msg = respondJson ctx 400 {| error = msg |}
+    let private respond500 ctx msg = respondJson ctx 500 {| error = msg |}
+
+    // --- Request parsing with Result type ---
+
+    let private parseRequest<'T> (ctx: HttpContext) : Task<Result<'T, string>> =
+        task {
+            try
+                let! req = ctx.Request.ReadFromJsonAsync<'T>()
+                if obj.ReferenceEquals(req, null) then
+                    return Error "Invalid request body"
+                else
+                    return Ok req
+            with _ ->
+                return Error "Invalid request body"
+        }
+
+    // --- Higher-order handler combinators ---
+
+    /// Fetch thread + check access, then run handler. Handles 404/403 automatically.
+    let private withThread
+        (repo: IThreadRepository)
+        (threadId: string)
+        (ctx: HttpContext)
+        (handler: Thread -> UserInfo -> Task)
+        : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+            let user = getUserInfo ctx
+
+            match thread with
+            | None ->
+                do! respond404 ctx
+            | Some t when not (Repository.canAccessWithEmail user.UserId user.Email t) ->
+                do! respond403 ctx "Access denied"
+            | Some t ->
+                do! handler t user
+        }
+
+    /// Fetch thread + check ownership, then run handler. Handles 404/403 automatically.
+    let private withOwnerThread
+        (repo: IThreadRepository)
+        (threadId: string)
+        (ctx: HttpContext)
+        (errorMsg: string)
+        (handler: Thread -> UserInfo -> Task)
+        : Task =
+        task {
+            let! thread = repo.GetById(threadId)
+            let user = getUserInfo ctx
+
+            match thread with
+            | None ->
+                do! respond404 ctx
+            | Some t when t.CreatedBy <> user.UserId ->
+                do! respond403 ctx errorMsg
+            | Some t ->
+                do! handler t user
+        }
+
+    /// Parse request and run handler if valid, else return 400.
+    let private withParsedRequest<'T>
+        (ctx: HttpContext)
+        (validate: 'T -> bool)
+        (handler: 'T -> Task)
+        : Task =
+        task {
+            let! result = parseRequest<'T> ctx
+            match result with
+            | Error msg ->
+                do! respond400 ctx msg
+            | Ok req when not (validate req) ->
+                do! respond400 ctx "Invalid request body"
+            | Ok req ->
+                do! handler req
+        }
+
+    // --- Handlers ---
 
     let listThreads (repo: IThreadRepository) (ctx: HttpContext) : Task =
         task {
-            let (userId, _, email) = getUserInfo ctx
-            let! threads = repo.GetByUser userId email
+            let user = getUserInfo ctx
+            let! threads = repo.GetByUser user.UserId user.Email
 
             let result =
                 threads
@@ -62,588 +140,335 @@ module ThreadHandlers =
                        lastEditedBy = t.LastEditedBy
                        lastEditedAt = t.LastEditedAt
                        memberCount = t.Members.Length
-                       visibility = t.Visibility |})
+                       visibility = t.Visibility
+                       editorMode = t.EditorMode |})
 
             do! ctx.Response.WriteAsJsonAsync(result)
         }
 
     let createThread (repo: IThreadRepository) (ctx: HttpContext) : Task =
-        task {
-            let! req =
-                try
-                    ctx.Request.ReadFromJsonAsync<CreateThreadRequest>()
-                with _ ->
-                    ValueTask<CreateThreadRequest>(Unchecked.defaultof<CreateThreadRequest>)
+        withParsedRequest<CreateThreadRequest> ctx (fun req -> isNotNull req.title) (fun req ->
+            task {
+                let user = getUserInfo ctx
 
-            if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.title, null) then
-                ctx.Response.StatusCode <- 400
-                do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
-            else
+                let thread =
+                    { Id = Guid.NewGuid().ToString("N")
+                      Title = req.title
+                      Key = "C Major"
+                      TimeSignature = "4/4"
+                      Bpm = 120
+                      CreatedBy = user.UserId
+                      CreatedByName = user.UserName
+                      CreatedAt = DateTime.UtcNow
+                      Score = ""
+                      MidiData = ""
+                      LastEditedBy = user.UserId
+                      LastEditedAt = DateTime.UtcNow
+                      Members = [ user.UserId ]
+                      History = []
+                      Visibility = "private"
+                      SharedWith = []
+                      EditorMode = "" }
 
-            let (userId, userName, email) = getUserInfo ctx
-
-            let thread =
-                { Id = Guid.NewGuid().ToString("N")
-                  Title = req.title
-                  Key = "C Major"
-                  TimeSignature = "4/4"
-                  Bpm = 120
-                  CreatedBy = userId
-                  CreatedByName = userName
-                  CreatedAt = DateTime.UtcNow
-                  Score = ""
-                  PianoRollData = ""
-                  LastEditedBy = userId
-                  LastEditedAt = DateTime.UtcNow
-                  Members = [ userId ]
-                  History = []
-                  Visibility = "private"
-                  SharedWith = [] }
-
-            let! created = repo.Create(thread)
-
-            ctx.Response.StatusCode <- 201
-            do! ctx.Response.WriteAsJsonAsync({| id = created.Id |})
-        }
+                let! created = repo.Create(thread)
+                do! respondJson ctx 201 {| id = created.Id |}
+            })
 
     let deleteThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, _, email) = getUserInfo ctx
-
-            match thread with
-            | Some t when t.CreatedBy = userId ->
+        withOwnerThread repo threadId ctx "Only the owner can delete" (fun _ _ ->
+            task {
                 let! _ = repo.Delete(threadId)
                 ctx.Response.StatusCode <- 204
-            | Some _ ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Only the owner can delete" |})
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-        }
+            })
 
     let getThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, _, email) = getUserInfo ctx
-
-            match thread with
-            | Some t when Repository.canAccessWithEmail userId email t ->
-                do! ctx.Response.WriteAsJsonAsync(t)
-            | Some _ ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-        }
+        withThread repo threadId ctx (fun t _ ->
+            ctx.Response.WriteAsJsonAsync(t))
 
     let saveScore (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, userName, email) = getUserInfo ctx
+        withThread repo threadId ctx (fun _ user ->
+            withParsedRequest<SaveScoreRequest> ctx (fun req -> isNotNull req.score) (fun req ->
+                task {
+                    let rawMidiData = req.midiData |> defaultIfNull ""
 
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccessWithEmail userId email t) ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | Some _ ->
-                let! req =
-                    try
-                        ctx.Request.ReadFromJsonAsync<SaveScoreRequest>()
-                    with _ ->
-                        ValueTask<SaveScoreRequest>(Unchecked.defaultof<SaveScoreRequest>)
+                    // Validate MIDI data if provided
+                    if rawMidiData <> "" && not (isValidMidiData rawMidiData) then
+                        do! respond400 ctx "Invalid MIDI data"
+                    else
 
-                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.score, null) then
-                    ctx.Response.StatusCode <- 400
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
-                else
+                    let midiData = if rawMidiData = "" then None else Some rawMidiData
 
-                let history =
-                    { UserId = userId
-                      UserName = userName
-                      Score = req.score
-                      Comment = req.comment
-                      AiComment = ""
-                      AiScores = ""
-                      CreatedAt = DateTime.UtcNow }
+                    let history =
+                        { UserId = user.UserId
+                          UserName = user.UserName
+                          Score = req.score
+                          MidiData = midiData |> Option.defaultValue ""
+                          Comment = req.comment
+                          AiComment = ""
+                          AiScores = ""
+                          CreatedAt = DateTime.UtcNow }
 
-                let pianoRollData = if obj.ReferenceEquals(req.pianoRollData, null) then None else Some req.pianoRollData
-                let! result = repo.SaveScore threadId req.score pianoRollData history
+                    let! result = repo.SaveScore threadId req.score midiData history
 
-                match result with
-                | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
-                | None ->
-                    ctx.Response.StatusCode <- 500
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Failed to save score" |})
-        }
+                    match result with
+                    | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
+                    | None -> do! respond500 ctx "Failed to save score"
+                }))
 
     let updateSettings (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, _, email) = getUserInfo ctx
+        withThread repo threadId ctx (fun _ _ ->
+            withParsedRequest<UpdateSettingsRequest> ctx (fun req -> isNotNull req.key) (fun req ->
+                task {
+                    let title = req.title |> defaultIfNull ""
+                    let editorMode = req.editorMode |> defaultIfNull ""
+                    let! result = repo.UpdateSettings threadId req.key req.timeSignature req.bpm title editorMode
 
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when t.CreatedBy <> userId ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Only the owner can update settings" |})
-            | Some _ ->
-                let! req =
-                    try
-                        ctx.Request.ReadFromJsonAsync<UpdateSettingsRequest>()
-                    with _ ->
-                        ValueTask<UpdateSettingsRequest>(Unchecked.defaultof<UpdateSettingsRequest>)
-
-                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.key, null) then
-                    ctx.Response.StatusCode <- 400
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
-                    return ()
-
-                let title = if obj.ReferenceEquals(req.title, null) then "" else req.title
-                let! result = repo.UpdateSettings threadId req.key req.timeSignature req.bpm title
-
-                match result with
-                | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
-                | None ->
-                    ctx.Response.StatusCode <- 500
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Failed to update settings" |})
-        }
+                    match result with
+                    | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
+                    | None -> do! respond500 ctx "Failed to update settings"
+                }))
 
     let reviewScore (repo: IThreadRepository) (config: AppConfig) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, _, email) = getUserInfo ctx
-
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccessWithEmail userId email t) ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | Some t ->
+        withThread repo threadId ctx (fun t user ->
+            task {
                 if String.IsNullOrEmpty(config.AnthropicApiKey) then
-                    ctx.Response.StatusCode <- 400
-                    do! ctx.Response.WriteAsJsonAsync({| error = "AI review is not configured" |})
+                    do! respond400 ctx "AI review is not configured"
                 elif t.History.Length = 0 then
-                    ctx.Response.StatusCode <- 400
-                    do! ctx.Response.WriteAsJsonAsync({| error = "No history to review" |})
+                    do! respond400 ctx "No history to review"
                 else
                     let httpClient = getHttpClient ctx
                     let scoreLines = t.Score.Split('\n') |> Array.toList
+
                     let! result =
                         AnthropicClient.reviewTurn httpClient config.AnthropicApiKey t.Key t.TimeSignature t.Score scoreLines
                         |> Async.StartAsTask
 
                     match result with
                     | Ok r ->
-                        // Update the latest history entry with AI comment
                         let updatedHistory =
                             t.History
                             |> List.mapi (fun i h ->
                                 if i = t.History.Length - 1 then
                                     { h with AiComment = r.Comment; AiScores = r.ScoresJson }
                                 else h)
-                        let updatedThread = { t with History = updatedHistory }
-                        let! _ = repo.Update(updatedThread)
+
+                        let! _ = repo.Update({ t with History = updatedHistory })
                         do! ctx.Response.WriteAsJsonAsync({| comment = r.Comment; scores = r.ScoresJson |})
                     | Error e ->
-                        ctx.Response.StatusCode <- 500
-                        do! ctx.Response.WriteAsJsonAsync({| error = $"AI review failed: {e}" |})
-        }
+                        do! respond500 ctx $"AI review failed: {e}"
+            })
 
     let transformChords (config: AppConfig) (threadId: string) (ctx: HttpContext) : Task =
         task {
             if String.IsNullOrEmpty(config.AnthropicApiKey) then
-                ctx.Response.StatusCode <- 400
-                do! ctx.Response.WriteAsJsonAsync({| error = "AI transform is not configured" |})
+                do! respond400 ctx "AI transform is not configured"
             else
 
-            let! req =
-                try
-                    ctx.Request.ReadFromJsonAsync<TransformRequest>()
-                with _ ->
-                    ValueTask<TransformRequest>(Unchecked.defaultof<TransformRequest>)
+            do! withParsedRequest<TransformRequest> ctx
+                    (fun req -> isNotNull req.selectedChords && isNotNull req.instruction)
+                    (fun req ->
+                        task {
+                            let httpClient = getHttpClient ctx
 
-            if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.selectedChords, null) || obj.ReferenceEquals(req.instruction, null) then
-                ctx.Response.StatusCode <- 400
-                do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
-            else
+                            let! result =
+                                AnthropicClient.transformChords httpClient config.AnthropicApiKey req.key req.timeSignature req.fullScore req.selectedChords req.instruction
+                                |> Async.StartAsTask
 
-            let httpClient = getHttpClient ctx
-            let! result =
-                AnthropicClient.transformChords httpClient config.AnthropicApiKey req.key req.timeSignature req.fullScore req.selectedChords req.instruction
-                |> Async.StartAsTask
-
-            match result with
-            | Ok r ->
-                do! ctx.Response.WriteAsJsonAsync({| comment = r.comment; chords = r.chords |})
-            | Error e ->
-                ctx.Response.StatusCode <- 500
-                do! ctx.Response.WriteAsJsonAsync({| error = $"AI transform failed: {e}" |})
+                            match result with
+                            | Ok r ->
+                                do! ctx.Response.WriteAsJsonAsync({| comment = r.comment; chords = r.chords |})
+                            | Error e ->
+                                do! respond500 ctx $"AI transform failed: {e}"
+                        })
         }
 
     let importChordChart (config: AppConfig) (ctx: HttpContext) : Task =
         task {
             if String.IsNullOrEmpty(config.AnthropicApiKey) then
-                ctx.Response.StatusCode <- 400
-                do! ctx.Response.WriteAsJsonAsync({| error = "AI import is not configured" |})
+                do! respond400 ctx "AI import is not configured"
             else
 
-            let! req =
-                try
-                    ctx.Request.ReadFromJsonAsync<ImportChordChartRequest>()
-                with _ ->
-                    ValueTask<ImportChordChartRequest>(Unchecked.defaultof<ImportChordChartRequest>)
+            do! withParsedRequest<ImportChordChartRequest> ctx
+                    (fun req -> isNotNull req.images && not req.images.IsEmpty)
+                    (fun req ->
+                        task {
+                            let httpClient = getHttpClient ctx
+                            let images = req.images |> List.map parseDataUri
 
-            if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.images, null) || req.images.IsEmpty then
-                ctx.Response.StatusCode <- 400
-                do! ctx.Response.WriteAsJsonAsync({| error = "At least one image is required" |})
-            else
+                            let songName = req.songName |> defaultIfNull ""
+                            let artist = req.artist |> defaultIfNull ""
+                            let sourceUrl = req.sourceUrl |> defaultIfNull ""
+                            let timeSignature = req.timeSignature |> defaultIfNull "4/4"
+                            let key = req.key |> defaultIfNull ""
 
-            let httpClient = getHttpClient ctx
+                            let! result =
+                                AnthropicClient.importChordChart httpClient config.AnthropicApiKey images songName artist sourceUrl req.bpm timeSignature key
+                                |> Async.StartAsTask
 
-            let parseDataUri (dataUri: string) =
-                if dataUri.Contains(",") then
-                    let prefix = dataUri.Substring(0, dataUri.IndexOf(","))
-                    let data = dataUri.Substring(dataUri.IndexOf(",") + 1)
-                    let mediaType =
-                        if prefix.Contains("image/jpeg") then "image/jpeg"
-                        elif prefix.Contains("image/webp") then "image/webp"
-                        elif prefix.Contains("image/gif") then "image/gif"
-                        else "image/png"
-                    (mediaType, data)
-                else
-                    ("image/png", dataUri)
-
-            let images = req.images |> List.map parseDataUri
-
-            let songName = if obj.ReferenceEquals(req.songName, null) then "" else req.songName
-            let artist = if obj.ReferenceEquals(req.artist, null) then "" else req.artist
-            let sourceUrl = if obj.ReferenceEquals(req.sourceUrl, null) then "" else req.sourceUrl
-            let timeSignature = if obj.ReferenceEquals(req.timeSignature, null) then "4/4" else req.timeSignature
-            let key = if obj.ReferenceEquals(req.key, null) then "" else req.key
-
-            let! result =
-                AnthropicClient.importChordChart httpClient config.AnthropicApiKey images songName artist sourceUrl req.bpm timeSignature key
-                |> Async.StartAsTask
-
-            match result with
-            | Ok chords ->
-                do! ctx.Response.WriteAsJsonAsync({| chords = chords |})
-            | Error e ->
-                ctx.Response.StatusCode <- 500
-                do! ctx.Response.WriteAsJsonAsync({| error = $"AI import failed: {e}" |})
+                            match result with
+                            | Ok chords ->
+                                do! ctx.Response.WriteAsJsonAsync({| chords = chords |})
+                            | Error e ->
+                                do! respond500 ctx $"AI import failed: {e}"
+                        })
         }
 
     let getHistory (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, _, email) = getUserInfo ctx
-
-            match thread with
-            | Some t when not (Repository.canAccessWithEmail userId email t) ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | Some t -> do! ctx.Response.WriteAsJsonAsync(t.History)
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-        }
+        withThread repo threadId ctx (fun t _ ->
+            ctx.Response.WriteAsJsonAsync(t.History))
 
     let exportThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, _, email) = getUserInfo ctx
-
-            match thread with
-            | Some t when not (Repository.canAccessWithEmail userId email t) ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | Some t ->
-                let sb = StringBuilder()
-                sb.AppendLine($"# {t.Title}") |> ignore
-                sb.AppendLine() |> ignore
-                sb.AppendLine($"- Key: {t.Key}") |> ignore
-                sb.AppendLine($"- Time Signature: {t.TimeSignature}") |> ignore
-                sb.AppendLine($"- BPM: {t.Bpm}") |> ignore
-                sb.AppendLine() |> ignore
-                sb.AppendLine("## Score") |> ignore
-                sb.AppendLine() |> ignore
-                sb.AppendLine("```") |> ignore
-                sb.AppendLine(t.Score) |> ignore
-                sb.AppendLine("```") |> ignore
+        withThread repo threadId ctx (fun t _ ->
+            task {
+                let markdown =
+                    [ $"# {t.Title}"
+                      ""
+                      $"- Key: {t.Key}"
+                      $"- Time Signature: {t.TimeSignature}"
+                      $"- BPM: {t.Bpm}"
+                      ""
+                      "## Score"
+                      ""
+                      "```"
+                      t.Score
+                      "```" ]
+                    |> String.concat Environment.NewLine
 
                 ctx.Response.ContentType <- "text/markdown; charset=utf-8"
-                do! ctx.Response.WriteAsync(sb.ToString())
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-        }
+                do! ctx.Response.WriteAsync(markdown + Environment.NewLine)
+            })
 
     let shareThread (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, _, email) = getUserInfo ctx
+        withOwnerThread repo threadId ctx "Only the owner can share" (fun _ _ ->
+            withParsedRequest<ShareRequest> ctx (fun req -> isNotNull req.visibility) (fun req ->
+                task {
+                    let sharedWith = if obj.ReferenceEquals(req.sharedWith, null) then [] else req.sharedWith
+                    let! result = repo.UpdateShare threadId req.visibility sharedWith
 
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when t.CreatedBy <> userId ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Only the owner can share" |})
-            | Some _ ->
-                let! req =
-                    try
-                        ctx.Request.ReadFromJsonAsync<ShareRequest>()
-                    with _ ->
-                        ValueTask<ShareRequest>(Unchecked.defaultof<ShareRequest>)
-
-                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.visibility, null) then
-                    ctx.Response.StatusCode <- 400
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
-                else
-
-                let sharedWith = if obj.ReferenceEquals(req.sharedWith, null) then [] else req.sharedWith
-                let! result = repo.UpdateShare threadId req.visibility sharedWith
-
-                match result with
-                | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
-                | None ->
-                    ctx.Response.StatusCode <- 500
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Failed to update share settings" |})
-        }
+                    match result with
+                    | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)
+                    | None -> do! respond500 ctx "Failed to update share settings"
+                }))
 
     let addComment (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, userName, email) = getUserInfo ctx
+        withThread repo threadId ctx (fun _ user ->
+            withParsedRequest<AddCommentRequest> ctx (fun req -> isNotNull req.text) (fun req ->
+                task {
+                    let comment: Comment =
+                        { Id = Guid.NewGuid().ToString("N")
+                          UserId = user.UserId
+                          UserName = user.UserName
+                          Text = req.text
+                          AnchorType = req.anchorType |> defaultIfNull "global"
+                          AnchorStart = req.anchorStart
+                          AnchorEnd = req.anchorEnd
+                          AnchorSnapshot = req.anchorSnapshot |> defaultIfNull ""
+                          CreatedAt = DateTime.UtcNow }
 
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccessWithEmail userId email t) ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | Some _ ->
-                let! req =
-                    try
-                        ctx.Request.ReadFromJsonAsync<AddCommentRequest>()
-                    with _ ->
-                        ValueTask<AddCommentRequest>(Unchecked.defaultof<AddCommentRequest>)
-
-                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.text, null) then
-                    ctx.Response.StatusCode <- 400
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
-                else
-
-                let comment: Comment =
-                    { Id = Guid.NewGuid().ToString("N")
-                      UserId = userId
-                      UserName = userName
-                      Text = req.text
-                      AnchorType = if obj.ReferenceEquals(req.anchorType, null) then "global" else req.anchorType
-                      AnchorStart = req.anchorStart
-                      AnchorEnd = req.anchorEnd
-                      AnchorSnapshot = if obj.ReferenceEquals(req.anchorSnapshot, null) then "" else req.anchorSnapshot
-                      CreatedAt = DateTime.UtcNow }
-
-                let! created = repo.AddComment threadId comment
-                ctx.Response.StatusCode <- 201
-                do! ctx.Response.WriteAsJsonAsync(created)
-        }
+                    let! created = repo.AddComment threadId comment
+                    do! respondJson ctx 201 created
+                }))
 
     let listComments (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, _, email) = getUserInfo ctx
-
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccessWithEmail userId email t) ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | Some _ ->
+        withThread repo threadId ctx (fun _ _ ->
+            task {
                 let! comments = repo.GetComments threadId
                 do! ctx.Response.WriteAsJsonAsync(comments)
-        }
+            })
 
     let deleteComment (repo: IThreadRepository) (threadId: string) (commentId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, _, email) = getUserInfo ctx
-
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccessWithEmail userId email t) ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | Some t ->
+        withThread repo threadId ctx (fun t user ->
+            task {
                 let! comments = repo.GetComments threadId
                 let commentOpt = comments |> List.tryFind (fun c -> c.Id = commentId)
 
                 match commentOpt with
                 | None ->
-                    ctx.Response.StatusCode <- 404
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Comment not found" |})
-                | Some c when c.UserId <> userId && t.CreatedBy <> userId ->
-                    ctx.Response.StatusCode <- 403
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Only comment author or thread owner can delete" |})
+                    do! respond404 ctx
+                | Some c when c.UserId <> user.UserId && t.CreatedBy <> user.UserId ->
+                    do! respond403 ctx "Only comment author or thread owner can delete"
                 | Some _ ->
                     let! _ = repo.DeleteComment threadId commentId
                     ctx.Response.StatusCode <- 204
-        }
+            })
 
     let addAnnotation (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, userName, email) = getUserInfo ctx
+        withThread repo threadId ctx (fun _ user ->
+            withParsedRequest<AddAnnotationRequest> ctx (fun req -> isNotNull req.annotationType) (fun req ->
+                task {
+                    let annotation: Annotation =
+                        { Id = Guid.NewGuid().ToString("N")
+                          UserId = user.UserId
+                          UserName = user.UserName
+                          Type = req.annotationType
+                          StartBar = req.startBar
+                          EndBar = req.endBar
+                          Snapshot = req.snapshot |> defaultIfNull ""
+                          Emoji = req.emoji |> defaultIfNull ""
+                          AiComment = ""
+                          CreatedAt = DateTime.UtcNow }
 
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccessWithEmail userId email t) ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | Some _ ->
-                let! req =
-                    try
-                        ctx.Request.ReadFromJsonAsync<AddAnnotationRequest>()
-                    with _ ->
-                        ValueTask<AddAnnotationRequest>(Unchecked.defaultof<AddAnnotationRequest>)
-
-                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.annotationType, null) then
-                    ctx.Response.StatusCode <- 400
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
-                else
-
-                let annotation: Annotation =
-                    { Id = Guid.NewGuid().ToString("N")
-                      UserId = userId
-                      UserName = userName
-                      Type = req.annotationType
-                      StartBar = req.startBar
-                      EndBar = req.endBar
-                      Snapshot = if obj.ReferenceEquals(req.snapshot, null) then "" else req.snapshot
-                      Emoji = if obj.ReferenceEquals(req.emoji, null) then "" else req.emoji
-                      AiComment = ""
-                      CreatedAt = DateTime.UtcNow }
-
-                let! created = repo.AddAnnotation threadId annotation
-                ctx.Response.StatusCode <- 201
-                do! ctx.Response.WriteAsJsonAsync(created)
-        }
+                    let! created = repo.AddAnnotation threadId annotation
+                    do! respondJson ctx 201 created
+                }))
 
     let listAnnotations (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, _, email) = getUserInfo ctx
-
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccessWithEmail userId email t) ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | Some _ ->
+        withThread repo threadId ctx (fun _ _ ->
+            task {
                 let! annotations = repo.GetAnnotations threadId
                 do! ctx.Response.WriteAsJsonAsync(annotations)
-        }
+            })
 
     let deleteAnnotation (repo: IThreadRepository) (threadId: string) (annotationId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, _, email) = getUserInfo ctx
-
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccessWithEmail userId email t) ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | Some _ ->
+        withThread repo threadId ctx (fun _ user ->
+            task {
                 let! annotations = repo.GetAnnotations threadId
                 let annotationOpt = annotations |> List.tryFind (fun a -> a.Id = annotationId)
 
                 match annotationOpt with
                 | None ->
-                    ctx.Response.StatusCode <- 404
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Annotation not found" |})
-                | Some a when a.UserId <> userId ->
-                    ctx.Response.StatusCode <- 403
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Only annotation author can delete" |})
+                    do! respond404 ctx
+                | Some a when a.UserId <> user.UserId ->
+                    do! respond403 ctx "Only annotation author can delete"
                 | Some _ ->
                     let! _ = repo.DeleteAnnotation threadId annotationId
                     ctx.Response.StatusCode <- 204
-        }
+            })
 
     let analyzeSelection (repo: IThreadRepository) (config: AppConfig) (threadId: string) (ctx: HttpContext) : Task =
-        task {
-            let! thread = repo.GetById(threadId)
-            let (userId, userName, email) = getUserInfo ctx
-
-            match thread with
-            | None ->
-                ctx.Response.StatusCode <- 404
-                do! ctx.Response.WriteAsJsonAsync({| error = "Thread not found" |})
-            | Some t when not (Repository.canAccessWithEmail userId email t) ->
-                ctx.Response.StatusCode <- 403
-                do! ctx.Response.WriteAsJsonAsync({| error = "Access denied" |})
-            | Some _ ->
+        withThread repo threadId ctx (fun _ user ->
+            task {
                 if String.IsNullOrEmpty(config.AnthropicApiKey) then
-                    ctx.Response.StatusCode <- 400
-                    do! ctx.Response.WriteAsJsonAsync({| error = "AI analysis is not configured" |})
+                    do! respond400 ctx "AI analysis is not configured"
                 else
 
-                let! req =
-                    try
-                        ctx.Request.ReadFromJsonAsync<AnalyzeSelectionRequest>()
-                    with _ ->
-                        ValueTask<AnalyzeSelectionRequest>(Unchecked.defaultof<AnalyzeSelectionRequest>)
+                do! withParsedRequest<AnalyzeSelectionRequest> ctx
+                        (fun req -> isNotNull req.selectedChords)
+                        (fun req ->
+                            task {
+                                let httpClient = getHttpClient ctx
 
-                if obj.ReferenceEquals(req, null) || obj.ReferenceEquals(req.selectedChords, null) then
-                    ctx.Response.StatusCode <- 400
-                    do! ctx.Response.WriteAsJsonAsync({| error = "Invalid request body" |})
-                else
+                                let! result =
+                                    AnthropicClient.analyzeSelection httpClient config.AnthropicApiKey req.selectedChords req.fullScore req.key req.timeSignature
+                                    |> Async.StartAsTask
 
-                let httpClient = getHttpClient ctx
-                let! result =
-                    AnthropicClient.analyzeSelection httpClient config.AnthropicApiKey req.selectedChords req.fullScore req.key req.timeSignature
-                    |> Async.StartAsTask
+                                match result with
+                                | Ok aiComment ->
+                                    let annotation: Annotation =
+                                        { Id = Guid.NewGuid().ToString("N")
+                                          UserId = user.UserId
+                                          UserName = user.UserName
+                                          Type = "ai_analysis"
+                                          StartBar = 0
+                                          EndBar = 0
+                                          Snapshot = req.selectedChords
+                                          Emoji = ""
+                                          AiComment = aiComment
+                                          CreatedAt = DateTime.UtcNow }
 
-                match result with
-                | Ok aiComment ->
-                    let annotation: Annotation =
-                        { Id = Guid.NewGuid().ToString("N")
-                          UserId = userId
-                          UserName = userName
-                          Type = "ai_analysis"
-                          StartBar = 0
-                          EndBar = 0
-                          Snapshot = req.selectedChords
-                          Emoji = ""
-                          AiComment = aiComment
-                          CreatedAt = DateTime.UtcNow }
-
-                    let! created = repo.AddAnnotation threadId annotation
-                    do! ctx.Response.WriteAsJsonAsync(created)
-                | Error e ->
-                    ctx.Response.StatusCode <- 500
-                    do! ctx.Response.WriteAsJsonAsync({| error = $"AI analysis failed: {e}" |})
-        }
+                                    let! created = repo.AddAnnotation threadId annotation
+                                    do! ctx.Response.WriteAsJsonAsync(created)
+                                | Error e ->
+                                    do! respond500 ctx $"AI analysis failed: {e}"
+                            })
+            })

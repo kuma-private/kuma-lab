@@ -10,8 +10,10 @@
 	import MiniMap from '$lib/components/MiniMap.svelte';
 	import NoteInfoPanel from '$lib/components/NoteInfoPanel.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
+	import EditorModeModal from '$lib/components/EditorModeModal.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import type { PianoRollBar } from '$lib/piano-roll-model';
+	import { pianoRollToScore, type PianoRollBar } from '$lib/piano-roll-model';
+	import { pianoRollBarsToBase64, pianoRollBarsToMidi, downloadMidiFile, importMidiFile } from '$lib/midi-io';
 
 	const store = createAppStore();
 	const threadId = page.params.id as string;
@@ -33,7 +35,11 @@
 	let scoreEditorValue = $state('');
 	let scoreInitialized = $state(false);
 	let submitting = $state(false);
-	const hasChanges = $derived(store.currentThread ? scoreEditorValue !== (store.currentThread.score || '') : false);
+	let midiDirty = $state(false); // Track if piano roll has unsaved changes
+	const hasChanges = $derived(midiDirty || (store.currentThread ? scoreEditorValue !== (store.currentThread.score || '') : false));
+
+	// Editor mode modal state
+	let editorModeModalOpen = $state(false);
 
 	// PianoRollEditor exposed state (for VelocityLane + MiniMap)
 	let prBars = $state<PianoRollBar[]>([]);
@@ -51,6 +57,9 @@
 	let scrollSeq = 0;
 	let noteUpdate = $state<{ noteId: string; updates: { midi?: number; velocity?: number; durationTicks?: number; startTick?: number; isChordTone?: boolean }; seq: number } | null>(null);
 	let noteUpdateSeq = 0;
+	let midiDataOverride = $state<{ data: string; seq: number } | null>(null);
+	let midiOverrideSeq = 0;
+	let midiFileInput: HTMLInputElement;
 
 	const handleStateExpose = (state: PianoRollExposedState) => {
 		prBars = state.bars;
@@ -95,7 +104,6 @@
 		if (thread && !scoreInitialized) {
 			scoreEditorValue = thread.score || '';
 			scoreInitialized = true;
-			console.log('[LOAD] thread.pianoRollData:', thread.pianoRollData ? thread.pianoRollData.substring(0, 100) + '...' : 'EMPTY');
 		}
 	});
 
@@ -107,6 +115,33 @@
 			lastSyncedAt = thread.lastEditedAt;
 		}
 	});
+
+	// Show editor mode modal when editorMode is not set
+	$effect(() => {
+		const thread = store.currentThread;
+		if (thread && !thread.editorMode) {
+			editorModeModalOpen = true;
+		}
+	});
+
+	const handleEditorModeSelect = async (mode: 'chord' | 'pianoroll') => {
+		editorModeModalOpen = false;
+		const thread = store.currentThread;
+		if (!thread) return;
+		try {
+			await store.updateSettings(threadId, {
+				key: thread.key,
+				timeSignature: thread.timeSignature,
+				bpm: thread.bpm,
+				editorMode: mode,
+			});
+		} catch {
+			// settings update failed, continue anyway
+		}
+		if (mode === 'chord') {
+			window.location.href = `/thread/${threadId}`;
+		}
+	};
 
 	// Unsaved changes warning
 	$effect(() => {
@@ -181,15 +216,16 @@
 
 	// Save
 	const handleSave = async () => {
-		if (submitting) return;
+		if (submitting || !hasChanges) return;
 		submitting = true;
 		try {
-			const snapshot = $state.snapshot(prBars);
-			const pianoRollData = JSON.stringify(snapshot);
-			console.log('[SAVE] pianoRollData length:', pianoRollData.length, 'bars:', snapshot.length, 'first bar entries:', snapshot[0]?.entries?.length);
-			await store.saveScore(threadId, { score: scoreEditorValue, comment: '', pianoRollData });
+			const thread = store.currentThread;
+			const ts = parseTimeSignature(thread?.timeSignature || '4/4');
+			const midiData = pianoRollBarsToBase64($state.snapshot(prBars), thread?.bpm || 120, ts);
+			await store.saveScore(threadId, { score: scoreEditorValue, comment: '', midiData });
 			player?.dispose();
 			player = null;
+			midiDirty = false;
 			showToast('保存しました', 'success');
 		} catch {
 			showToast('保存に失敗しました', 'error');
@@ -198,8 +234,37 @@
 		}
 	};
 
+	const handleMidiExport = () => {
+		const thread = store.currentThread;
+		if (!thread || prBars.length === 0) return;
+		const ts = parseTimeSignature(thread.timeSignature);
+		const midi = pianoRollBarsToMidi($state.snapshot(prBars), thread.bpm, ts);
+		downloadMidiFile(midi, (thread.title || 'export') + '.mid');
+	};
+
+	const handleMidiImport = async (e: Event) => {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		try {
+			const result = await importMidiFile(file);
+			const ts = { beats: result.timeSignature.beats, beatValue: result.timeSignature.beatValue };
+			const midiBase64 = pianoRollBarsToBase64(result.bars, result.bpm, ts);
+			midiDataOverride = { data: midiBase64, seq: ++midiOverrideSeq };
+			const newScore = pianoRollToScore(result.bars);
+			scoreEditorValue = newScore;
+			player?.dispose();
+			player = null;
+			showToast('MIDIインポート完了', 'success');
+		} catch {
+			showToast('MIDIインポートに失敗しました', 'error');
+		}
+		input.value = '';
+	};
+
 	const handleScoreChange = (value: string) => {
 		scoreEditorValue = value;
+		midiDirty = true;
 		// Invalidate player so it rebuilds with new score on next play
 		player?.dispose();
 		player = null;
@@ -230,6 +295,8 @@
 {#if store.currentThread}
 	{@const thread = store.currentThread}
 
+	<input type="file" accept=".mid,.midi" class="hidden" bind:this={midiFileInput} onchange={handleMidiImport} />
+
 	<div class="pianoroll-page">
 		<!-- Header -->
 		<header class="pr-header">
@@ -247,15 +314,31 @@
 					</svg>
 					コード
 				</a>
-				<button
-					class="pr-save-btn"
-					class:pr-save-btn--active={hasChanges}
-					onclick={handleSave}
-					disabled={submitting || !hasChanges}
-				>
-					{submitting ? '保存中...' : '保存'}
-				</button>
-			</div>
+				<button class="pr-midi-btn" onclick={() => midiFileInput?.click()} title="MIDIファイルを読み込み">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+							<polyline points="7 10 12 15 17 10" />
+							<line x1="12" y1="15" x2="12" y2="3" />
+						</svg>
+						インポート
+					</button>
+					<button class="pr-midi-btn" onclick={handleMidiExport} title="MIDIファイルとしてダウンロード" disabled={prBars.length === 0}>
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+							<polyline points="17 8 12 3 7 8" />
+							<line x1="12" y1="3" x2="12" y2="15" />
+						</svg>
+						エクスポート
+					</button>
+					<button
+						class="pr-save-btn"
+						class:pr-save-btn--active={hasChanges}
+						onclick={handleSave}
+						disabled={submitting || !hasChanges}
+					>
+						{submitting ? '保存中...' : '保存'}
+					</button>
+				</div>
 		</header>
 
 		<!-- MiniMap -->
@@ -287,13 +370,14 @@
 					{activeBarIndex}
 					{currentTime}
 					{totalDuration}
-					initialPianoRollData={thread.pianoRollData || ''}
+					initialMidiData={thread.midiData || ''}
 					onScoreChange={handleScoreChange}
 					onSeek={handleSeek}
 					onStateExpose={handleStateExpose}
 					{velocityUpdate}
 					{scrollUpdate}
 					{noteUpdate}
+					{midiDataOverride}
 				/>
 			</div>
 			<NoteInfoPanel
@@ -343,6 +427,11 @@
 			/>
 		</div>
 	</div>
+
+	<EditorModeModal
+		open={editorModeModalOpen}
+		onSelect={handleEditorModeSelect}
+	/>
 
 {:else if store.loading}
 	<div class="pr-loading">
@@ -425,6 +514,32 @@
 	.pr-link-btn:hover {
 		background: rgba(255, 255, 255, 0.06);
 		color: var(--text-primary, #e0e0ff);
+	}
+
+	.hidden {
+		display: none;
+	}
+
+	.pr-midi-btn {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 10px;
+		font-size: 12px;
+		color: var(--text-secondary, #9090b0);
+		background: transparent;
+		border: 1px solid var(--border-subtle, #2a2a5a);
+		border-radius: 6px;
+		cursor: pointer;
+		transition: background 0.15s, color 0.15s;
+	}
+	.pr-midi-btn:hover:not(:disabled) {
+		background: rgba(255, 255, 255, 0.06);
+		color: var(--text-primary, #e0e0ff);
+	}
+	.pr-midi-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
 
 	.pr-save-btn {
@@ -528,6 +643,10 @@
 		}
 		.pr-save-btn {
 			padding: 3px 10px;
+			font-size: 11px;
+		}
+		.pr-midi-btn {
+			padding: 3px 6px;
 			font-size: 11px;
 		}
 		.pr-minimap {

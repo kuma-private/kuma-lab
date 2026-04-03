@@ -22,6 +22,7 @@
 	},
 	"dependencies": {
 		"@sveltejs/adapter-static": "^3.0.10",
+		"@tonejs/midi": "^2.0.28",
 		"tone": "^15.1.22"
 	}
 }

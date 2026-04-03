@@ -8,6 +8,7 @@ module Models =
         { UserId: string
           UserName: string
           Score: string
+          MidiData: string
           Comment: string
           AiComment: string
           AiScores: string
@@ -23,19 +24,20 @@ module Models =
           CreatedByName: string
           CreatedAt: DateTime
           Score: string
-          PianoRollData: string
+          MidiData: string
           LastEditedBy: string
           LastEditedAt: DateTime
           Members: string list
           History: SaveHistory list
           Visibility: string
-          SharedWith: string list }
+          SharedWith: string list
+          EditorMode: string }
 
     type CreateThreadRequest = { title: string }
 
-    type SaveScoreRequest = { score: string; comment: string; pianoRollData: string }
+    type SaveScoreRequest = { score: string; comment: string; midiData: string }
 
-    type UpdateSettingsRequest = { title: string; key: string; timeSignature: string; bpm: int }
+    type UpdateSettingsRequest = { title: string; key: string; timeSignature: string; bpm: int; editorMode: string }
 
     type TransformRequest =
         { selectedChords: string
@@ -97,3 +99,45 @@ module Models =
           fullScore: string
           key: string
           timeSignature: string }
+
+    /// Represents authenticated user information extracted from HttpContext
+    type UserInfo =
+        { UserId: string
+          UserName: string
+          Email: string }
+
+    // --- Validation helpers ---
+
+    /// Safely coalesce a possibly-null string to a default value
+    let defaultIfNull (defaultValue: string) (value: string) =
+        if obj.ReferenceEquals(value, null) then defaultValue else value
+
+    /// Check if a deserialized request object is non-null
+    let isNotNull (value: 'T) = not (obj.ReferenceEquals(value, null))
+
+    /// Validate that a Base64 string contains a valid MIDI file (starts with MThd header)
+    let isValidMidiData (base64: string) =
+        if System.String.IsNullOrEmpty(base64) then true // empty is OK (no MIDI data)
+        else
+            try
+                let bytes = Convert.FromBase64String(base64)
+                bytes.Length >= 14
+                && bytes.[0] = byte 'M' && bytes.[1] = byte 'T'
+                && bytes.[2] = byte 'h' && bytes.[3] = byte 'd'
+            with
+            | :? FormatException -> false
+            | :? ArgumentException -> false
+
+    /// Parse a data URI into (mediaType, base64data)
+    let parseDataUri (dataUri: string) =
+        if dataUri.Contains(",") then
+            let prefix = dataUri.Substring(0, dataUri.IndexOf(","))
+            let data = dataUri.Substring(dataUri.IndexOf(",") + 1)
+            let mediaType =
+                if prefix.Contains("image/jpeg") then "image/jpeg"
+                elif prefix.Contains("image/webp") then "image/webp"
+                elif prefix.Contains("image/gif") then "image/gif"
+                else "image/png"
+            (mediaType, data)
+        else
+            ("image/png", dataUri)

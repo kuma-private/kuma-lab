@@ -104,55 +104,66 @@ function parseToken(token: string): BarEntry | null {
 
 // ── Full progression parsing ───────────────────────────
 
+// ── Progression parsing helpers ────────────────────────
+
+/** Classify a line as comment (returns text) or content (returns null). Pure. */
+function extractComment(line: string): string | null {
+  const trimmed = line.trim();
+  if (trimmed.startsWith('//')) return trimmed.slice(2).trim();
+  if (trimmed.startsWith('#')) return trimmed.slice(1).trim();
+  return null;
+}
+
+/** Separate lines into comments and content parts. Pure. */
+function partitionLines(lines: ReadonlyArray<string>): { comments: string[]; contentParts: string[] } {
+  const comments: string[] = [];
+  const contentParts: string[] = [];
+  for (const line of lines) {
+    const comment = extractComment(line);
+    if (comment !== null) {
+      comments.push(comment);
+    } else if (line.trim()) {
+      contentParts.push(line.trim());
+    }
+  }
+  return { comments, contentParts };
+}
+
+/** Parse a single bar segment (text between | delimiters) into a ParsedBar. Pure. */
+function parseBarSegment(segment: string, barNumber: number): ParsedBar | null {
+  const trimmed = segment.trim();
+  if (!trimmed) return null;
+  const entries = trimmed.split(/\s+/).filter(Boolean)
+    .map(parseToken)
+    .filter((e): e is BarEntry => e !== null);
+  return { barNumber, entries };
+}
+
+/** Convert joined content into ParsedBar[]. Pure. */
+function segmentsToBars(content: string): ParsedBar[] {
+  return content.split('|')
+    .reduce<ParsedBar[]>((acc, segment, _i) => {
+      const bar = parseBarSegment(segment, acc.length + 1);
+      return bar ? [...acc, bar] : acc;
+    }, []);
+}
+
 /**
  * Parse a rechord-style chord progression string.
  *
  * Format:
  *   | Am7 Dm7 | G7 | Cmaj7 |
- *   | % |                      ← repeat previous bar
- *   | _ Am7 | G7 = |           ← rest then chord; sustain G7
+ *   | % |                      <- repeat previous bar
+ *   | _ Am7 | G7 = |           <- rest then chord; sustain G7
  *   # this is a comment
- *   | C/E | F#dim |            ← slash chord, sharp root
+ *   | C/E | F#dim |            <- slash chord, sharp root
  *
  * Lines starting with # are treated as comments.
  * Bars are delimited by |. Whitespace within bars separates entries.
  */
 export function parseProgression(input: string): ParseResult {
-  const comments: string[] = [];
-  const bars: ParsedBar[] = [];
-
-  // Collect all lines, filter comments
-  const lines = input.split('\n');
-  const contentParts: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('#') || trimmed.startsWith('//')) {
-      const text = trimmed.startsWith('//')
-        ? trimmed.slice(2).trim()
-        : trimmed.slice(1).trim();
-      comments.push(text);
-    } else if (trimmed) {
-      contentParts.push(trimmed);
-    }
-  }
-
-  // Join all content lines and split by |
-  const joined = contentParts.join(' ');
-  const segments = joined.split('|');
-
-  let barNumber = 1;
-  for (const segment of segments) {
-    const trimmed = segment.trim();
-    if (!trimmed) continue;
-
-    const tokens = trimmed.split(/\s+/).filter(Boolean);
-    const entries: BarEntry[] = tokens.map(parseToken).filter((e): e is BarEntry => e !== null);
-
-    bars.push({ barNumber, entries });
-    barNumber++;
-  }
-
+  const { comments, contentParts } = partitionLines(input.split('\n'));
+  const bars = segmentsToBars(contentParts.join(' '));
   return { bars, comments };
 }
 
