@@ -3,6 +3,31 @@
 参考音声（20秒程度）を使った歌声変換とゼロショット音声合成のローカルツールキット。
 Apple Silicon Mac (MPS) でネイティブ動作。
 
+## ディレクトリ構成
+
+```
+ai-sing/
+├── Makefile          # CLI エントリポイント
+├── speak.py          # Qwen3-TTS ゼロショットTTS
+├── seed-vc/          # Seed-VC (git clone)
+├── .venv-tts/        # TTS用 Python venv
+└── audio/
+    ├── source/       # 参考音声（自分の声）
+    ├── song/         # 変換元の楽曲
+    ├── separated/    # Demucs分離結果（vocals / no_vocals）
+    ├── output/       # Seed-VC変換結果
+    ├── final/        # ミックス済み最終出力
+    └── speak/        # TTS出力
+```
+
+## パイプライン
+
+```
+source（参考音声）
+  ├─→ sing:  song → [分離] → [声変換] → [ミックス] → final/
+  └─→ speak: テキスト → [TTS] → speak/
+```
+
 ## セットアップ
 
 ### 前提
@@ -36,36 +61,30 @@ python3.10 -m venv .venv-tts
 ### YouTube音声取得
 
 ```bash
-# 全体
-make clip URL="https://www.youtube.com/watch?v=xxx" NAME=song
-
-# 時間指定
-make clip URL="https://..." FROM=00:03:57 TO=00:04:17 NAME=clip
+make clip URL="https://..." NAME=song              # 全体
+make clip URL="https://..." FROM=00:01:00 TO=00:04:00 NAME=clip  # 時間指定
 ```
 
-### 歌声変換（全自動: 分離 → 変換 → 合成）
+### 歌声変換（全自動）
 
 ```bash
-make sing SOURCE=audio/song.wav TARGET=audio/my_voice.wav NAME=result
+make sing SOURCE=audio/song/song.wav TARGET=audio/source/my_voice.wav NAME=result
 ```
 
 ### 音声合成（ゼロショットTTS）
 
 ```bash
-# 単発
-make speak TEXT="こんにちは" TARGET=audio/my_voice.wav NAME=hello
-
-# 対話モード（モデル常駐）
-make speak-i TARGET=audio/my_voice.wav
+make speak TEXT="こんにちは" TARGET=audio/source/my_voice.wav NAME=hello
+make speak-i TARGET=audio/source/my_voice.wav   # 対話モード（モデル常駐）
 ```
 
 ### 個別ステップ
 
 ```bash
-make separate SOURCE=audio/song.wav                    # ボーカル分離
-make convert SOURCE=audio/vocals.wav TARGET=audio/my_voice.wav  # 声変換
-make mix VOCALS=... INST=... NAME=final                # ミックス
-make ui                                                 # Web UI起動
+make separate SOURCE=audio/song/song.wav
+make convert SOURCE=audio/vocals.wav TARGET=audio/source/my_voice.wav
+make mix VOCALS=... INST=... NAME=final
+make ui                                          # Seed-VC Web UI
 ```
 
 ## オプション
