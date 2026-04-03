@@ -237,7 +237,9 @@ function recognizeEntryChord(entry: PianoRollBarEntry): PianoRollBarEntry {
     : { ...entry, recognizedChordName: null, isCustomVoicing: true };
 }
 
-/** Extract chord names from bars (pure). Returns [updatedBars, chordNames]. */
+/** Extract chord names from bars (pure). Returns [updatedBars, chordNames].
+ *  Preserves originalChordName for unmodified entries to avoid cosmetic rewrites.
+ */
 function recognizeAllEntries(
   bars: ReadonlyArray<PianoRollBar>,
 ): { updatedBars: PianoRollBar[]; chordNames: (string | null)[] } {
@@ -245,11 +247,19 @@ function recognizeAllEntries(
   const updatedBars = bars.map(bar => ({
     ...bar,
     entries: bar.entries.map(entry => {
+      if (entry.notes.length === 0) {
+        chordNames.push(null);
+        return { ...entry, recognizedChordName: null, isCustomVoicing: false };
+      }
+      // If entry has original chord name and is NOT custom voicing, preserve it
+      // (avoids Am7→C69/A rewrites on unmodified entries)
+      if (entry.originalChordName && !entry.isCustomVoicing) {
+        chordNames.push(entry.originalChordName);
+        return { ...entry, recognizedChordName: entry.originalChordName };
+      }
+      // Entry was modified (custom voicing or no original) — re-recognize
       const updated = recognizeEntryChord(entry);
-      chordNames.push(updated.notes.length > 0
-        ? (updated.recognizedChordName ?? updated.originalChordName)
-        : null,
-      );
+      chordNames.push(updated.recognizedChordName ?? entry.originalChordName);
       return updated;
     }),
   }));

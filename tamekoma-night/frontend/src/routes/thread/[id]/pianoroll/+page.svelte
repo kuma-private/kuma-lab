@@ -216,7 +216,7 @@
 
 	// Save
 	const handleSave = async () => {
-		if (submitting) return;
+		if (submitting || !hasChanges) return;
 		submitting = true;
 		try {
 			const thread = store.currentThread;

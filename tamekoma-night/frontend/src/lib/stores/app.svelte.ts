@@ -72,6 +72,7 @@ export const createAppStore = () => {
 				currentThread = await api.getThread(threadId);
 			} catch (e) {
 				error = e instanceof Error ? e.message : 'Failed to save score';
+				throw e;
 			}
 		},
 
