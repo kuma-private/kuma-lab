@@ -66,7 +66,7 @@ module Repository =
                 | false, _ -> None
             |> Task.FromResult
 
-        let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) (title: string) : Task<Thread option> =
+        let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) (title: string) (editorMode: string) : Task<Thread option> =
             threads.TryGetValue(threadId)
             |> function
                 | true, thread ->
@@ -75,7 +75,8 @@ module Repository =
                             Title = if title <> "" then title else thread.Title
                             Key = key
                             TimeSignature = timeSignature
-                            Bpm = bpm }
+                            Bpm = bpm
+                            EditorMode = if editorMode <> "" then editorMode else thread.EditorMode }
                     threads.[threadId] <- updated
                     Some updated
                 | false, _ -> None
@@ -214,7 +215,8 @@ module Repository =
               Members = doc |> tryGetStringList <| "members"
               History = history
               Visibility = doc |> tryGetDocString <| "visibility" <| "private"
-              SharedWith = doc |> tryGetStringList <| "sharedWith" }
+              SharedWith = doc |> tryGetStringList <| "sharedWith"
+              EditorMode = doc |> tryGetDocString <| "editorMode" <| "" }
 
         let private toComment (doc: DocumentSnapshot) : Comment =
             { Id = doc.Id
@@ -276,7 +278,8 @@ module Repository =
                       "members", toStringList thread.Members
                       "history", System.Collections.Generic.List<obj>() :> obj
                       "visibility", thread.Visibility :> obj
-                      "sharedWith", toStringList thread.SharedWith ])
+                      "sharedWith", toStringList thread.SharedWith
+                      "editorMode", thread.EditorMode :> obj ])
 
         let private updateFields (docRef: DocumentReference) (updates: (string * obj) list) =
             task {
@@ -351,6 +354,7 @@ module Repository =
                     "history", (System.Collections.Generic.List<obj>(histDicts) :> obj)
                     "visibility", thread.Visibility :> obj
                     "sharedWith", toStringList thread.SharedWith
+                    "editorMode", thread.EditorMode :> obj
                 ]
                 return thread
             }
@@ -385,13 +389,14 @@ module Repository =
                     LastEditedAt = history.CreatedAt
                     History = thread.History @ [ history ] })
 
-        let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) (title: string) : Task<Thread option> =
+        let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) (title: string) (editorMode: string) : Task<Thread option> =
             updateThread threadId (fun thread ->
                 { thread with
                     Title = if title <> "" then title else thread.Title
                     Key = key
                     TimeSignature = timeSignature
-                    Bpm = bpm })
+                    Bpm = bpm
+                    EditorMode = if editorMode <> "" then editorMode else thread.EditorMode })
 
         let updateShare (threadId: string) (visibility: string) (sharedWith: string list) : Task<Thread option> =
             updateThread threadId (fun thread ->
@@ -491,7 +496,7 @@ module Repository =
           Update: Thread -> Task<Thread>
           Delete: string -> Task<bool>
           SaveScore: string -> string -> string option -> SaveHistory -> Task<Thread option>
-          UpdateSettings: string -> string -> string -> int -> string -> Task<Thread option>
+          UpdateSettings: string -> string -> string -> int -> string -> string -> Task<Thread option>
           UpdateShare: string -> string -> string list -> Task<Thread option>
           AddComment: string -> Comment -> Task<Comment>
           GetComments: string -> Task<Comment list>

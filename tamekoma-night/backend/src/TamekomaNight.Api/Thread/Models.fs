@@ -30,13 +30,14 @@ module Models =
           Members: string list
           History: SaveHistory list
           Visibility: string
-          SharedWith: string list }
+          SharedWith: string list
+          EditorMode: string }
 
     type CreateThreadRequest = { title: string }
 
     type SaveScoreRequest = { score: string; comment: string; midiData: string }
 
-    type UpdateSettingsRequest = { title: string; key: string; timeSignature: string; bpm: int }
+    type UpdateSettingsRequest = { title: string; key: string; timeSignature: string; bpm: int; editorMode: string }
 
     type TransformRequest =
         { selectedChords: string

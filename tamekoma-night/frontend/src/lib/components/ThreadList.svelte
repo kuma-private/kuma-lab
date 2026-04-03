@@ -128,7 +128,7 @@
 			{@const chords = previewChords(thread.score)}
 			{@const color = keyColor(thread.key)}
 			<a
-				href="/thread/{thread.id}"
+				href={thread.editorMode === 'pianoroll' ? `/thread/${thread.id}/pianoroll` : `/thread/${thread.id}`}
 				class="card"
 				style="animation-delay: {Math.min(i * 0.04, 0.6)}s"
 				aria-label="{thread.title} - {thread.key} {thread.bpm}BPM"

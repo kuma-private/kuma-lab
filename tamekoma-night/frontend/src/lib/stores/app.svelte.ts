@@ -75,7 +75,7 @@ export const createAppStore = () => {
 			}
 		},
 
-		updateSettings: async (threadId: string, data: { title?: string; key?: string; timeSignature?: string; bpm?: number }) => {
+		updateSettings: async (threadId: string, data: { title?: string; key?: string; timeSignature?: string; bpm?: number; editorMode?: string }) => {
 			error = null;
 			try {
 				await api.updateSettings(threadId, data);

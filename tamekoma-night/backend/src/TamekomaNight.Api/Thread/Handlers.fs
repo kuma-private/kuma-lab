@@ -140,7 +140,8 @@ module ThreadHandlers =
                        lastEditedBy = t.LastEditedBy
                        lastEditedAt = t.LastEditedAt
                        memberCount = t.Members.Length
-                       visibility = t.Visibility |})
+                       visibility = t.Visibility
+                       editorMode = t.EditorMode |})
 
             do! ctx.Response.WriteAsJsonAsync(result)
         }
@@ -166,7 +167,8 @@ module ThreadHandlers =
                       Members = [ user.UserId ]
                       History = []
                       Visibility = "private"
-                      SharedWith = [] }
+                      SharedWith = []
+                      EditorMode = "" }
 
                 let! created = repo.Create(thread)
                 do! respondJson ctx 201 {| id = created.Id |}
@@ -212,7 +214,8 @@ module ThreadHandlers =
             withParsedRequest<UpdateSettingsRequest> ctx (fun req -> isNotNull req.key) (fun req ->
                 task {
                     let title = req.title |> defaultIfNull ""
-                    let! result = repo.UpdateSettings threadId req.key req.timeSignature req.bpm title
+                    let editorMode = req.editorMode |> defaultIfNull ""
+                    let! result = repo.UpdateSettings threadId req.key req.timeSignature req.bpm title editorMode
 
                     match result with
                     | Some updated -> do! ctx.Response.WriteAsJsonAsync(updated)

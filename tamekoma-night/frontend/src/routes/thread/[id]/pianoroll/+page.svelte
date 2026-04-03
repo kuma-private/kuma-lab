@@ -10,6 +10,7 @@
 	import MiniMap from '$lib/components/MiniMap.svelte';
 	import NoteInfoPanel from '$lib/components/NoteInfoPanel.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
+	import EditorModeModal from '$lib/components/EditorModeModal.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { pianoRollToScore, type PianoRollBar } from '$lib/piano-roll-model';
 	import { pianoRollBarsToBase64, pianoRollBarsToMidi, downloadMidiFile, importMidiFile } from '$lib/midi-io';
@@ -35,6 +36,9 @@
 	let scoreInitialized = $state(false);
 	let submitting = $state(false);
 	const hasChanges = $derived(store.currentThread ? scoreEditorValue !== (store.currentThread.score || '') : false);
+
+	// Editor mode modal state
+	let editorModeModalOpen = $state(false);
 
 	// PianoRollEditor exposed state (for VelocityLane + MiniMap)
 	let prBars = $state<PianoRollBar[]>([]);
@@ -110,6 +114,33 @@
 			lastSyncedAt = thread.lastEditedAt;
 		}
 	});
+
+	// Show editor mode modal when editorMode is not set
+	$effect(() => {
+		const thread = store.currentThread;
+		if (thread && !thread.editorMode) {
+			editorModeModalOpen = true;
+		}
+	});
+
+	const handleEditorModeSelect = async (mode: 'chord' | 'pianoroll') => {
+		editorModeModalOpen = false;
+		const thread = store.currentThread;
+		if (!thread) return;
+		try {
+			await store.updateSettings(threadId, {
+				key: thread.key,
+				timeSignature: thread.timeSignature,
+				bpm: thread.bpm,
+				editorMode: mode,
+			});
+		} catch {
+			// settings update failed, continue anyway
+		}
+		if (mode === 'chord') {
+			window.location.href = `/thread/${threadId}`;
+		}
+	};
 
 	// Unsaved changes warning
 	$effect(() => {
@@ -393,6 +424,11 @@
 			/>
 		</div>
 	</div>
+
+	<EditorModeModal
+		open={editorModeModalOpen}
+		onSelect={handleEditorModeSelect}
+	/>
 
 {:else if store.loading}
 	<div class="pr-loading">
