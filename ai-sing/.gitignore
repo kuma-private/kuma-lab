@@ -1,5 +1,7 @@
 # 音声素材・出力
-audio/
+input/
+output/
+tmp/
 
 # 外部リポジトリ
 seed-vc/

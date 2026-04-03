@@ -7,25 +7,27 @@ Apple Silicon Mac (MPS) でネイティブ動作。
 
 ```
 ai-sing/
-├── Makefile          # CLI エントリポイント
-├── speak.py          # Qwen3-TTS ゼロショットTTS
-├── seed-vc/          # Seed-VC (git clone)
-├── .venv-tts/        # TTS用 Python venv
-└── audio/
-    ├── source/       # 参考音声（自分の声）
-    ├── song/         # 変換元の楽曲
-    ├── separated/    # Demucs分離結果（vocals / no_vocals）
-    ├── output/       # Seed-VC変換結果
-    ├── final/        # ミックス済み最終出力
-    └── speak/        # TTS出力
+├── Makefile
+├── scripts/
+│   ├── speak.py       # Qwen3-TTS ゼロショットTTS
+│   └── sing.py        # (予定) 歌声変換パイプライン
+├── input/
+│   ├── source/        # 参考音声（自分の声）
+│   └── song/          # 変換元の楽曲
+├── output/
+│   ├── sing/          # 歌声変換の最終出力
+│   └── speak/         # TTS出力
+├── tmp/               # 中間ファイル（分離結果、変換途中）
+├── seed-vc/           # Seed-VC (git clone)
+└── .venv-tts/         # TTS用 Python venv
 ```
 
 ## パイプライン
 
 ```
-source（参考音声）
-  ├─→ sing:  song → [分離] → [声変換] → [ミックス] → final/
-  └─→ speak: テキスト → [TTS] → speak/
+input/source/（参考音声）
+  ├─→ sing:  input/song/ → [分離] → [声変換] → [ミックス] → output/sing/
+  └─→ speak: テキスト → [TTS] → output/speak/
 ```
 
 ## セットアップ
@@ -61,30 +63,29 @@ python3.10 -m venv .venv-tts
 ### YouTube音声取得
 
 ```bash
-make clip URL="https://..." NAME=song              # 全体
-make clip URL="https://..." FROM=00:01:00 TO=00:04:00 NAME=clip  # 時間指定
+make clip URL="https://..." NAME=song                                  # 全体
+make clip URL="https://..." FROM=00:01:00 TO=00:04:00 NAME=clip       # 時間指定
 ```
 
 ### 歌声変換（全自動）
 
 ```bash
-make sing SOURCE=audio/song/song.wav TARGET=audio/source/my_voice.wav NAME=result
+make sing SOURCE=input/song/song.wav TARGET=input/source/my_voice.wav NAME=result
 ```
 
 ### 音声合成（ゼロショットTTS）
 
 ```bash
-make speak TEXT="こんにちは" TARGET=audio/source/my_voice.wav NAME=hello
-make speak-i TARGET=audio/source/my_voice.wav   # 対話モード（モデル常駐）
+make speak TEXT="こんにちは" TARGET=input/source/my_voice.wav NAME=hello
+make speak-i TARGET=input/source/my_voice.wav    # 対話モード（モデル常駐）
 ```
 
-### 個別ステップ
+### その他
 
 ```bash
-make separate SOURCE=audio/song/song.wav
-make convert SOURCE=audio/vocals.wav TARGET=audio/source/my_voice.wav
-make mix VOCALS=... INST=... NAME=final
-make ui                                          # Seed-VC Web UI
+make separate SOURCE=input/song/song.wav         # ボーカル分離のみ
+make ui                                           # Seed-VC Web UI
+make clean                                        # 中間ファイル削除
 ```
 
 ## オプション
