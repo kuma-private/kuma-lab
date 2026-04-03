@@ -22,6 +22,7 @@ module Repository =
     module InMemory =
 
         let private threads = ConcurrentDictionary<string, Thread>()
+        let private saveLock = obj()
         let private comments = ConcurrentDictionary<string, ConcurrentDictionary<string, Comment>>()
         let private annotations = ConcurrentDictionary<string, ConcurrentDictionary<string, Annotation>>()
 
@@ -53,16 +54,20 @@ module Repository =
         let saveScore (threadId: string) (score: string) (midiData: string option) (history: SaveHistory) : Task<Thread option> =
             threads.TryGetValue(threadId)
             |> function
-                | true, thread ->
-                    let updated =
-                        { thread with
-                            Score = score
-                            MidiData = midiData |> Option.defaultValue thread.MidiData
-                            LastEditedBy = history.UserId
-                            LastEditedAt = history.CreatedAt
-                            History = thread.History @ [ history ] }
-                    threads.[threadId] <- updated
-                    Some updated
+                | true, _ ->
+                    lock saveLock (fun () ->
+                        match threads.TryGetValue(threadId) with
+                        | true, thread ->
+                            let updated =
+                                { thread with
+                                    Score = score
+                                    MidiData = midiData |> Option.defaultValue thread.MidiData
+                                    LastEditedBy = history.UserId
+                                    LastEditedAt = history.CreatedAt
+                                    History = thread.History @ [ history ] }
+                            threads.[threadId] <- updated
+                            Some updated
+                        | false, _ -> None)
                 | false, _ -> None
             |> Task.FromResult
 
@@ -381,13 +386,23 @@ module Repository =
             }
 
         let saveScore (threadId: string) (score: string) (midiData: string option) (history: SaveHistory) : Task<Thread option> =
-            updateThread threadId (fun thread ->
-                { thread with
-                    Score = score
-                    MidiData = midiData |> Option.defaultValue thread.MidiData
-                    LastEditedBy = history.UserId
-                    LastEditedAt = history.CreatedAt
-                    History = thread.History @ [ history ] })
+            task {
+                let docRef = db.Value.Collection("threads").Document(threadId)
+                let histDict = saveHistoryToDict history :> obj
+                // Atomic update: use ArrayUnion for history to avoid race conditions
+                let updates: (string * obj) list = [
+                    "score", score :> obj
+                    "lastEditedBy", history.UserId :> obj
+                    "lastEditedAt", toTimestamp history.CreatedAt :> obj
+                    "history", Google.Cloud.Firestore.FieldValue.ArrayUnion(histDict) :> obj
+                ]
+                let updates =
+                    match midiData with
+                    | Some md -> ("midiData", md :> obj) :: updates
+                    | None -> updates
+                do! updateFields docRef updates
+                return! getById threadId
+            }
 
         let updateSettings (threadId: string) (key: string) (timeSignature: string) (bpm: int) (title: string) (editorMode: string) : Task<Thread option> =
             updateThread threadId (fun thread ->
