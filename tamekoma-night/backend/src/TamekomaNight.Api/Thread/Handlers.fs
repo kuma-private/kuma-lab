@@ -210,7 +210,7 @@ module ThreadHandlers =
                 }))
 
     let updateSettings (repo: IThreadRepository) (threadId: string) (ctx: HttpContext) : Task =
-        withOwnerThread repo threadId ctx "Only the owner can update settings" (fun _ _ ->
+        withThread repo threadId ctx (fun _ _ ->
             withParsedRequest<UpdateSettingsRequest> ctx (fun req -> isNotNull req.key) (fun req ->
                 task {
                     let title = req.title |> defaultIfNull ""

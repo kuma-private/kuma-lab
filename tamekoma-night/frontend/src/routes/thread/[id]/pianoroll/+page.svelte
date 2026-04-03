@@ -35,7 +35,8 @@
 	let scoreEditorValue = $state('');
 	let scoreInitialized = $state(false);
 	let submitting = $state(false);
-	const hasChanges = $derived(store.currentThread ? scoreEditorValue !== (store.currentThread.score || '') : false);
+	let midiDirty = $state(false); // Track if piano roll has unsaved changes
+	const hasChanges = $derived(midiDirty || (store.currentThread ? scoreEditorValue !== (store.currentThread.score || '') : false));
 
 	// Editor mode modal state
 	let editorModeModalOpen = $state(false);
@@ -224,6 +225,7 @@
 			await store.saveScore(threadId, { score: scoreEditorValue, comment: '', midiData });
 			player?.dispose();
 			player = null;
+			midiDirty = false;
 			showToast('保存しました', 'success');
 		} catch {
 			showToast('保存に失敗しました', 'error');
@@ -262,6 +264,7 @@
 
 	const handleScoreChange = (value: string) => {
 		scoreEditorValue = value;
+		midiDirty = true;
 		// Invalidate player so it rebuilds with new score on next play
 		player?.dispose();
 		player = null;
