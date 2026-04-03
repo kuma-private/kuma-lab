@@ -189,8 +189,14 @@ module ThreadHandlers =
         withThread repo threadId ctx (fun _ user ->
             withParsedRequest<SaveScoreRequest> ctx (fun req -> isNotNull req.score) (fun req ->
                 task {
-                    let midiData =
-                        req.midiData |> defaultIfNull "" |> function "" -> None | v -> Some v
+                    let rawMidiData = req.midiData |> defaultIfNull ""
+
+                    // Validate MIDI data if provided
+                    if rawMidiData <> "" && not (isValidMidiData rawMidiData) then
+                        do! respond400 ctx "Invalid MIDI data"
+                    else
+
+                    let midiData = if rawMidiData = "" then None else Some rawMidiData
 
                     let history =
                         { UserId = user.UserId

@@ -115,6 +115,19 @@ module Models =
     /// Check if a deserialized request object is non-null
     let isNotNull (value: 'T) = not (obj.ReferenceEquals(value, null))
 
+    /// Validate that a Base64 string contains a valid MIDI file (starts with MThd header)
+    let isValidMidiData (base64: string) =
+        if System.String.IsNullOrEmpty(base64) then true // empty is OK (no MIDI data)
+        else
+            try
+                let bytes = Convert.FromBase64String(base64)
+                bytes.Length >= 14
+                && bytes.[0] = byte 'M' && bytes.[1] = byte 'T'
+                && bytes.[2] = byte 'h' && bytes.[3] = byte 'd'
+            with
+            | :? FormatException -> false
+            | :? ArgumentException -> false
+
     /// Parse a data URI into (mediaType, base64data)
     let parseDataUri (dataUri: string) =
         if dataUri.Contains(",") then

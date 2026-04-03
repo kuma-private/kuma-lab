@@ -307,16 +307,14 @@
 			return;
 		}
 		if (initialMidiData) {
-			try {
-				const result = base64ToPianoRollBars(initialMidiData);
-				if (result.bars && result.bars.length > 0) {
-					bars = result.bars;
-					midiIsSourceOfTruth = true;
-					return;
-				}
-			} catch { /* fall through */ }
+			const result = base64ToPianoRollBars(initialMidiData);
+			if (result.bars && result.bars.length > 0) {
+				bars = result.bars;
+				midiIsSourceOfTruth = true;
+				return;
+			}
 		}
-		// Don't lock in empty score — wait for the real score to arrive
+		// No midiData: convert from score text (first-time open)
 		if (!score.trim()) return;
 		bars = scoreToPianoRoll(score, parsedTimeSignature, bpm);
 		midiIsSourceOfTruth = true;
