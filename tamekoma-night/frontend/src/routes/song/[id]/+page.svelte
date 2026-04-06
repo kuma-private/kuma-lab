@@ -52,11 +52,28 @@
 		}
 	};
 
+	const handlePlay = () => { playerState = 'playing'; };
+	const handlePause = () => { playerState = 'paused'; };
+
 	const handleKeydown = (e: KeyboardEvent) => {
+		// Cmd/Ctrl+S: 保存
 		if ((e.ctrlKey || e.metaKey) && e.key === 's') {
 			e.preventDefault();
 			handleSave();
+			return;
 		}
+		// Space: 再生/一時停止（input/textarea 以外）
+		if (e.key === ' ' && !(e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement)) {
+			e.preventDefault();
+			if (playerState === 'playing') handlePause();
+			else handlePlay();
+			return;
+		}
+		// Escape: ポップオーバーを閉じる（フォーカス解除）
+		if (e.key === 'Escape') {
+			if (e.target instanceof HTMLElement) e.target.blur();
+		}
+		// Cmd/Ctrl+Z: Undo (将来用のプレースホルダー)
 	};
 </script>
 
@@ -139,8 +156,8 @@
 			currentChord={currentChord}
 			volume={playerVolume}
 			loop={playerLoop}
-			onplay={() => { playerState = 'playing'; }}
-			onpause={() => { playerState = 'paused'; }}
+			onplay={handlePlay}
+			onpause={handlePause}
 			onstop={() => { playerState = 'stopped'; currentTime = 0; }}
 			onseek={(t) => { currentTime = t; }}
 			onVolumeChange={(v) => { playerVolume = v; }}
