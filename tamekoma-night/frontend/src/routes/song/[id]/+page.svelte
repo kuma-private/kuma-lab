@@ -294,7 +294,8 @@
 	.song-main {
 		flex: 1;
 		overflow: auto;
-		padding-bottom: 80px; /* space for PlayerBar */
+		padding: var(--space-md) var(--space-lg);
+		padding-bottom: calc(var(--player-height) + var(--space-md));
 	}
 
 	.loading-container {

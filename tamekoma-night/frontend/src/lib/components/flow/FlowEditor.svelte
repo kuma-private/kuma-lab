@@ -267,14 +267,14 @@
   .row-label {
     display: flex;
     align-items: center;
-    padding: 0 var(--space-sm);
-    font-size: 0.72rem;
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.75rem;
     font-weight: 500;
     color: var(--text-muted);
     font-family: var(--font-sans);
     white-space: nowrap;
     border-right: 1px solid var(--border-subtle);
-    min-height: 28px;
+    min-height: 36px;
   }
 
   .track-label {
@@ -283,7 +283,8 @@
   }
 
   .row-content {
-    min-height: 28px;
+    min-height: 36px;
+    padding: var(--space-xs) 0;
   }
 
   .chord-row {
