@@ -1,5 +1,5 @@
 import type { Song, Track, DirectiveBlock, Section } from '$lib/types/song';
-import { createDefaultSong } from '$lib/types/song';
+import * as api from '$lib/api';
 
 export const createSongStore = () => {
 	let songs = $state<Song[]>([]);
@@ -21,26 +21,83 @@ export const createSongStore = () => {
 		get loading() { return loading; },
 		get error() { return error; },
 
-		// Song CRUD — API連携は後のIssueで実装。今はローカル操作のみ
-		createSong: (title: string) => {
-			const song = createDefaultSong(title);
-			songs = [...songs, song];
-			currentSong = song;
-			return song;
-		},
-
-		updateSong: (song: Song) => {
-			song.lastEditedAt = new Date().toISOString();
-			songs = songs.map((s) => (s.id === song.id ? song : s));
-			if (currentSong?.id === song.id) {
-				currentSong = song;
+		// Song CRUD — API連携
+		loadSongs: async () => {
+			loading = true;
+			error = null;
+			try {
+				songs = await api.getSongs();
+			} catch (e) {
+				error = e instanceof Error ? e.message : String(e);
+			} finally {
+				loading = false;
 			}
 		},
 
-		deleteSong: (id: string) => {
-			songs = songs.filter((s) => s.id !== id);
-			if (currentSong?.id === id) {
-				currentSong = null;
+		loadSong: async (id: string) => {
+			loading = true;
+			error = null;
+			try {
+				currentSong = await api.getSong(id);
+			} catch (e) {
+				error = e instanceof Error ? e.message : String(e);
+			} finally {
+				loading = false;
+			}
+		},
+
+		createSong: async (title: string) => {
+			loading = true;
+			error = null;
+			try {
+				const result = await api.createSong({ title });
+				return result;
+			} catch (e) {
+				error = e instanceof Error ? e.message : String(e);
+				throw e;
+			} finally {
+				loading = false;
+			}
+		},
+
+		saveSong: async () => {
+			if (!currentSong) return;
+			loading = true;
+			error = null;
+			try {
+				const saved = await api.updateSong(currentSong.id, {
+					title: currentSong.title,
+					bpm: currentSong.bpm,
+					timeSignature: currentSong.timeSignature,
+					key: currentSong.key,
+					chordProgression: currentSong.chordProgression,
+					sections: currentSong.sections,
+					tracks: currentSong.tracks,
+				});
+				currentSong = saved;
+				songs = songs.map((s) => (s.id === saved.id ? saved : s));
+			} catch (e) {
+				error = e instanceof Error ? e.message : String(e);
+				throw e;
+			} finally {
+				loading = false;
+			}
+		},
+
+		deleteSong: async (id: string) => {
+			loading = true;
+			error = null;
+			try {
+				await api.deleteSong(id);
+				songs = songs.filter((s) => s.id !== id);
+				if (currentSong?.id === id) {
+					currentSong = null;
+				}
+			} catch (e) {
+				error = e instanceof Error ? e.message : String(e);
+				throw e;
+			} finally {
+				loading = false;
 			}
 		},
 
