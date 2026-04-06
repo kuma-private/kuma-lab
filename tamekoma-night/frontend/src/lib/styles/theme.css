@@ -62,7 +62,15 @@
   --font-display: 'Space Grotesk', var(--font-sans);
 
   /* ---- Player bar height (for bottom padding) ---- */
-  --player-height: 60px;
+  --player-height: 80px;
+
+  /* ---- Z-index layers ---- */
+  --z-dropdown: 20;
+  --z-player: 50;
+  --z-popover: 60;
+  --z-modal: 100;
+  --z-toast: 150;
+  --z-context-menu: 200;
 }
 
 /* ============================================
@@ -89,6 +97,7 @@
 }
 
 html {
+  color-scheme: dark;
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -282,7 +291,7 @@ textarea.chord-input {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: var(--z-modal);
 }
 
 .modal {
@@ -311,7 +320,7 @@ textarea.chord-input {
   display: flex;
   align-items: center;
   padding: 0 var(--space-lg);
-  z-index: 50;
+  z-index: var(--z-player);
 }
 
 /* ============================================

@@ -396,7 +396,7 @@
 	<!-- Header -->
 	<div class="viz-header">
 		<span class="viz-label">VISUALIZER</span>
-		<button class="viz-close" onclick={() => onClose?.()}>&#x2715;</button>
+		<button class="viz-close" aria-label="ビジュアライザーを閉じる" onclick={() => onClose?.()}>&#x2715;</button>
 	</div>
 
 	<!-- Body -->
@@ -420,6 +420,8 @@
 		<div class="canvas-area" onwheel={handleWheel}>
 			<canvas
 				bind:this={canvasEl}
+				role="img"
+				aria-label="MIDI ノートビジュアライザー"
 				style="width: {canvasWidth}px; height: {canvasHeight}px;"
 			></canvas>
 		</div>
@@ -433,12 +435,16 @@
 						class:active={mutedTracks.has(trackId)}
 						onclick={() => toggleMute(trackId)}
 						title="Mute"
+						aria-label="ミュート"
+						aria-pressed={mutedTracks.has(trackId)}
 					>M</button>
 					<button
 						class="mixer-btn solo"
 						class:active={soloTracks.has(trackId)}
 						onclick={() => toggleSolo(trackId)}
 						title="Solo"
+						aria-label="ソロ"
+						aria-pressed={soloTracks.has(trackId)}
 					>S</button>
 					<input
 						type="range"
@@ -449,6 +455,7 @@
 						value={trackVolumes.get(trackId) ?? 0}
 						oninput={(e) => handleVolumeChange(trackId, e)}
 						title="Volume"
+						aria-label="音量"
 					/>
 				</div>
 			{/each}
@@ -461,8 +468,8 @@
 	.visualizer {
 		display: flex;
 		flex-direction: column;
-		background: var(--bg-surface, #141432);
-		border: 1px solid var(--border-default, #3a3a7a);
+		background: var(--bg-surface);
+		border: 1px solid var(--border-default);
 		border-radius: 8px;
 		overflow: hidden;
 		position: relative;
@@ -489,23 +496,23 @@
 		justify-content: space-between;
 		height: 32px;
 		padding: 0 12px;
-		background: var(--bg-elevated, #1c1c44);
-		border-bottom: 1px solid var(--border-subtle, #2a2a5a);
+		background: var(--bg-elevated);
+		border-bottom: 1px solid var(--border-subtle);
 		flex-shrink: 0;
 	}
 
 	.viz-label {
-		font-family: var(--font-mono, 'JetBrains Mono', monospace);
+		font-family: var(--font-mono);
 		font-size: 11px;
 		font-weight: 600;
 		letter-spacing: 1.5px;
-		color: var(--text-secondary, #9090b0);
+		color: var(--text-secondary);
 	}
 
 	.viz-close {
 		background: none;
 		border: none;
-		color: var(--text-muted, #8888a8);
+		color: var(--text-muted);
 		font-size: 14px;
 		cursor: pointer;
 		padding: 2px 6px;
@@ -514,7 +521,7 @@
 	}
 
 	.viz-close:hover {
-		color: var(--text-primary, #e8e8f0);
+		color: var(--text-primary);
 		background: rgba(255, 255, 255, 0.08);
 	}
 
@@ -527,7 +534,7 @@
 	.track-names {
 		width: 50px;
 		flex-shrink: 0;
-		border-right: 1px solid var(--border-subtle, #2a2a5a);
+		border-right: 1px solid var(--border-subtle);
 		overflow: hidden;
 	}
 
@@ -543,7 +550,7 @@
 	}
 
 	.track-name-text {
-		font-family: var(--font-mono, 'JetBrains Mono', monospace);
+		font-family: var(--font-mono);
 		font-size: 9px;
 		font-weight: 500;
 		white-space: nowrap;
@@ -565,7 +572,7 @@
 	.mixer {
 		width: 100px;
 		flex-shrink: 0;
-		border-left: 1px solid var(--border-subtle, #2a2a5a);
+		border-left: 1px solid var(--border-subtle);
 		overflow: hidden;
 	}
 
@@ -580,11 +587,11 @@
 	.mixer-btn {
 		width: 20px;
 		height: 20px;
-		border: 1px solid var(--border-subtle, #2a2a5a);
+		border: 1px solid var(--border-subtle);
 		border-radius: 3px;
-		background: var(--bg-base, #0c0c1e);
-		color: var(--text-muted, #8888a8);
-		font-family: var(--font-mono, 'JetBrains Mono', monospace);
+		background: var(--bg-base);
+		color: var(--text-muted);
+		font-family: var(--font-mono);
 		font-size: 9px;
 		font-weight: 600;
 		cursor: pointer;
@@ -596,20 +603,20 @@
 	}
 
 	.mixer-btn:hover {
-		border-color: var(--border-default, #3a3a7a);
-		color: var(--text-primary, #e8e8f0);
+		border-color: var(--border-default);
+		color: var(--text-primary);
 	}
 
 	.mixer-btn.active {
-		background: var(--error, #f87171);
+		background: var(--error);
 		color: #fff;
-		border-color: var(--error, #f87171);
+		border-color: var(--error);
 	}
 
 	.mixer-btn.solo.active {
-		background: var(--accent-warm, #fbbf24);
+		background: var(--accent-warm);
 		color: #000;
-		border-color: var(--accent-warm, #fbbf24);
+		border-color: var(--accent-warm);
 	}
 
 	.volume-slider {
@@ -617,7 +624,7 @@
 		height: 4px;
 		-webkit-appearance: none;
 		appearance: none;
-		background: var(--border-subtle, #2a2a5a);
+		background: var(--border-subtle);
 		border-radius: 2px;
 		outline: none;
 		cursor: pointer;
@@ -629,7 +636,7 @@
 		width: 10px;
 		height: 10px;
 		border-radius: 50%;
-		background: var(--text-secondary, #9090b0);
+		background: var(--text-secondary);
 		border: none;
 		cursor: pointer;
 	}
@@ -638,16 +645,16 @@
 		width: 10px;
 		height: 10px;
 		border-radius: 50%;
-		background: var(--text-secondary, #9090b0);
+		background: var(--text-secondary);
 		border: none;
 		cursor: pointer;
 	}
 
 	.volume-slider:hover::-webkit-slider-thumb {
-		background: var(--accent-primary, #a78bfa);
+		background: var(--accent-primary);
 	}
 
 	.volume-slider:hover::-moz-range-thumb {
-		background: var(--accent-primary, #a78bfa);
+		background: var(--accent-primary);
 	}
 </style>

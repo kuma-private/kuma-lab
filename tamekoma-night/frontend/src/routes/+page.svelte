@@ -94,7 +94,17 @@
 	const toggleTemplateMenu = () => {
 		templateMenuOpen = !templateMenuOpen;
 	};
+
+	const handleWindowClick = (e: MouseEvent) => {
+		if (!templateMenuOpen) return;
+		const target = e.target as HTMLElement;
+		if (!target.closest('.btn-new-wrap')) {
+			templateMenuOpen = false;
+		}
+	};
 </script>
+
+<svelte:window onclick={handleWindowClick} />
 
 <svelte:head>
 	<title>Cadenza.fm</title>
@@ -437,22 +447,13 @@
 		background: #f8f8ff;
 	}
 
-	.welcome-msg {
-		text-align: center;
-		font-size: 0.78rem;
-		color: var(--text-muted);
-		margin: 0;
-		padding: var(--space-md) 0 0;
-		opacity: 0.7;
-	}
-
 	.slogan {
 		text-align: center;
 		font-size: 0.85rem;
 		color: var(--text-muted);
 		padding: var(--space-lg) 0 var(--space-sm);
 		letter-spacing: 0.15em;
-		opacity: 0.6;
+		opacity: 0.8;
 	}
 
 	/* Recent activity */
@@ -521,7 +522,7 @@
 	}
 
 	.sort-pill {
-		padding: 2px 10px;
+		padding: 4px 12px;
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-md);
 		background: transparent;
@@ -594,7 +595,7 @@
 	.btn-new:hover {
 		background: #d09440;
 		transform: translateY(-1px);
-		box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
+		box-shadow: 0 4px 16px rgba(232, 168, 76, 0.35);
 	}
 
 	.btn-new:focus-visible {
@@ -644,7 +645,7 @@
 		padding: var(--space-2xl) 0 var(--space-lg);
 		font-size: 0.7rem;
 		color: var(--text-muted);
-		opacity: 0.4;
+		opacity: 0.6;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

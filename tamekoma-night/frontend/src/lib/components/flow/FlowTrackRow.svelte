@@ -22,6 +22,7 @@
     onBlockCopy: (blockId: string, targetStartBar: number) => void;
   } = $props();
 
+  import { tick } from 'svelte';
   let contextMenu = $state<{ x: number; y: number; blockId: string } | null>(null);
 
   function handleGridDblClick(e: MouseEvent) {
@@ -47,6 +48,10 @@
     const blockId = blockEl.dataset.blockId;
     if (blockId) {
       contextMenu = { x: e.clientX, y: e.clientY, blockId };
+      tick().then(() => {
+        const menu = document.querySelector('.context-menu [role="menuitem"]') as HTMLElement | null;
+        menu?.focus();
+      });
     }
   }
 
@@ -102,9 +107,10 @@
 
 <svelte:window onclick={closeContextMenu} />
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="track-grid"
+  role="gridcell"
+  tabindex="0"
   style:grid-template-columns="repeat({totalBars}, 1fr)"
   ondblclick={handleGridDblClick}
   oncontextmenu={handleContextMenu}
@@ -124,9 +130,10 @@
         trackColor={track.instrument}
         onClick={() => onBlockClick(block)}
       />
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="resize-edge"
+        role="separator"
+        tabindex="-1"
         onmousedown={(e) => handleResizeStart(block.id, e)}
       ></div>
     </div>
@@ -134,14 +141,15 @@
 </div>
 
 {#if contextMenu}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="context-menu"
+    role="menu"
+    onkeydown={(e) => { if (e.key === 'Escape') closeContextMenu(); }}
     style:left="{contextMenu.x}px"
     style:top="{contextMenu.y}px"
   >
-    <button class="ctx-item" onclick={handleCopy}>Duplicate</button>
-    <button class="ctx-item ctx-item--danger" onclick={handleDelete}>Delete</button>
+    <button class="ctx-item" role="menuitem" onclick={handleCopy}>Duplicate</button>
+    <button class="ctx-item ctx-item--danger" role="menuitem" onclick={handleDelete}>Delete</button>
   </div>
 {/if}
 
@@ -179,14 +187,14 @@
     right: 0;
     top: 0;
     bottom: 0;
-    width: 6px;
+    width: 12px;
     cursor: ew-resize;
     z-index: 2;
   }
 
   .context-menu {
     position: fixed;
-    z-index: 200;
+    z-index: var(--z-context-menu);
     background: var(--bg-elevated);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-md);

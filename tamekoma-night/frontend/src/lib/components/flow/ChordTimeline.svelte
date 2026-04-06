@@ -80,7 +80,6 @@
     font-size: 0.6rem;
     color: var(--text-muted);
     font-family: var(--font-sans);
-    opacity: 0.7;
   }
 
   .chord-entries {

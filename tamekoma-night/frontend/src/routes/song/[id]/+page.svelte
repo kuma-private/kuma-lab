@@ -197,8 +197,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 32px;
-		height: 32px;
+		min-width: 44px;
+		min-height: 44px;
 		border-radius: var(--radius-md);
 		color: var(--text-muted);
 		text-decoration: none;
@@ -274,9 +274,9 @@
 	}
 
 	.btn-save:hover {
-		background: #9374e8;
+		background: #d09440;
 		transform: translateY(-1px);
-		box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
+		box-shadow: 0 4px 16px rgba(232, 168, 76, 0.35);
 	}
 
 	/* Error */
@@ -323,7 +323,7 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		z-index: 100;
+		z-index: var(--z-player);
 	}
 
 	/* Mobile */

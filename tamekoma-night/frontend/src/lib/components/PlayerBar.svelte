@@ -47,6 +47,16 @@
 		onseek?.(pct * totalDuration);
 	};
 
+	const handleProgressKeydown = (e: KeyboardEvent) => {
+		if (e.key === 'ArrowLeft') {
+			e.preventDefault();
+			onseek?.(Math.max(0, currentTime - 5));
+		} else if (e.key === 'ArrowRight') {
+			e.preventDefault();
+			onseek?.(Math.min(totalDuration, currentTime + 5));
+		}
+	};
+
 	let audioLoading = $state(false);
 	let audioInitialized = $state(false);
 
@@ -187,9 +197,17 @@
 		</div>
 
 		<!-- Progress bar -->
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="player-progress" onclick={handleProgressClick}>
+		<div
+			class="player-progress"
+			role="slider"
+			tabindex="0"
+			aria-label="再生位置"
+			aria-valuemin={0}
+			aria-valuemax={100}
+			aria-valuenow={Math.round(progress)}
+			onclick={handleProgressClick}
+			onkeydown={handleProgressKeydown}
+		>
 			<div class="player-progress-fill" style="width: {progress}%"></div>
 			<div class="player-progress-handle" style="left: {progress}%"></div>
 		</div>
@@ -211,7 +229,7 @@
 		border-radius: var(--radius-lg);
 		display: flex;
 		align-items: stretch;
-		z-index: 50;
+		z-index: var(--z-player);
 	}
 
 	.player-controls-section {
@@ -279,7 +297,7 @@
 	}
 
 	.player-btn--play:hover {
-		background: #9374e8;
+		background: #d09440;
 	}
 
 	.player-btn--loading {

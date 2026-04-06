@@ -32,8 +32,6 @@
     return lines.slice(0, 2).join(' / ') + '...';
   }
 
-  let resizing = $state(false);
-
   function handleMouseDown(e: MouseEvent) {
     // Right-edge resize detection is handled by parent (FlowTrackRow)
     if ((e.target as HTMLElement).classList.contains('resize-handle')) {
@@ -44,15 +42,16 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="directive-block"
+  role="button"
+  tabindex="0"
   style:background={colors.bg}
   style:border-color={colors.border}
   style:color={colors.text}
   style:grid-column="{block.startBar} / {block.endBar + 1}"
   onmousedown={handleMouseDown}
+  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
 >
   <span class="block-summary">{summary}</span>
   <div class="resize-handle" style:background={colors.border}></div>
