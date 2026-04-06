@@ -172,6 +172,10 @@ module Program =
         mapRouteWithId app "PUT" "/api/songs/{id}" (withId (TamekomaNight.Api.Song.SongHandlers.updateSong songRepo))
         mapRouteWithId app "DELETE" "/api/songs/{id}" (withId (TamekomaNight.Api.Song.SongHandlers.deleteSong songRepo))
 
+        // Song API - AI routes
+        mapRouteWithId app "POST" "/api/songs/{id}/suggest" (withIdRL (TamekomaNight.Api.Song.SongAiHandlers.suggestDirectives config))
+        mapRouteWithId app "POST" "/api/songs/{id}/arrange" (withIdRL (TamekomaNight.Api.Song.SongAiHandlers.suggestArrangement config))
+
         // SPA fallback
         app.MapFallbackToFile("index.html") |> ignore
 
