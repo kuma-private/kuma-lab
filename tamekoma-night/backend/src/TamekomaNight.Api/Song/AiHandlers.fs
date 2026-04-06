@@ -106,7 +106,163 @@ module SongAiHandlers =
         + "- ジャンルの特徴を反映\n"
         + "- 全小節をカバー"
 
+    // --- Generate MIDI types ---
+
+    [<CLIMutable>]
+    type GenerateMidiRequest =
+        { [<JsonPropertyName("chordProgression")>]
+          chordProgression: string
+          [<JsonPropertyName("style")>]
+          style: string
+          [<JsonPropertyName("instrument")>]
+          instrument: string
+          [<JsonPropertyName("bpm")>]
+          bpm: int
+          [<JsonPropertyName("expression")>]
+          expression: int
+          [<JsonPropertyName("feel")>]
+          feel: int
+          [<JsonPropertyName("barRange")>]
+          barRange: string }
+
+    [<CLIMutable>]
+    type MidiNoteCompact =
+        { [<JsonPropertyName("m")>]
+          m: int
+          [<JsonPropertyName("t")>]
+          t: int
+          [<JsonPropertyName("d")>]
+          d: int
+          [<JsonPropertyName("v")>]
+          v: int }
+
+    // --- Generate MIDI system prompt ---
+
+    let private generateMidiSystemPrompt =
+        "あなたは20年のキャリアを持つスタジオミュージシャンです。コード進行、スタイル、2つのパラメータに基づいてMIDIノートデータを出力してください。\n\n"
+        + "出力フォーマット (JSON配列のみ、説明不要):\n"
+        + "[{\"m\": <MIDI番号>, \"t\": <tick>, \"d\": <duration>, \"v\": <velocity>}, ...]\n\n"
+        + "技術仕様:\n"
+        + "- 1小節 = 1920 ticks (480 ticks/quarter note, 4/4拍子)\n"
+        + "- MIDI番号: C4(中央ド) = 60\n\n"
+        + "2つのパラメータ:\n\n"
+        + "【Expression (0-100)】\n"
+        + "表現の厚みと派手さを制御。\n"
+        + "0 (Subtle): シンプルなクローズドボイシング。3-4音の基本和音。テンションなし。\n"
+        + "50: 適度なテンション。オクターブの広がり。標準的なアレンジ。\n"
+        + "100 (Dramatic): 広いボイシング。テンションノート多用。和音の厚み最大。\n\n"
+        + "楽器別のExpression解釈:\n"
+        + "- ピアノ: Subtle=3音クローズド → Dramatic=両手6-8音の広いボイシング\n"
+        + "- ギター: Subtle=パワーコード的 → Dramatic=テンション入りジャズコード\n"
+        + "- ストリングス: Subtle=ユニゾン → Dramatic=divisi、対旋律\n\n"
+        + "【Feel (0-100)】\n"
+        + "演奏の人間味とリアリティ。\n"
+        + "0 (Tight): 機械的に正確。タイミングずれなし。ベロシティ均一。\n"
+        + "50: 自然な揺れ。タイミング±8tick。ベロシティ±5。\n"
+        + "100 (Loose): 大きな揺れ。±20tick。±12。レイドバック。ゴーストノート多用。\n\n"
+        + "演奏のリアリティ:\n"
+        + "1. 和音のストラム: 2-12 tickずらす（Feel値に比例）\n"
+        + "2. タイミングの揺れ: Feel値に比例\n"
+        + "3. ベロシティの揺れ: Feel値に比例\n"
+        + "4. ゴーストノート: Feel 60以上で登場\n"
+        + "5. アーティキュレーション: スタイルに適切なレガート/スタッカート\n"
+        + "6. ダイナミクス: フレーズの起伏"
+
+    /// Extract a JSON array from text that may contain markdown code fences or extra text.
+    let private extractJsonArray (text: string) : string =
+        let trimmed = text.Trim()
+        // Try to find content within ```json ... ``` or ``` ... ```
+        let mutable start = trimmed.IndexOf("```json")
+        if start >= 0 then
+            let afterFence = start + 7
+            let endFence = trimmed.IndexOf("```", afterFence)
+            if endFence > afterFence then
+                trimmed.Substring(afterFence, endFence - afterFence).Trim()
+            else
+                trimmed.Substring(afterFence).Trim()
+        else
+            start <- trimmed.IndexOf("```")
+            if start >= 0 then
+                let afterFence = start + 3
+                let endFence = trimmed.IndexOf("```", afterFence)
+                if endFence > afterFence then
+                    trimmed.Substring(afterFence, endFence - afterFence).Trim()
+                else
+                    trimmed.Substring(afterFence).Trim()
+            else
+                // Find the first '[' and last ']'
+                let bracketStart = trimmed.IndexOf('[')
+                let bracketEnd = trimmed.LastIndexOf(']')
+                if bracketStart >= 0 && bracketEnd > bracketStart then
+                    trimmed.Substring(bracketStart, bracketEnd - bracketStart + 1)
+                else
+                    trimmed
+
+    /// Parse barRange like "1-4" and return bar count.
+    let private parseBarCount (barRange: string) : int =
+        if String.IsNullOrWhiteSpace(barRange) then
+            4
+        else
+            let parts = barRange.Split('-')
+            if parts.Length = 2 then
+                match Int32.TryParse(parts.[0]), Int32.TryParse(parts.[1]) with
+                | (true, s), (true, e) when e >= s -> e - s + 1
+                | _ -> 4
+            else
+                4
+
     // --- Handlers ---
+
+    let generateMidi (config: AppConfig) (songId: string) (ctx: HttpContext) : Task =
+        task {
+            if String.IsNullOrEmpty(config.AnthropicApiKey) then
+                do! respond400 ctx "AI generate-midi is not configured (API key missing)"
+            else
+
+            do! withParsedRequest<GenerateMidiRequest> ctx
+                    (fun req ->
+                        not (String.IsNullOrWhiteSpace(req.chordProgression))
+                        && not (String.IsNullOrWhiteSpace(req.instrument))
+                        && req.bpm > 0
+                        && req.expression >= 0 && req.expression <= 100
+                        && req.feel >= 0 && req.feel <= 100)
+                    (fun req ->
+                        task {
+                            let httpClient = getHttpClient ctx
+                            let barCount = parseBarCount req.barRange
+
+                            let userMessage =
+                                $"コード進行: {req.chordProgression}\n"
+                                + $"楽器: {req.instrument}\n"
+                                + $"スタイル: {req.style}、BPM {req.bpm}\n"
+                                + $"Expression: {req.expression}\n"
+                                + $"Feel: {req.feel}\n\n"
+                                + $"{barCount}小節分のMIDIノートをJSON配列で出力。"
+
+                            let! result =
+                                AnthropicClient.callApi httpClient config.AnthropicApiKey "claude-opus-4-20250514" generateMidiSystemPrompt userMessage 4000
+                                |> Async.StartAsTask
+
+                            match result with
+                            | Ok text ->
+                                let jsonArray = extractJsonArray text
+                                try
+                                    let compactNotes = System.Text.Json.JsonSerializer.Deserialize<MidiNoteCompact array>(jsonArray)
+                                    let notes =
+                                        compactNotes
+                                        |> Array.map (fun n ->
+                                            {| midi = n.m; tick = n.t; duration = n.d; velocity = n.v |})
+                                    do! ctx.Response.WriteAsJsonAsync(
+                                        {| notes = notes
+                                           style = req.style |> Shared.defaultIfNull ""
+                                           expression = req.expression
+                                           feel = req.feel |})
+                                with ex ->
+                                    do! respond500 ctx $"Failed to parse AI MIDI response: {ex.Message}"
+                            | Error e ->
+                                do! respond500 ctx $"AI generate-midi failed: {e}"
+                        })
+        }
 
     let suggestDirectives (config: AppConfig) (songId: string) (ctx: HttpContext) : Task =
         task {
