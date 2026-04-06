@@ -480,7 +480,7 @@
             placeholder="スタイルを入力... (例: ジャズバラード風)"
             bind:value={aiPrompt}
             disabled={aiLoading}
-            onkeydown={(e) => { if (e.key === 'Enter' && !aiLoading) handleGenerate(); }}
+            onkeydown={(e) => { if (e.key === 'Enter' && !e.isComposing && !aiLoading) handleGenerate(); }}
           />
           <button class="btn btn-primary btn-sm btn-generate" onclick={handleGenerate} disabled={aiLoading}>
             {#if aiLoading}
