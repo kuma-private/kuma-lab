@@ -7,6 +7,8 @@
   import FlowTrackRow from './FlowTrackRow.svelte';
   import TextView from './TextView.svelte';
   import BlockPopover from './BlockPopover.svelte';
+  import ChordEditDialog from './ChordEditDialog.svelte';
+  import { parseProgression, serialize } from '$lib/chord-parser';
   import Visualizer from '$lib/components/visualizer/Visualizer.svelte';
   // MixerView removed — M/S/Vol integrated into track labels
 
@@ -31,6 +33,62 @@
   // --- BlockPopover state ---
   let popoverBlock = $state<DirectiveBlock | null>(null);
   let popoverTrack = $state<Track | null>(null);
+
+  // --- ChordEditDialog state ---
+  let editingBar = $state<number | null>(null);
+  let editingBarInitialChords = $state('');
+
+  function handleBarClick(barNumber: number) {
+    // Extract current chords for this bar
+    const { bars, comments } = parseProgression(song.chordProgression);
+    const bar = bars.find(b => b.barNumber === barNumber);
+    if (bar) {
+      editingBarInitialChords = bar.entries
+        .map(e => {
+          switch (e.type) {
+            case 'chord': return e.chord.raw;
+            case 'repeat': return '%';
+            case 'rest': return '_';
+            case 'sustain': return '=';
+          }
+        })
+        .join(' ');
+    } else {
+      editingBarInitialChords = '';
+    }
+    editingBar = barNumber;
+  }
+
+  function handleChordEditOk(newChords: string) {
+    if (editingBar === null) return;
+    const { bars, comments } = parseProgression(song.chordProgression);
+    const barIndex = bars.findIndex(b => b.barNumber === editingBar);
+
+    // Parse the new chords into entries
+    const newParsed = parseProgression(`| ${newChords} |`);
+    const newEntries = newParsed.bars.length > 0 ? newParsed.bars[0].entries : [];
+
+    if (barIndex !== -1) {
+      // Replace existing bar's entries
+      bars[barIndex] = { barNumber: editingBar!, entries: newEntries };
+    } else if (newChords.trim()) {
+      // Add a new bar (fill gaps if needed)
+      const maxExisting = bars.length > 0 ? Math.max(...bars.map(b => b.barNumber)) : 0;
+      for (let i = maxExisting + 1; i < editingBar!; i++) {
+        bars.push({ barNumber: i, entries: [] });
+      }
+      bars.push({ barNumber: editingBar!, entries: newEntries });
+      bars.sort((a, b) => a.barNumber - b.barNumber);
+    }
+
+    song.chordProgression = serialize(bars, comments);
+    emit();
+    editingBar = null;
+  }
+
+  function handleChordEditCancel() {
+    editingBar = null;
+  }
 
   // --- AI Arrange state ---
   let arrangeOpen = $state(false);
@@ -314,7 +372,7 @@
         <!-- Chord row -->
         <div class="row-label">Chords</div>
         <div class="row-content chord-row">
-          <ChordTimeline chords={song.chordProgression} totalBars={totalBars} musicalKey={song.key} />
+          <ChordTimeline chords={song.chordProgression} totalBars={totalBars} musicalKey={song.key} onBarClick={handleBarClick} />
         </div>
 
         <!-- Separator -->
@@ -377,6 +435,16 @@
     <div class="text-view-container">
       <TextView {song} {onSongChange} />
     </div>
+  {/if}
+
+  {#if editingBar !== null}
+    <ChordEditDialog
+      barNumber={editingBar}
+      initialChords={editingBarInitialChords}
+      musicalKey={song.key}
+      onOk={handleChordEditOk}
+      onCancel={handleChordEditCancel}
+    />
   {/if}
 
   {#if popoverBlock && popoverTrack}

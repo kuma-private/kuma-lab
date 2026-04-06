@@ -6,10 +6,12 @@
     chords,
     totalBars,
     musicalKey = 'C Major',
+    onBarClick,
   }: {
     chords: string;
     totalBars: number;
     musicalKey?: string;
+    onBarClick?: (barNumber: number) => void;
   } = $props();
 
   let parsed = $derived(resolveRepeats(parseProgression(chords).bars));
@@ -64,7 +66,7 @@
 <div class="chord-timeline" style:grid-template-columns="repeat({totalBars}, minmax(0, 140px))">
   {#each Array.from({ length: totalBars }, (_, i) => i + 1) as barNum}
     {@const bar = getBar(barNum)}
-    <div class="chord-cell">
+    <div class="chord-cell" class:chord-cell--clickable={!!onBarClick} onclick={() => onBarClick?.(barNum)} role={onBarClick ? 'button' : undefined} tabindex={onBarClick ? 0 : undefined} onkeydown={(e) => { if (onBarClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onBarClick(barNum); } }}>
       <span class="bar-number">{barNum}</span>
       <div class="chord-entries">
         {#if bar}
@@ -97,6 +99,13 @@
     padding: 2px 2px;
     padding-top: 12px;
     overflow: hidden;
+  }
+
+  .chord-cell--clickable {
+    cursor: pointer;
+  }
+  .chord-cell--clickable:hover {
+    background: rgba(232, 168, 76, 0.06);
   }
 
   .chord-cell:first-child {
