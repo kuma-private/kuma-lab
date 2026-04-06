@@ -121,12 +121,12 @@
   }
 
   .chord-entry {
-    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 1px;
     min-width: 0;
+    overflow: hidden;
   }
 
   .chord-degree {
@@ -145,6 +145,9 @@
     padding: 2px 4px;
     border-radius: 4px;
     border: none;
+    box-sizing: border-box;
+    min-width: 0;
+    overflow: hidden;
     font-family: var(--font-mono);
     font-weight: 500;
     font-size: 0.65rem;
