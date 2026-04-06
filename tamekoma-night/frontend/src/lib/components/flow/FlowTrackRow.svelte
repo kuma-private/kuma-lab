@@ -111,7 +111,7 @@
   class="track-grid"
   role="gridcell"
   tabindex="0"
-  style:grid-template-columns="repeat({totalBars}, minmax(0, 1fr))"
+  style:grid-template-columns="repeat({totalBars}, minmax(0, 140px))"
   ondblclick={handleGridDblClick}
   oncontextmenu={handleContextMenu}
 >

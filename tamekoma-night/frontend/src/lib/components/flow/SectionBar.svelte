@@ -63,7 +63,7 @@
   }
 </script>
 
-<div class="section-bar" style:grid-template-columns="repeat({totalBars}, minmax(0, 1fr))">
+<div class="section-bar" style:grid-template-columns="repeat({totalBars}, minmax(0, 140px))">
   {#each sections as section (section.id)}
     {@const color = getColor(section.name)}
     <div
@@ -99,13 +99,13 @@
     background: color-mix(in srgb, var(--section-color) 8%, transparent);
     border: 1px solid color-mix(in srgb, var(--section-color) 18%, transparent);
     border-radius: 6px;
-    padding: 2px 8px;
-    min-height: 24px;
+    padding: 1px 6px;
+    min-height: 18px;
   }
 
   .section-label {
     font-family: var(--font-display);
-    font-size: 0.75rem;
+    font-size: 0.6rem;
     font-weight: 600;
     color: var(--section-color);
     white-space: nowrap;

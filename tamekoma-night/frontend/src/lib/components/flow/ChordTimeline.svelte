@@ -26,8 +26,8 @@
     switch (entry.type) {
       case 'chord': return entry.chord.raw;
       case 'repeat': return '%';
-      case 'rest': return '_';
-      case 'sustain': return '\u2500';
+      case 'rest': return '';
+      case 'sustain': return '';
     }
   }
 
@@ -35,27 +35,45 @@
     if (entry.type !== 'chord') return null;
     return chordToDegree(entry.chord.raw, musicalKey);
   }
+
+  /** Resolve sustain/repeat entries to show the previous chord instead */
+  function resolveDisplay(entries: BarEntry[]): { text: string; root: string | null; degree: string | null; isSustain: boolean }[] {
+    let lastChord: { text: string; root: string; degree: string | null } | null = null;
+    return entries.map(entry => {
+      if (entry.type === 'chord') {
+        const root = entry.chord.root;
+        const degree = chordToDegree(entry.chord.raw, musicalKey);
+        lastChord = { text: entry.chord.raw, root, degree };
+        return { text: entry.chord.raw, root, degree, isSustain: false };
+      }
+      if (entry.type === 'sustain' && lastChord) {
+        return { text: lastChord.text, root: lastChord.root, degree: lastChord.degree, isSustain: true };
+      }
+      if (entry.type === 'repeat' && lastChord) {
+        return { text: lastChord.text, root: lastChord.root, degree: lastChord.degree, isSustain: false };
+      }
+      return { text: '', root: null, degree: null, isSustain: false };
+    });
+  }
 </script>
 
-<div class="chord-timeline" style:grid-template-columns="repeat({totalBars}, minmax(0, 1fr))">
+<div class="chord-timeline" style:grid-template-columns="repeat({totalBars}, minmax(0, 140px))">
   {#each Array.from({ length: totalBars }, (_, i) => i + 1) as barNum}
     {@const bar = getBar(barNum)}
     <div class="chord-cell">
       <span class="bar-number">{barNum}</span>
       <div class="chord-entries">
         {#if bar}
-          {#each bar.entries as entry}
-            {@const root = rootOf(entry)}
-            {@const degree = degreeOf(entry)}
-            {#if root}
+          {#each resolveDisplay(bar.entries) as item}
+            {#if item.root}
               <div class="chord-entry">
-                {#if degree}
-                  <span class="chord-degree">{degree}</span>
+                {#if item.degree}
+                  <span class="chord-degree">{item.degree}</span>
                 {/if}
-                <span class="chord-chip" data-root={root}>{displayText(entry)}</span>
+                <span class="chord-chip" data-root={item.root}>{item.text}</span>
               </div>
-            {:else}
-              <span class="chord-special">{displayText(entry)}</span>
+            {:else if item.text}
+              <span class="chord-special">{item.text}</span>
             {/if}
           {/each}
         {/if}

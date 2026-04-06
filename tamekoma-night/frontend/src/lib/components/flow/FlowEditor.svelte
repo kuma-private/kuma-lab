@@ -330,7 +330,21 @@
 
         <!-- Track rows -->
         {#each song.tracks as track (track.id)}
-          <div class="row-label track-label">{track.name}</div>
+          <div class="row-label track-label">
+            <select class="track-instrument-select" value={track.instrument} onchange={(e) => {
+              const inst = (e.target as HTMLSelectElement).value;
+              track.instrument = inst;
+              track.name = inst.charAt(0).toUpperCase() + inst.slice(1);
+              emit();
+            }}>
+              <option value="piano">Piano</option>
+              <option value="bass">Bass</option>
+              <option value="drums">Drums</option>
+              <option value="strings">Strings</option>
+              <option value="guitar">Guitar</option>
+              <option value="organ">Organ</option>
+            </select>
+          </div>
           <div class="row-content">
             <FlowTrackRow
               {track}
@@ -580,6 +594,29 @@
   .track-label {
     color: var(--text-secondary);
     font-weight: 600;
+  }
+
+  .track-instrument-select {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 4px;
+    cursor: pointer;
+    outline: none;
+    width: 100%;
+  }
+  .track-instrument-select:hover {
+    border-color: var(--border-default);
+    background: var(--bg-elevated);
+  }
+  .track-instrument-select:focus {
+    border-color: var(--accent-primary);
   }
 
   .row-content {
