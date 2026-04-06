@@ -34,7 +34,7 @@
 				<circle cx="18" cy="16" r="3" />
 			</svg>
 		</span>
-		Tamekoma Night
+		Cadenza.fm
 	</a>
 	<div class="service-right">
 		<button class="btn-help" onclick={() => helpOpen = true} title="ヘルプ">?</button>
@@ -125,7 +125,7 @@
 	}
 
 	.btn-login:hover {
-		background: rgba(167, 139, 250, 0.1);
+		background: rgba(232, 168, 76, 0.1);
 	}
 
 	.btn-help {
@@ -148,7 +148,7 @@
 	.btn-help:hover {
 		border-color: var(--accent-primary);
 		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.08);
+		background: rgba(232, 168, 76, 0.08);
 	}
 
 	@media (max-width: 600px) {

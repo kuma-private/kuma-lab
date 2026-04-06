@@ -6,65 +6,65 @@
    ============================================ */
 
 :root {
-  /* C - Red */
-  --chord-c-bg: #3d1520;
-  --chord-c-text: #f87171;
-  --chord-c-border: #7f1d1d;
+  /* C - Red (boosted contrast on warm bg) */
+  --chord-c-bg: #2e1018;
+  --chord-c-text: #f07068;
+  --chord-c-border: #6e1818;
 
-  /* C# / Db - Red-Orange */
-  --chord-cs-bg: #3d1f15;
-  --chord-cs-text: #fb923c;
-  --chord-cs-border: #7f3d1d;
+  /* C# / Db - Red-Orange (shifted cooler bg) */
+  --chord-cs-bg: #2e1810;
+  --chord-cs-text: #f08838;
+  --chord-cs-border: #6e3018;
 
-  /* D - Orange */
-  --chord-d-bg: #3d2a15;
-  --chord-d-text: #fbbf24;
-  --chord-d-border: #7f5a1d;
+  /* D - Orange (cooler bg to separate from warm theme) */
+  --chord-d-bg: #2e2210;
+  --chord-d-text: #f0b828;
+  --chord-d-border: #6e4e18;
 
-  /* D# / Eb - Yellow-Orange */
-  --chord-ds-bg: #3d3315;
-  --chord-ds-text: #fde047;
-  --chord-ds-border: #7f6d1d;
+  /* D# / Eb - Yellow-Orange (cooler bg) */
+  --chord-ds-bg: #2e2a10;
+  --chord-ds-text: #f0d840;
+  --chord-ds-border: #6e6018;
 
   /* E - Yellow-Green */
-  --chord-e-bg: #333d15;
-  --chord-e-text: #a3e635;
-  --chord-e-border: #5a7f1d;
+  --chord-e-bg: #282e10;
+  --chord-e-text: #a0e030;
+  --chord-e-border: #506e18;
 
   /* F - Green */
-  --chord-f-bg: #153d20;
-  --chord-f-text: #34d399;
-  --chord-f-border: #1d7f3d;
+  --chord-f-bg: #102e18;
+  --chord-f-text: #40c890;
+  --chord-f-border: #186e30;
 
   /* F# / Gb - Teal */
-  --chord-fs-bg: #153d33;
-  --chord-fs-text: #2dd4bf;
-  --chord-fs-border: #1d7f6d;
+  --chord-fs-bg: #102e28;
+  --chord-fs-text: #30c8b0;
+  --chord-fs-border: #186e58;
 
   /* G - Cyan */
-  --chord-g-bg: #152a3d;
-  --chord-g-text: #22d3ee;
-  --chord-g-border: #1d5a7f;
+  --chord-g-bg: #10222e;
+  --chord-g-text: #28c8e0;
+  --chord-g-border: #18486e;
 
   /* G# / Ab - Blue */
-  --chord-gs-bg: #15203d;
-  --chord-gs-text: #60a5fa;
-  --chord-gs-border: #1d3d7f;
+  --chord-gs-bg: #10182e;
+  --chord-gs-text: #58a0f0;
+  --chord-gs-border: #18306e;
 
   /* A - Indigo */
-  --chord-a-bg: #1f153d;
-  --chord-a-text: #818cf8;
-  --chord-a-border: #3d1d7f;
+  --chord-a-bg: #18102e;
+  --chord-a-text: #7888f0;
+  --chord-a-border: #30186e;
 
   /* A# / Bb - Purple */
-  --chord-as-bg: #2a153d;
-  --chord-as-text: #a78bfa;
-  --chord-as-border: #5a1d7f;
+  --chord-as-bg: #22102e;
+  --chord-as-text: #a080f0;
+  --chord-as-border: #48186e;
 
   /* B - Violet */
-  --chord-b-bg: #33153d;
-  --chord-b-text: #c084fc;
-  --chord-b-border: #6d1d7f;
+  --chord-b-bg: #28102e;
+  --chord-b-text: #b878f0;
+  --chord-b-border: #58186e;
 }
 
 /* ============================================
@@ -183,14 +183,14 @@
 .measure-bar {
   width: 2px;
   height: 36px;
-  background: var(--border-subtle, #2a2a5a);
+  background: var(--border-subtle, #3a2e1a);
   flex-shrink: 0;
 }
 
 .measure-number {
   font-family: var(--font-sans, 'Inter', sans-serif);
   font-size: 0.7rem;
-  color: var(--text-muted, #606080);
+  color: var(--text-muted, #706850);
   position: absolute;
   top: -14px;
 }
@@ -208,5 +208,5 @@
 
 .chord-progression .measure-bar:first-child,
 .chord-progression .measure-bar:last-child {
-  background: var(--border-default, #3a3a7a);
+  background: var(--border-default, #4a3e28);
 }

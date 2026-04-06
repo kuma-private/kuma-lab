@@ -383,7 +383,7 @@
 	}
 
 	.player-btn--play:hover {
-		background: #9374e8;
+		background: #d09440;
 	}
 
 	.player-btn--loading {
@@ -398,7 +398,7 @@
 
 	.player-btn--active {
 		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.2);
+		background: rgba(232, 168, 76, 0.2);
 	}
 
 	/* Current chord */
@@ -569,7 +569,7 @@
 
 	.tone-select:focus {
 		border-color: var(--accent-primary);
-		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+		box-shadow: 0 0 0 2px rgba(232, 168, 76, 0.15);
 	}
 
 	/* Metronome pulsing dot */

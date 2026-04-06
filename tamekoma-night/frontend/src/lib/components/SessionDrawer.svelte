@@ -84,7 +84,7 @@
 	});
 
 	const avatarColor = (name: string): string => {
-		const colors = ['#a78bfa', '#f472b6', '#34d399', '#60a5fa', '#fbbf24', '#f87171', '#38bdf8', '#a3e635'];
+		const colors = ['#e8a84c', '#f472b6', '#34d399', '#60a5fa', '#fbbf24', '#f87171', '#38bdf8', '#a3e635'];
 		let hash = 0;
 		for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
 		return colors[Math.abs(hash) % colors.length];
@@ -302,7 +302,7 @@
 		font-family: var(--font-mono);
 		font-size: 0.68rem;
 		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.12);
+		background: rgba(232, 168, 76, 0.12);
 		padding: 2px 7px;
 		border-radius: 8px;
 	}
@@ -437,12 +437,12 @@
 
 	.tl-save--clickable:hover {
 		opacity: 0.85;
-		background: rgba(167, 139, 250, 0.06);
+		background: rgba(232, 168, 76, 0.06);
 	}
 
 	.tl-save--selected {
 		opacity: 1;
-		background: rgba(167, 139, 250, 0.08);
+		background: rgba(232, 168, 76, 0.08);
 		border-left: 2px solid var(--accent-primary);
 	}
 
@@ -502,7 +502,7 @@
 		padding: var(--space-sm);
 		border: none;
 		border-top: 1px solid var(--border-subtle);
-		background: rgba(167, 139, 250, 0.06);
+		background: rgba(232, 168, 76, 0.06);
 		color: var(--accent-primary);
 		font-size: 0.75rem;
 		font-weight: 600;
@@ -511,7 +511,7 @@
 	}
 
 	.btn-restore:hover {
-		background: rgba(167, 139, 250, 0.15);
+		background: rgba(232, 168, 76, 0.15);
 	}
 
 	.tl-delete {

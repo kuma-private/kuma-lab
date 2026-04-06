@@ -9,7 +9,7 @@
 </script>
 
 <svelte:head>
-	<title>Tamekoma Night</title>
+	<title>Cadenza.fm</title>
 </svelte:head>
 
 <ServiceHeader />

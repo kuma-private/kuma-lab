@@ -176,7 +176,7 @@
 	}
 
 	.pattern-btn--play:hover:not(:disabled) {
-		background: rgba(167, 139, 250, 0.15);
+		background: rgba(232, 168, 76, 0.15);
 	}
 
 	.pattern-btn--stop {
@@ -203,7 +203,7 @@
 	.mini-spinner {
 		width: 10px;
 		height: 10px;
-		border: 1.5px solid rgba(167, 139, 250, 0.3);
+		border: 1.5px solid rgba(232, 168, 76, 0.3);
 		border-top-color: var(--accent-primary);
 		border-radius: 50%;
 		animation: spin 0.6s linear infinite;

@@ -252,7 +252,7 @@
 
 	.wk--playing {
 		background: var(--accent-primary) !important;
-		box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 8px rgba(167, 139, 250, 0.5);
+		box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 8px rgba(232, 168, 76, 0.5);
 	}
 
 	.wk-label {
@@ -298,7 +298,7 @@
 
 	.bk--playing {
 		background: var(--accent-primary) !important;
-		box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 6px rgba(167, 139, 250, 0.5);
+		box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 6px rgba(232, 168, 76, 0.5);
 	}
 
 	.bk-label {

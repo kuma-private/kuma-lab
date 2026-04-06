@@ -76,7 +76,7 @@
 </script>
 
 <svelte:head>
-	<title>Tamekoma Night</title>
+	<title>Cadenza.fm</title>
 </svelte:head>
 
 <div class="page-bg" aria-hidden="true">
@@ -101,8 +101,8 @@
 						<circle cx="18" cy="16" r="3" />
 					</svg>
 				</div>
-				<h1 class="login-title">Tamekoma Night</h1>
-				<p class="login-sub">溜め込まないで、コードを放て。</p>
+				<h1 class="login-title">Cadenza.fm</h1>
+				<p class="login-sub">Arrange by text, hear it live.</p>
 				<p class="login-tagline">コード進行エディタ</p>
 				<a href="/auth/google" class="btn-google">
 					<svg width="18" height="18" viewBox="0 0 24 24">
@@ -117,7 +117,7 @@
 		</div>
 	{:else}
 
-		<div class="slogan">溜め込まないで、コードを放て。</div>
+		<div class="slogan">Arrange by text, hear it live.</div>
 
 		{#if recentThreads.length > 0}
 			<div class="recent-activity">
@@ -179,7 +179,7 @@
 		</main>
 
 		<footer class="app-footer">
-			<span>Tamekoma Night</span>
+			<span>Cadenza.fm</span>
 			<span>·</span>
 			<span>コード進行エディタ</span>
 		</footer>
@@ -193,33 +193,33 @@
 		overflow: hidden;
 		pointer-events: none;
 		z-index: -1;
-		background: linear-gradient(180deg, #030010 0%, #0a0820 40%, #0f0c2e 70%, #1a1040 100%);
+		background: linear-gradient(180deg, #040200 0%, #0a0604 40%, #120c04 70%, #1a1208 100%);
 	}
 
 	.bg-stars {
 		position: absolute;
 		inset: 0;
 		background-image:
-			radial-gradient(2px 2px at 8% 10%, #fff, transparent),
-			radial-gradient(2px 2px at 22% 6%, #fff, transparent),
-			radial-gradient(3px 3px at 38% 18%, #c4b5fd, transparent),
-			radial-gradient(2px 2px at 52% 4%, #fff, transparent),
-			radial-gradient(2px 2px at 68% 14%, #fff, transparent),
-			radial-gradient(3px 3px at 82% 9%, #93c5fd, transparent),
-			radial-gradient(1.5px 1.5px at 12% 26%, #e0e0f0, transparent),
-			radial-gradient(2px 2px at 32% 30%, #fff, transparent),
-			radial-gradient(1.5px 1.5px at 58% 24%, #e0e0f0, transparent),
-			radial-gradient(3px 3px at 78% 28%, #f9a8d4, transparent),
-			radial-gradient(2px 2px at 90% 20%, #fff, transparent),
-			radial-gradient(4px 4px at 18% 2%, #c4b5fd, transparent),
-			radial-gradient(1.5px 1.5px at 45% 34%, #e0e0f0, transparent),
-			radial-gradient(2px 2px at 95% 6%, #fff, transparent),
-			radial-gradient(2px 2px at 5% 38%, #fff, transparent),
-			radial-gradient(3px 3px at 65% 8%, #93c5fd, transparent),
-			radial-gradient(2px 2px at 28% 16%, #fff, transparent),
-			radial-gradient(1.5px 1.5px at 72% 36%, #e0e0f0, transparent),
-			radial-gradient(2px 2px at 48% 12%, #fff, transparent),
-			radial-gradient(3px 3px at 85% 22%, #c4b5fd, transparent);
+			radial-gradient(2px 2px at 8% 10%, #ffe8c0, transparent),
+			radial-gradient(2px 2px at 22% 6%, #fff0d0, transparent),
+			radial-gradient(3px 3px at 38% 18%, #f0c060, transparent),
+			radial-gradient(2px 2px at 52% 4%, #ffe8c0, transparent),
+			radial-gradient(2px 2px at 68% 14%, #fff0d0, transparent),
+			radial-gradient(3px 3px at 82% 9%, #e8a84c, transparent),
+			radial-gradient(1.5px 1.5px at 12% 26%, #e8dcc0, transparent),
+			radial-gradient(2px 2px at 32% 30%, #ffe8c0, transparent),
+			radial-gradient(1.5px 1.5px at 58% 24%, #e8dcc0, transparent),
+			radial-gradient(3px 3px at 78% 28%, #f0a860, transparent),
+			radial-gradient(2px 2px at 90% 20%, #fff0d0, transparent),
+			radial-gradient(4px 4px at 18% 2%, #f0c060, transparent),
+			radial-gradient(1.5px 1.5px at 45% 34%, #e8dcc0, transparent),
+			radial-gradient(2px 2px at 95% 6%, #ffe8c0, transparent),
+			radial-gradient(2px 2px at 5% 38%, #fff0d0, transparent),
+			radial-gradient(3px 3px at 65% 8%, #e8a84c, transparent),
+			radial-gradient(2px 2px at 28% 16%, #ffe8c0, transparent),
+			radial-gradient(1.5px 1.5px at 72% 36%, #e8dcc0, transparent),
+			radial-gradient(2px 2px at 48% 12%, #fff0d0, transparent),
+			radial-gradient(3px 3px at 85% 22%, #f0c060, transparent);
 		animation: twinkle 3s ease-in-out infinite alternate;
 	}
 
@@ -234,7 +234,7 @@
 		left: 0;
 		right: 0;
 		height: 35%;
-		background: linear-gradient(180deg, transparent 0%, rgba(167,139,250,0.03) 50%, rgba(139,92,246,0.06) 100%);
+		background: linear-gradient(180deg, transparent 0%, rgba(232,168,76,0.03) 50%, rgba(240,192,96,0.06) 100%);
 	}
 
 	.orb {
@@ -302,7 +302,7 @@
 		align-items: center;
 		gap: var(--space-md);
 		padding: var(--space-2xl) var(--space-xl);
-		background: rgba(20, 20, 50, 0.6);
+		background: rgba(26, 20, 8, 0.6);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 		backdrop-filter: blur(12px);
@@ -388,7 +388,7 @@
 	.recent-activity {
 		margin-bottom: var(--space-lg);
 		padding: var(--space-md);
-		background: rgba(167, 139, 250, 0.04);
+		background: rgba(232, 168, 76, 0.04);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 	}
@@ -418,7 +418,7 @@
 	}
 
 	.recent-item:hover {
-		background: rgba(167, 139, 250, 0.08);
+		background: rgba(232, 168, 76, 0.08);
 	}
 
 	.recent-item:hover .recent-name {
@@ -469,7 +469,7 @@
 	.sort-pill--active {
 		color: var(--accent-primary);
 		border-color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.08);
+		background: rgba(232, 168, 76, 0.08);
 	}
 
 	.top-bar {
@@ -499,7 +499,7 @@
 		font-family: var(--font-mono);
 		font-size: 0.7rem;
 		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.12);
+		background: rgba(232, 168, 76, 0.12);
 		padding: 2px 8px;
 		border-radius: 10px;
 	}
@@ -521,9 +521,9 @@
 	}
 
 	.btn-new:hover {
-		background: #9374e8;
+		background: #d09440;
 		transform: translateY(-1px);
-		box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
+		box-shadow: 0 4px 16px rgba(232, 168, 76, 0.35);
 	}
 
 	.btn-new:focus-visible {
@@ -649,7 +649,7 @@
 	}
 
 	.template-option:hover {
-		background: rgba(167, 139, 250, 0.1);
+		background: rgba(232, 168, 76, 0.1);
 		color: var(--accent-primary);
 	}
 

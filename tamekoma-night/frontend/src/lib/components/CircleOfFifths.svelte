@@ -728,7 +728,7 @@
 	}
 
 	.cof-q-btn--active {
-		background: rgba(167, 139, 250, 0.2);
+		background: rgba(232, 168, 76, 0.2);
 		color: var(--accent-primary);
 		border-color: var(--accent-primary);
 	}
@@ -810,7 +810,7 @@
 		opacity: 1;
 		stroke: var(--accent-primary);
 		stroke-width: 2;
-		filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.4));
+		filter: drop-shadow(0 0 6px rgba(232, 168, 76, 0.4));
 	}
 
 	.cof-segment--hovered {
@@ -908,7 +908,7 @@
 		padding: 8px 16px;
 		border: 1px solid var(--accent-primary);
 		border-radius: var(--radius-md);
-		background: rgba(167, 139, 250, 0.15);
+		background: rgba(232, 168, 76, 0.15);
 		color: var(--accent-primary);
 		font-family: var(--font-mono);
 		font-size: 0.8rem;
@@ -918,7 +918,7 @@
 	}
 
 	.cof-add-btn:hover {
-		background: rgba(167, 139, 250, 0.3);
+		background: rgba(232, 168, 76, 0.3);
 	}
 
 	@media (max-width: 600px) {

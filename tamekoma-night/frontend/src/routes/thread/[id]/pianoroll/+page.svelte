@@ -289,7 +289,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
-	<title>{store.currentThread?.title || 'Piano Roll'} - Tamekoma Night</title>
+	<title>{store.currentThread?.title || 'Piano Roll'} - Cadenza.fm</title>
 </svelte:head>
 
 {#if store.currentThread}

@@ -72,7 +72,7 @@
 		'E':  '#a3e635',
 		'F':  '#34d399', 'F#': '#2dd4bf', 'Gb': '#2dd4bf',
 		'G':  '#22d3ee', 'G#': '#60a5fa', 'Ab': '#60a5fa',
-		'A':  '#818cf8', 'A#': '#a78bfa', 'Bb': '#a78bfa',
+		'A':  '#818cf8', 'A#': '#e8a84c', 'Bb': '#e8a84c',
 		'B':  '#c084fc',
 	};
 
@@ -709,9 +709,9 @@
 		const w = Math.abs(lassoRect.x2 - lassoRect.x1);
 		const h = Math.abs(lassoRect.y2 - lassoRect.y1);
 
-		ctx.fillStyle = 'rgba(167, 139, 250, 0.08)';
+		ctx.fillStyle = 'rgba(232, 168, 76, 0.08)';
 		ctx.fillRect(x, y, w, h);
-		ctx.strokeStyle = 'rgba(167, 139, 250, 0.5)';
+		ctx.strokeStyle = 'rgba(232, 168, 76, 0.5)';
 		ctx.lineWidth = 1;
 		ctx.setLineDash([4, 4]);
 		ctx.strokeRect(x, y, w, h);

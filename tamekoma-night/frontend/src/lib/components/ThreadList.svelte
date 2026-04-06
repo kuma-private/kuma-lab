@@ -76,11 +76,11 @@
 		'E': '#34d399', 'F': '#2dd4bf',
 		'F#': '#22d3ee', 'Gb': '#22d3ee',
 		'G': '#60a5fa', 'G#': '#818cf8', 'Ab': '#818cf8',
-		'A': '#a78bfa', 'A#': '#c084fc', 'Bb': '#c084fc',
+		'A': '#e8a84c', 'A#': '#c084fc', 'Bb': '#c084fc',
 		'B': '#f472b6',
 	};
 
-	const keyColor = (key: string): string => KEY_COLORS[key.split(' ')[0]] || '#a78bfa';
+	const keyColor = (key: string): string => KEY_COLORS[key.split(' ')[0]] || '#e8a84c';
 
 	const keyShort = (key: string): string => key.replace(' Major', '').replace(' Minor', 'm');
 
@@ -225,7 +225,7 @@
 	.filter-tab--active {
 		color: var(--accent-primary);
 		border-color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.08);
+		background: rgba(232, 168, 76, 0.08);
 	}
 
 	/* Empty state */
@@ -273,9 +273,9 @@
 	}
 
 	.empty-cta:hover {
-		background: #9374e8;
+		background: #d09440;
 		transform: translateY(-1px);
-		box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
+		box-shadow: 0 4px 16px rgba(232, 168, 76, 0.35);
 	}
 
 	/* Grid */
@@ -307,7 +307,7 @@
 
 	.card:hover {
 		transform: translateY(-2px);
-		box-shadow: 0 4px 16px rgba(167, 139, 250, 0.1), 0 8px 24px rgba(0, 0, 0, 0.35);
+		box-shadow: 0 4px 16px rgba(232, 168, 76, 0.1), 0 8px 24px rgba(0, 0, 0, 0.35);
 		border-color: var(--accent-primary);
 	}
 
@@ -449,7 +449,7 @@
 	.card-action:hover {
 		color: var(--accent-primary);
 		border-color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.08);
+		background: rgba(232, 168, 76, 0.08);
 	}
 
 	.action-label {

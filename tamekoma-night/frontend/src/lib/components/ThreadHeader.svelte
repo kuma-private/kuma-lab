@@ -394,7 +394,7 @@
 	.badge-editable:hover {
 		border-color: var(--accent-primary);
 		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.08);
+		background: rgba(232, 168, 76, 0.08);
 	}
 
 	.badge-members {
@@ -529,7 +529,7 @@
 	.btn-log:hover {
 		border-color: var(--accent-primary);
 		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.1);
+		background: rgba(232, 168, 76, 0.1);
 	}
 
 	/* Share button */
@@ -551,7 +551,7 @@
 	.btn-share:hover {
 		border-color: var(--accent-primary);
 		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.1);
+		background: rgba(232, 168, 76, 0.1);
 	}
 
 	.share-icon {

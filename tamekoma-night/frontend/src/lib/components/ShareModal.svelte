@@ -63,7 +63,7 @@
 	const nativeShare = async () => {
 		const url = window.location.origin + '/thread/' + threadId;
 		try {
-			await navigator.share({ title: 'Tamekoma Night', url });
+			await navigator.share({ title: 'Cadenza.fm', url });
 		} catch {
 			// User cancelled or share failed, fall back to copy
 			await copyUrl();
@@ -302,7 +302,7 @@
 
 	.radio-option--active {
 		border-color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.08);
+		background: rgba(232, 168, 76, 0.08);
 	}
 
 	.radio-option input[type="radio"] {
@@ -354,7 +354,7 @@
 		padding: 8px 16px;
 		border: 1px solid var(--accent-primary);
 		border-radius: var(--radius-md);
-		background: rgba(167, 139, 250, 0.1);
+		background: rgba(232, 168, 76, 0.1);
 		color: var(--accent-primary);
 		font-size: 0.82rem;
 		font-weight: 600;
@@ -363,7 +363,7 @@
 	}
 
 	.btn-copy-url:hover {
-		background: rgba(167, 139, 250, 0.2);
+		background: rgba(232, 168, 76, 0.2);
 	}
 
 	.email-error {

@@ -428,7 +428,7 @@
 
 	.drop-zone:hover {
 		border-color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.04);
+		background: rgba(232, 168, 76, 0.04);
 	}
 
 	.drop-zone p {
@@ -458,7 +458,7 @@
 	.drop-action-btn:hover {
 		border-color: var(--accent-primary);
 		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.08);
+		background: rgba(232, 168, 76, 0.08);
 	}
 
 	.drop-hint {
@@ -724,7 +724,7 @@
 	.preview-textarea:focus {
 		outline: none;
 		border-color: var(--accent-primary);
-		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+		box-shadow: 0 0 0 2px rgba(232, 168, 76, 0.15);
 	}
 
 	@media (max-width: 600px) {

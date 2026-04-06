@@ -63,7 +63,7 @@
 	}
 
 	.measure--active {
-		background: rgba(167, 139, 250, 0.1);
+		background: rgba(232, 168, 76, 0.1);
 	}
 
 	.measure-label {

@@ -890,7 +890,7 @@
 	}
 
 	.se-textarea:focus {
-		background: rgba(167, 139, 250, 0.02);
+		background: rgba(232, 168, 76, 0.02);
 	}
 
 	.se-textarea::placeholder {
@@ -991,7 +991,7 @@
 	}
 
 	:global(.se-active) {
-		background: linear-gradient(90deg, rgba(167, 139, 250, 0.15), transparent);
+		background: linear-gradient(90deg, rgba(232, 168, 76, 0.15), transparent);
 		border-left: 2px solid var(--accent-primary);
 		border-radius: 4px;
 		padding: 1px 2px 1px 4px;
@@ -1004,7 +1004,7 @@
 
 	@keyframes chord-flash {
 		0% {
-			background: rgba(167, 139, 250, 0.5);
+			background: rgba(232, 168, 76, 0.5);
 			border-radius: 4px;
 		}
 		100% {
@@ -1060,7 +1060,7 @@
 	/* AI Toast */
 	.ai-toast {
 		padding: 8px 12px;
-		background: rgba(167, 139, 250, 0.15);
+		background: rgba(232, 168, 76, 0.15);
 		border: 1px solid var(--accent-primary);
 		border-radius: var(--radius-md);
 		color: var(--text-primary);
@@ -1189,7 +1189,7 @@
 	.ai-instruction-input:focus {
 		outline: none;
 		border-color: var(--accent-primary);
-		box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+		box-shadow: 0 0 0 2px rgba(232, 168, 76, 0.15);
 	}
 
 	.ai-instruction-input::placeholder {
@@ -1223,7 +1223,7 @@
 
 	.ai-btn-submit:hover:not(:disabled) {
 		background: var(--accent-secondary);
-		box-shadow: 0 2px 12px rgba(139, 92, 246, 0.3);
+		box-shadow: 0 2px 12px rgba(232, 168, 76, 0.3);
 	}
 
 	.ai-btn-cancel {
@@ -1271,7 +1271,7 @@
 	}
 
 	:global(.se-chord-swap-selected) {
-		background: rgba(167, 139, 250, 0.4);
+		background: rgba(232, 168, 76, 0.4);
 		outline: 2px solid var(--accent-primary);
 		outline-offset: 1px;
 		border-radius: 4px;
@@ -1373,9 +1373,9 @@
 	}
 
 	.se-mode-banner--accent {
-		background: rgba(167, 139, 250, 0.1);
+		background: rgba(232, 168, 76, 0.1);
 		color: var(--accent-primary);
-		border-bottom: 1px solid rgba(167, 139, 250, 0.2);
+		border-bottom: 1px solid rgba(232, 168, 76, 0.2);
 	}
 
 	.se-preview--delete-mode {
@@ -1394,7 +1394,7 @@
 	}
 
 	:global(.se-selection-playing) {
-		background: rgba(167, 139, 250, 0.35);
+		background: rgba(232, 168, 76, 0.35);
 		border-radius: 4px;
 		padding: 1px 3px;
 	}
@@ -1453,8 +1453,8 @@
 
 	@keyframes chord-dblclick-glow {
 		0% {
-			box-shadow: 0 0 8px 2px rgba(167, 139, 250, 0.7);
-			background: rgba(167, 139, 250, 0.3);
+			box-shadow: 0 0 8px 2px rgba(232, 168, 76, 0.7);
+			background: rgba(232, 168, 76, 0.3);
 		}
 		100% {
 			box-shadow: 0 0 0 0 transparent;

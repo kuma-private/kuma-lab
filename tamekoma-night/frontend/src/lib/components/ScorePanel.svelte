@@ -454,7 +454,7 @@
 		gap: 8px;
 		padding: 4px var(--space-lg);
 		border-bottom: 1px solid var(--border-subtle);
-		background: rgba(167, 139, 250, 0.03);
+		background: rgba(232, 168, 76, 0.03);
 		flex-wrap: wrap;
 	}
 
@@ -576,7 +576,7 @@
 	.section-pill:hover {
 		border-color: var(--accent-primary);
 		color: var(--text-primary);
-		background: rgba(167, 139, 250, 0.08);
+		background: rgba(232, 168, 76, 0.08);
 	}
 
 	.section-pill--active {
@@ -623,7 +623,7 @@
 
 	.score-tool-btn--ai:hover {
 		border-color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.1);
+		background: rgba(232, 168, 76, 0.1);
 	}
 
 	.toolbar-spacer {
@@ -647,7 +647,7 @@
 		gap: 8px;
 		padding: 4px var(--space-md);
 		border-bottom: 1px solid var(--border-subtle);
-		background: rgba(167, 139, 250, 0.04);
+		background: rgba(232, 168, 76, 0.04);
 	}
 
 	.legend-item {
@@ -724,8 +724,8 @@
 	.quick-guide {
 		margin: var(--space-sm) var(--space-md);
 		padding: var(--space-sm) var(--space-md);
-		background: rgba(167, 139, 250, 0.06);
-		border: 1px solid rgba(167, 139, 250, 0.15);
+		background: rgba(232, 168, 76, 0.06);
+		border: 1px solid rgba(232, 168, 76, 0.15);
 		border-radius: var(--radius-md);
 	}
 

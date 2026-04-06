@@ -117,10 +117,10 @@
 
 	.mode-card:hover {
 		border-color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.06);
+		background: rgba(232, 168, 76, 0.06);
 		color: var(--text-primary);
 		transform: translateY(-2px);
-		box-shadow: 0 4px 16px rgba(167, 139, 250, 0.15);
+		box-shadow: 0 4px 16px rgba(232, 168, 76, 0.15);
 	}
 
 	.mode-icon {

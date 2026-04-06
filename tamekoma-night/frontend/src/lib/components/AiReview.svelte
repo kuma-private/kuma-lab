@@ -89,7 +89,7 @@
 					<!-- Data polygon -->
 					<polygon
 						points={radarPoints}
-						fill="rgba(167, 139, 250, 0.2)"
+						fill="rgba(232, 168, 76, 0.2)"
 						stroke="var(--accent-primary)"
 						stroke-width="1.5"
 					/>
