@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cadenza.fm — User Workflow v2</title>
+<style>
+  :root {
+    --bg: #080604;
+    --bg-surface: #0f0a04;
+    --bg-card: #1a1408;
+    --bg-elevated: #241c0e;
+    --bg-hover: #2e2414;
+    --border: #3a2e1a;
+    --border-strong: #4a3e28;
+    --text: #ece4d4;
+    --text-secondary: #b8ad94;
+    --text-muted: #8a7e68;
+    --accent: #e8a84c;
+    --accent-blue: #6ea8d0;
+    --accent-green: #7cb882;
+    --accent-red: #e06050;
+    --accent-warm: #f0c060;
+    --accent-purple: #b8a0f0;
+    --font-body: 'Inter', -apple-system, sans-serif;
+    --font-display: 'Space Grotesk', var(--font-body);
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 14px; line-height: 1.6; }
+  .page { max-width: 1200px; margin: 0 auto; padding: 40px 24px 120px; }
+  h1 { font-family: var(--font-display); font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+  h1 .fm { color: var(--accent); }
+  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 48px; }
+  h2 {
+    font-family: var(--font-display); font-size: 1.2rem; font-weight: 700;
+    margin: 56px 0 20px; color: var(--accent);
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  p { margin: 12px 0; color: var(--text-secondary); font-size: 13px; }
+
+  /* ── Screen cards ── */
+  .screen {
+    background: var(--bg-card); border: 2px solid var(--border);
+    border-radius: 12px; overflow: hidden; transition: border-color 0.2s;
+  }
+  .screen:hover { border-color: var(--border-strong); }
+  .screen-active { border-color: var(--accent); box-shadow: 0 0 24px rgba(232,168,76,0.08); }
+  .screen-title-bar {
+    padding: 7px 14px; background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .screen-url { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+  .screen-label { font-size: 10px; font-weight: 600; color: var(--accent); margin-left: auto; }
+  .screen-body { padding: 16px; }
+
+  .tag {
+    display: inline-block; font-size: 8px; font-weight: 700; letter-spacing: 0.1em;
+    padding: 2px 8px; border-radius: 3px; margin-bottom: 10px; text-transform: uppercase;
+  }
+  .tag-page { background: rgba(232,168,76,0.12); color: var(--accent); }
+
+  /* ── Layout helpers ── */
+  .flow-center { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .flow-row { display: flex; align-items: flex-start; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .arrow-down {
+    width: 2px; height: 28px; background: var(--border-strong); position: relative; margin: 4px 0;
+  }
+  .arrow-down::after {
+    content: ''; position: absolute; bottom: -5px; left: -4px;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 6px solid var(--border-strong);
+  }
+  .arrow-down .alabel {
+    position: absolute; left: 12px; top: 4px;
+    font-size: 9px; color: var(--text-muted); white-space: nowrap;
+  }
+
+  /* ── Mini UI ── */
+  .mini-btn {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 3px 8px; border-radius: 4px; font-size: 9px; font-weight: 600; border: none; cursor: pointer;
+  }
+  .btn-p { background: var(--accent); color: #1a1408; }
+  .btn-g { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); }
+  .btn-tab { background: transparent; color: var(--text-muted); border: none; padding: 4px 10px; font-size: 10px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; }
+  .btn-tab-active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .mini-card {
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; margin-bottom: 5px; cursor: pointer;
+  }
+  .mini-card:hover { background: var(--bg-hover); }
+  .card-title { font-size: 11px; font-weight: 600; }
+  .card-meta { font-size: 8px; color: var(--text-muted); margin-top: 2px; }
+
+  .section-tag {
+    display: inline-block; padding: 1px 5px; border-radius: 3px;
+    font-size: 8px; font-weight: 700; color: #fff;
+  }
+
+  .chord { font-family: var(--font-mono); font-size: 9px; color: var(--accent-warm); }
+
+  .block {
+    border-radius: 4px; padding: 3px 6px; font-size: 8px;
+    font-family: var(--font-mono); margin-bottom: 2px;
+  }
+  .block-purple { background: rgba(184,160,240,0.12); border: 1px solid rgba(184,160,240,0.25); color: var(--accent-purple); }
+  .block-green { background: rgba(124,184,130,0.1); border: 1px solid rgba(124,184,130,0.25); color: var(--accent-green); }
+  .block-amber { background: rgba(232,168,76,0.08); border: 1px solid rgba(232,168,76,0.25); color: var(--accent); }
+
+  .player-bar {
+    display: flex; align-items: center; gap: 8px; padding: 7px 14px;
+    font-size: 10px; color: var(--text-muted);
+  }
+  .progress { flex: 1; height: 3px; background: var(--bg-elevated); border-radius: 2px; position: relative; }
+  .progress-fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--accent); border-radius: 2px; }
+
+  .mixer-row {
+    display: flex; align-items: center; gap: 4px; padding: 5px 0;
+    border-bottom: 1px solid rgba(58,46,26,0.25); font-size: 8px;
+  }
+  .mixer-row:last-child { border-bottom: none; }
+  .mixer-label { width: 36px; font-weight: 700; flex-shrink: 0; }
+  .mixer-notes { flex: 1; font-family: var(--font-mono); font-size: 8px; opacity: 0.4; position: relative; min-height: 16px; }
+  .mixer-ctrl { display: flex; gap: 3px; align-items: center; width: 80px; justify-content: flex-end; }
+  .mixer-btn { padding: 1px 3px; border-radius: 2px; background: var(--bg-elevated); font-size: 7px; color: var(--text-muted); border: none; }
+  .mixer-slider { width: 36px; height: 2px; background: var(--bg-elevated); border-radius: 1px; display: inline-block; position: relative; }
+  .mixer-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 1px; }
+  .cursor-line { position: absolute; left: 28%; top: 0; bottom: 0; width: 1.5px; background: var(--accent-red); opacity: 0.5; }
+
+  .callout {
+    display: flex; gap: 8px; padding: 10px 14px; margin: 10px 0;
+    background: rgba(232,168,76,0.04); border: 1px solid rgba(232,168,76,0.12);
+    border-radius: 8px; font-size: 11px; color: var(--text-secondary);
+  }
+  .callout-icon { font-size: 14px; flex-shrink: 0; }
+  .callout strong { color: var(--text); }
+
+  .grid4 { display: grid; grid-template-columns: 36px 1fr 1fr 1fr; gap: 1px; font-size: 8px; margin: 4px 0; }
+  .grid4 > * { padding: 2px 4px; }
+
+  .textarea-mock {
+    width: 100%; background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: 5px; padding: 10px 12px; font-family: var(--font-mono);
+    font-size: 11px; color: var(--text-secondary); line-height: 1.6;
+  }
+  .textarea-mock .dir { color: var(--accent); }
+  .textarea-mock .val { color: var(--accent-green); }
+  .textarea-mock .cmt { color: var(--text-muted); }
+  .textarea-mock .sec { color: var(--accent-blue); }
+  .textarea-mock .chd { color: var(--accent-warm); }
+
+  /* Popover redesign */
+  .popover {
+    background: var(--bg-card); border: 1px solid var(--border-strong);
+    border-radius: 10px; padding: 14px; box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+  }
+  .popover-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .popover-title { font-size: 10px; font-weight: 700; color: var(--text-secondary); }
+  .popover-section {
+    display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;
+  }
+  .popover-row {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .popover-label {
+    font-size: 9px; font-weight: 600; color: var(--text-muted);
+    width: 56px; flex-shrink: 0;
+  }
+  .popover-select {
+    flex: 1; padding: 3px 6px; border-radius: 4px; font-size: 9px;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--font-mono);
+  }
+  .popover-chips { display: flex; flex-wrap: wrap; gap: 3px; }
+  .popover-chip {
+    padding: 2px 6px; border-radius: 3px; font-size: 8px; font-weight: 600;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    color: var(--text-secondary); cursor: pointer;
+  }
+  .popover-chip-active { background: rgba(232,168,76,0.15); border-color: var(--accent); color: var(--accent); }
+  .popover-raw {
+    width: 100%; background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: 4px; padding: 6px 8px; font-family: var(--font-mono);
+    font-size: 10px; color: var(--accent); line-height: 1.5; min-height: 36px;
+    resize: none; outline: none;
+  }
+  .popover-toggle {
+    font-size: 8px; color: var(--text-muted); cursor: pointer; text-decoration: underline;
+  }
+  .popover-actions {
+    display: flex; gap: 4px; margin-top: 10px; justify-content: flex-end;
+    padding-top: 8px; border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 800px) {
+    .flow-row { flex-direction: column; align-items: center; }
+    .screen { width: 100% !important; max-width: 400px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>Cadenza<span class="fm">.fm</span> Workflow</h1>
+<p class="subtitle">画面遷移と操作フロー v2</p>
+
+<!-- ================================================================ -->
+<h2>1. Home → Song Editor</h2>
+<p>画面は<strong style="color:var(--text);">2つだけ</strong>。Home（一覧）と Song Editor（編集）。</p>
+
+<div class="flow-center">
+  <div class="screen screen-active" style="width: 340px;">
+    <div class="screen-title-bar">
+      <div class="dot" style="background: var(--accent-red);"></div>
+      <div class="dot" style="background: var(--accent-warm);"></div>
+      <div class="dot" style="background: var(--accent-green);"></div>
+      <span class="screen-url">cadenza.fm/</span>
+      <span class="screen-label">Home</span>
+    </div>
+    <div class="screen-body">
+      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px;">
+        <span style="font-family: var(--font-display); font-size: 12px; color: var(--accent);">Cadenza.fm</span>
+        <span style="margin-left: auto; font-size: 9px; color: var(--text-muted);">Dev User</span>
+      </div>
+      <div style="text-align: center; font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; margin-bottom: 10px;">Arrange by text, hear it live.</div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <span style="font-size: 11px; font-weight: 700;">Songs</span>
+        <button class="mini-btn btn-p">+ 新規作成</button>
+      </div>
+      <div class="mini-card"><div class="card-title">Jazz Ballad Demo</div><div class="card-meta">Piano + Bass + Drums &middot; 3 tracks &middot; 2分前</div></div>
+      <div class="mini-card"><div class="card-title">Pop Arrangement</div><div class="card-meta">Piano &middot; 1 track &middot; 1時間前</div></div>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span class="alabel">クリック or 新規作成</span></div>
+
+  <div class="screen" style="width: 340px;">
+    <div class="screen-title-bar">
+      <div class="dot" style="background: var(--accent-red);"></div>
+      <div class="dot" style="background: var(--accent-warm);"></div>
+      <div class="dot" style="background: var(--accent-green);"></div>
+      <span class="screen-url">cadenza.fm/song/abc123</span>
+      <span class="screen-label">Song Editor</span>
+    </div>
+    <div class="screen-body" style="padding: 8px; font-size: 10px; text-align: center; color: var(--text-muted);">
+      &#8595; 下記セクション 2〜5 で詳細
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<h2>2. Song Editor — 2つのビュー</h2>
+<p>
+  Song Editor は <strong style="color:var(--text);">Flow View</strong> (GUI) と
+  <strong style="color:var(--text);">Text View</strong> (全体テキスト編集) をタブで切り替え。
+  <br>同じデータの2つの表現。一方の変更はもう一方に即座に反映される。
+</p>
+
+<div class="flow-row">
+  <!-- Flow View -->
+  <div class="screen screen-active" style="width: 440px;">
+    <div class="screen-title-bar">
+      <div class="dot" style="background: var(--accent-red);"></div>
+      <div class="dot" style="background: var(--accent-warm);"></div>
+      <div class="dot" style="background: var(--accent-green);"></div>
+      <span class="screen-url">Song Editor</span>
+      <span class="screen-label">Flow View</span>
+    </div>
+    <div class="screen-body">
+      <!-- Tab bar -->
+      <div style="display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--border);">
+        <button class="btn-tab btn-tab-active">Flow</button>
+        <button class="btn-tab">Text</button>
+        <span style="margin-left: auto; font-size: 9px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+          <span>Jazz Ballad Demo</span>
+          <span style="color: var(--accent);">C Major &middot; 120</span>
+        </span>
+      </div>
+
+      <!-- Flow grid -->
+      <div class="grid4">
+        <div style="color: var(--text-muted); font-weight: 600;">Sect</div>
+        <div><span class="section-tag" style="background: var(--accent-blue);">A</span></div>
+        <div><span class="section-tag" style="background: var(--accent);">B</span></div>
+        <div><span class="section-tag" style="background: var(--accent-warm); color: #1a1408;">Chorus</span></div>
+
+        <div style="color: var(--accent-warm); font-weight: 600;">Chords</div>
+        <div class="chord">|Am7|Dm7|G7|C|</div>
+        <div class="chord">|Fm7|Bb7|Eb|Ab|</div>
+        <div class="chord">|F|G|Em|Am|</div>
+
+        <div style="color: var(--text-muted);">Piano</div>
+        <div><div class="block block-purple">arpUp / mp</div></div>
+        <div><div class="block block-purple">block / mf</div></div>
+        <div><div class="block block-purple">block / f</div></div>
+
+        <div style="color: var(--text-muted);">Bass</div>
+        <div style="color: var(--text-muted); opacity: 0.3;">&mdash;</div>
+        <div><div class="block block-green">root</div></div>
+        <div><div class="block block-green">walking</div></div>
+
+        <div style="color: var(--text-muted);">Drums</div>
+        <div style="color: var(--text-muted); opacity: 0.3;">&mdash;</div>
+        <div style="color: var(--text-muted); opacity: 0.3;">&mdash;</div>
+        <div><div class="block block-amber">8beat / f</div></div>
+      </div>
+
+      <div style="text-align: center; margin-top: 8px;">
+        <button class="mini-btn btn-g" style="font-size: 8px;">+ Track</button>
+      </div>
+
+      <div class="callout" style="margin-top: 12px;">
+        <span class="callout-icon">&#128073;</span>
+        <div style="font-size: 10px;">
+          <strong>GUI操作</strong>: ブロックをクリック→ポップオーバー、ドラッグで移動/リサイズ、ダブルクリックで新規作成
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Text View -->
+  <div class="screen" style="width: 440px;">
+    <div class="screen-title-bar">
+      <div class="dot" style="background: var(--accent-red);"></div>
+      <div class="dot" style="background: var(--accent-warm);"></div>
+      <div class="dot" style="background: var(--accent-green);"></div>
+      <span class="screen-url">Song Editor</span>
+      <span class="screen-label">Text View</span>
+    </div>
+    <div class="screen-body">
+      <!-- Tab bar -->
+      <div style="display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--border);">
+        <button class="btn-tab">Flow</button>
+        <button class="btn-tab btn-tab-active">Text</button>
+        <span style="margin-left: auto; font-size: 9px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+          <span>Jazz Ballad Demo</span>
+          <span style="color: var(--accent);">C Major &middot; 120</span>
+        </span>
+      </div>
+
+      <!-- Full text editor -->
+      <div class="textarea-mock">
+<span class="dir">@title:</span> <span class="val">Jazz Ballad Demo</span>
+<span class="dir">@bpm:</span> <span class="val">120</span>
+<span class="dir">@key:</span> <span class="val">C Major</span>
+
+<span class="sec">=== Chords ===</span>
+<span class="cmt">// A [bars 1-4]</span>
+<span class="chd">| Am7 | Dm7 | G7 | C |</span>
+
+<span class="cmt">// B [bars 5-8]</span>
+<span class="chd">| Fm7 | Bb7 | Eb | Ab |</span>
+
+<span class="cmt">// Chorus [bars 9-12]</span>
+<span class="chd">| F | G | Em | Am |</span>
+
+<span class="sec">=== Piano [bars 1-4] ===</span>
+<span class="dir">@mode:</span> <span class="val">arpUp</span>
+<span class="dir">@velocity:</span> <span class="val">mp</span>
+
+<span class="sec">=== Piano [bars 5-8] ===</span>
+<span class="dir">@mode:</span> <span class="val">block</span>
+<span class="dir">@velocity:</span> <span class="val">mf</span>
+
+<span class="sec">=== Bass [bars 5-12] ===</span>
+<span class="dir">@mode:</span> <span class="val">walking</span>
+<span class="dir">@octave:</span> <span class="val">2</span>
+
+<span class="sec">=== Drums [bars 9-12] ===</span>
+<span class="dir">@mode:</span> <span class="val">8beat</span>
+<span class="dir">@velocity:</span> <span class="val">f</span>
+      </div>
+
+      <div class="callout" style="margin-top: 12px;">
+        <span class="callout-icon">&#9997;</span>
+        <div style="font-size: 10px;">
+          <strong>全体をテキストで直接編集</strong>。コード進行もディレクティブも1つのテキストとして読み書き。
+          シンタックスハイライト + @補完あり。Flow View と双方向同期。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<h2>3. Block Popover（AI生成ファースト）</h2>
+<p>
+  Flow View でブロックをクリックしたとき開くポップオーバー。
+  <strong style="color:var(--text);">AIに意図を伝える → 結果をプレビュー → バーで微調整</strong>のフロー。
+  パラメータを知らなくても使える。
+</p>
+
+<div class="flow-center">
+  <div style="width: 380px;">
+    <div class="popover">
+      <div class="popover-header">
+        <span class="popover-title">Piano &mdash; Section A (bars 1-4)</span>
+        <span style="font-size: 9px; color: var(--text-muted); cursor: pointer;">&times;</span>
+      </div>
+
+      <!-- AI input -->
+      <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+        <input type="text" placeholder="スタイルを入力... (例: ジャズバラード風)" style="flex: 1; padding: 6px 10px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text); font-size: 10px; outline: none;">
+        <button class="mini-btn btn-p" style="font-size: 9px; white-space: nowrap;">生成</button>
+      </div>
+
+      <!-- Quick preset chips -->
+      <div style="display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 12px;">
+        <span class="popover-chip popover-chip-active">block</span>
+        <span class="popover-chip">arpUp</span>
+        <span class="popover-chip">arpDown</span>
+        <span class="popover-chip">bossa</span>
+        <span class="popover-chip">jazz</span>
+        <span class="popover-chip">8beat</span>
+        <span class="popover-chip">walking</span>
+      </div>
+
+      <!-- Continuous bars -->
+      <div class="popover-section">
+        <div class="popover-row">
+          <span class="popover-label">Voicing</span>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+            <input type="range" min="0" max="100" value="0" style="width: 100%; accent-color: var(--accent); height: 4px;">
+            <div style="display: flex; justify-content: space-between; font-size: 7px; color: var(--text-muted);">
+              <span>close</span><span>open</span><span>drop2</span><span>spread</span><span>shell</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="popover-row">
+          <span class="popover-label">Velocity</span>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+            <input type="range" min="0" max="100" value="40" style="width: 100%; accent-color: var(--accent); height: 4px;">
+            <div style="display: flex; justify-content: space-between; font-size: 7px; color: var(--text-muted);">
+              <span>pp</span><span>p</span><span>mp</span><span>mf</span><span>f</span><span>ff</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="popover-row">
+          <span class="popover-label">Humanize</span>
+          <input type="range" min="0" max="30" value="10" style="flex: 1; accent-color: var(--accent); height: 4px;">
+          <span style="font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); width: 28px; text-align: right;">10%</span>
+        </div>
+
+        <div class="popover-row">
+          <span class="popover-label">Swing</span>
+          <input type="range" min="0" max="70" value="0" style="flex: 1; accent-color: var(--accent); height: 4px;">
+          <span style="font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); width: 28px; text-align: right;">0%</span>
+        </div>
+      </div>
+
+      <!-- Pattern Preview -->
+      <div style="margin: 10px 0 8px;">
+        <div style="font-size: 8px; color: var(--accent); font-weight: 600; letter-spacing: 0.08em; margin-bottom: 4px;">PREVIEW</div>
+        <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; min-height: 50px; display: flex; align-items: center; justify-content: center;">
+          <span style="font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); opacity: 0.5;">MIDIプレビュー（パラメータ変更で自動更新）</span>
+        </div>
+      </div>
+
+      <!-- Raw toggle -->
+      <div style="margin-bottom: 6px;">
+        <span class="popover-toggle">&#9662; Raw テキスト</span>
+      </div>
+      <div class="popover-raw" style="display: block;">@mode: block
+@voicing: close
+@velocity: mp
+@humanize: 10%</div>
+
+      <div class="popover-actions">
+        <button class="mini-btn btn-g" style="border: none;">&#9654; Preview</button>
+        <button class="mini-btn btn-p">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="callout" style="max-width: 500px; margin: 12px auto;">
+  <span class="callout-icon">&#128161;</span>
+  <div style="font-size: 10px;">
+    <strong>AI生成ファースト</strong>。スタイルを自然言語で入力 → AIがパターン+パラメータを提案 → プレビューで確認 → バーで微調整。
+    簡単に設定したい場合はプリセットチップをクリック。パワーユーザーはRawテキストで直接書ける。
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<h2>4. Visualizer + Mixer</h2>
+<p>Song Editor の下部にトグルで開くパネル。生成されたMIDIのピアノロール（読み取り専用）+ トラック別ミキサー。</p>
+
+<div class="flow-center">
+  <div class="screen" style="width: 600px;">
+    <div class="screen-title-bar">
+      <div class="dot" style="background: var(--accent-red);"></div>
+      <div class="dot" style="background: var(--accent-warm);"></div>
+      <div class="dot" style="background: var(--accent-green);"></div>
+      <span class="screen-url">Song Editor 下部パネル</span>
+      <span class="screen-label">Visualizer + Mixer</span>
+    </div>
+    <div class="screen-body">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span style="font-size: 9px; color: var(--accent); font-weight: 700; letter-spacing: 0.1em;">VISUALIZER + MIXER</span>
+        <span style="font-size: 9px; color: var(--text-muted);">[close]</span>
+      </div>
+
+      <div class="mixer-row">
+        <span class="mixer-label" style="color: var(--accent-purple);">Piano</span>
+        <div class="mixer-notes" style="color: var(--accent-purple);">
+          &#9644;&#9644; &nbsp; &#9644;&#9644;&#9644; &nbsp; &#9644;&#9644; &nbsp; &#9644;&#9644;&#9644;&#9644; &nbsp;&nbsp; &#9644;&#9644; &nbsp; &#9644;&#9644;&#9644;
+          <div class="cursor-line"></div>
+        </div>
+        <div class="mixer-ctrl">
+          <button class="mixer-btn">M</button>
+          <button class="mixer-btn">S</button>
+          <span class="mixer-slider"><span class="mixer-fill" style="width: 70%; background: var(--accent-purple);"></span></span>
+        </div>
+      </div>
+
+      <div class="mixer-row">
+        <span class="mixer-label" style="color: var(--accent-green);">Bass</span>
+        <div class="mixer-notes" style="color: var(--accent-green);">
+          &#9644; &nbsp;&nbsp; &#9644; &nbsp;&nbsp; &#9644; &nbsp;&nbsp; &#9644; &nbsp;&nbsp;&nbsp; &#9644; &nbsp;&nbsp; &#9644;
+          <div class="cursor-line"></div>
+        </div>
+        <div class="mixer-ctrl">
+          <button class="mixer-btn">M</button>
+          <button class="mixer-btn">S</button>
+          <span class="mixer-slider"><span class="mixer-fill" style="width: 60%; background: var(--accent-green);"></span></span>
+        </div>
+      </div>
+
+      <div class="mixer-row">
+        <span class="mixer-label" style="color: var(--accent);">Drums</span>
+        <div class="mixer-notes" style="color: var(--accent);">
+          &middot;&middot; &middot; &middot;&middot; &middot; &nbsp; &middot;&middot; &middot; &middot;&middot; &middot; &nbsp; &middot;&middot; &middot; &middot;&middot; &middot;
+          <div class="cursor-line"></div>
+        </div>
+        <div class="mixer-ctrl">
+          <button class="mixer-btn">M</button>
+          <button class="mixer-btn">S</button>
+          <span class="mixer-slider"><span class="mixer-fill" style="width: 50%; background: var(--accent);"></span></span>
+        </div>
+      </div>
+
+      <div class="callout" style="margin-top: 10px;">
+        <span class="callout-icon">&#127925;</span>
+        <span style="font-size: 10px;"><strong>読み取り専用のMIDIピアノロール</strong>。ディレクティブから生成されたノートを可視化。右クリックでスクラブ試聴。Flow Editor と横軸同期。</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<h2>5. 全体レイアウト</h2>
+
+<div class="flow-center">
+  <div class="screen screen-active" style="width: 660px;">
+    <div class="screen-title-bar">
+      <div class="dot" style="background: var(--accent-red);"></div>
+      <div class="dot" style="background: var(--accent-warm);"></div>
+      <div class="dot" style="background: var(--accent-green);"></div>
+      <span class="screen-url">cadenza.fm/song/abc123</span>
+      <span class="screen-label">Full Layout</span>
+    </div>
+    <div class="screen-body" style="padding: 0;">
+      <!-- Header -->
+      <div style="padding: 7px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="color: var(--text-muted);">&#8592;</span>
+          <span style="font-weight: 700;">Jazz Ballad Demo</span>
+          <span style="color: var(--text-muted);">C Major &middot; 120 BPM</span>
+        </div>
+        <div style="display: flex; gap: 4px;">
+          <button class="mini-btn btn-p" style="font-size: 8px;">Save</button>
+          <button class="mini-btn btn-g" style="font-size: 8px;">Export .mid</button>
+        </div>
+      </div>
+
+      <!-- Tab bar -->
+      <div style="padding: 0 14px; border-bottom: 1px solid var(--border); display: flex; gap: 0;">
+        <button class="btn-tab btn-tab-active">Flow</button>
+        <button class="btn-tab">Text</button>
+      </div>
+
+      <!-- Flow Editor -->
+      <div style="padding: 10px 14px; border-bottom: 1px solid var(--border); min-height: 100px;">
+        <div class="grid4" style="grid-template-columns: 36px 1fr 1fr 1fr;">
+          <div style="color: var(--text-muted); font-weight: 700; font-size: 7px;">Sect</div>
+          <div><span class="section-tag" style="background: var(--accent-blue); font-size: 7px;">A</span></div>
+          <div><span class="section-tag" style="background: var(--accent); font-size: 7px;">B</span></div>
+          <div><span class="section-tag" style="background: var(--accent-warm); color: #1a1408; font-size: 7px;">Chorus</span></div>
+
+          <div style="color: var(--accent-warm); font-weight: 700; font-size: 7px;">Chords</div>
+          <div class="chord">|Am7|Dm7|G7|C|</div>
+          <div class="chord">|Fm7|Bb7|Eb|Ab|</div>
+          <div class="chord">|F|G|Em|Am|</div>
+
+          <div style="color: var(--text-muted); font-size: 7px;">Piano</div>
+          <div><div class="block block-purple">arpUp</div></div>
+          <div><div class="block block-purple">block</div></div>
+          <div><div class="block block-purple">block / f</div></div>
+
+          <div style="color: var(--text-muted); font-size: 7px;">Bass</div>
+          <div style="opacity: 0.2; font-size: 7px; color: var(--text-muted);">&mdash;</div>
+          <div><div class="block block-green">root</div></div>
+          <div><div class="block block-green">walking</div></div>
+
+          <div style="color: var(--text-muted); font-size: 7px;">Drums</div>
+          <div style="opacity: 0.2; font-size: 7px; color: var(--text-muted);">&mdash;</div>
+          <div style="opacity: 0.2; font-size: 7px; color: var(--text-muted);">&mdash;</div>
+          <div><div class="block block-amber">8beat</div></div>
+        </div>
+      </div>
+
+      <!-- Visualizer (collapsed) -->
+      <div style="padding: 5px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; cursor: pointer;">
+        <span style="font-size: 9px; color: var(--text-muted); margin-right: 6px;">&#9654;</span>
+        <span style="font-size: 8px; color: var(--accent); font-weight: 700; letter-spacing: 0.08em;">VISUALIZER</span>
+      </div>
+
+      <!-- PlayerBar -->
+      <div class="player-bar">
+        <span>&#9632;</span>
+        <span style="color: var(--accent); font-size: 12px;">&#9654;</span>
+        <span>&#128257;</span>
+        <span style="font-family: var(--font-mono); color: var(--accent-warm); font-weight: 700;">Am7</span>
+        <span style="font-family: var(--font-mono); font-size: 9px;">0:03 / 0:48</span>
+        <span class="progress"><span class="progress-fill" style="width: 6%;"></span></span>
+        <span style="font-size: 8px;">Vol</span>
+        <span class="mixer-slider" style="width: 44px;"><span class="mixer-fill" style="width: 65%; background: var(--text-muted);"></span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="callout" style="max-width: 660px; margin: 16px auto;">
+  <span class="callout-icon">&#128209;</span>
+  <div style="font-size: 11px;">
+    <strong>v1 → v2 の構造変化</strong><br><br>
+    <table style="width: 100%; font-size: 10px; border-collapse: collapse;">
+      <tr style="border-bottom: 1px solid var(--border);">
+        <td style="padding: 4px 8px; color: var(--text-muted); font-weight: 600;">v1</td>
+        <td style="padding: 4px 8px; color: var(--text-muted); font-weight: 600;">v2</td>
+      </tr>
+      <tr style="border-bottom: 1px solid rgba(58,46,26,0.3);">
+        <td style="padding: 4px 8px;">/ (一覧)</td>
+        <td style="padding: 4px 8px;">/ (Home — Song一覧)</td>
+      </tr>
+      <tr style="border-bottom: 1px solid rgba(58,46,26,0.3);">
+        <td style="padding: 4px 8px;">/thread/[id] (コードエディタ)</td>
+        <td style="padding: 4px 8px; color: var(--accent);" rowspan="2">/song/[id] (Song Editor)<br><span style="font-size: 9px; color: var(--text-muted);">Flow View + Text View + Visualizer</span></td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 8px;">/thread/[id]/pianoroll</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

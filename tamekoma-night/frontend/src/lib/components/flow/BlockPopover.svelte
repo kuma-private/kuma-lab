@@ -11,13 +11,24 @@
     onPreview?: () => void;
   }
 
-  const PATTERN_OPTIONS = [
-    'block', 'arpUp', 'arpDown', 'fingerpick', 'bossa-nova',
-    'comp-jazz', '8beat', 'walking', 'root', 'root-fifth', 'sustain',
+  const MODE_CHIPS = ['block', 'arpUp', 'arpDown', 'bossa', 'jazz', '8beat'] as const;
+
+  const VOICING_SNAPS = [
+    { value: 0,   name: 'close' },
+    { value: 25,  name: 'open' },
+    { value: 50,  name: 'drop2' },
+    { value: 75,  name: 'spread' },
+    { value: 100, name: 'shell' },
   ] as const;
 
-  const VOICING_OPTIONS = ['close', 'open', 'drop2', 'spread', 'shell'] as const;
-  const VELOCITY_OPTIONS = ['pp', 'p', 'mp', 'mf', 'f', 'ff'] as const;
+  const VELOCITY_SNAPS = [
+    { value: 0,   name: 'pp' },
+    { value: 20,  name: 'p' },
+    { value: 40,  name: 'mp' },
+    { value: 60,  name: 'mf' },
+    { value: 80,  name: 'f' },
+    { value: 100, name: 'ff' },
+  ] as const;
 
   const HUMANIZE_MIN = 0;
   const HUMANIZE_MAX = 30;
@@ -39,13 +50,44 @@
   let rawText = $state(directivesToText(directives));
   let rawOpen = $state(false);
   let parseErrors: string[] = $state([]);
-  let presetMenuOpen = $state(false);
+  let aiPrompt = $state('');
 
-  // --- Derived header ---
+  // --- Slider state (continuous values) ---
+  let voicingSlider = $state(voicingNameToValue(directives.voicing));
+  let velocitySlider = $state(velocityNameToValue(typeof directives.velocity === 'string' ? directives.velocity : 'mf'));
+
+  // --- Derived ---
   let headerLabel = $derived.by(() => {
     const bars = (block.startBar !== undefined && block.endBar !== undefined) ? ` (bars ${block.startBar + 1}–${block.endBar})` : '';
     return `${trackName} — ${sectionName}${bars}`;
   });
+
+  let snappedVoicing = $derived.by(() => snapToNearest(voicingSlider, VOICING_SNAPS));
+  let snappedVelocity = $derived.by(() => snapToNearest(velocitySlider, VELOCITY_SNAPS));
+
+  // --- Snap helpers ---
+  function snapToNearest(value: number, snaps: readonly { value: number; name: string }[]): { value: number; name: string } {
+    let closest = snaps[0];
+    let minDist = Math.abs(value - snaps[0].value);
+    for (const s of snaps) {
+      const dist = Math.abs(value - s.value);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = s;
+      }
+    }
+    return closest;
+  }
+
+  function voicingNameToValue(name: string | undefined): number {
+    const found = VOICING_SNAPS.find(s => s.name === name);
+    return found ? found.value : 0;
+  }
+
+  function velocityNameToValue(name: string | undefined): number {
+    const found = VELOCITY_SNAPS.find(s => s.name === name);
+    return found ? found.value : 60;
+  }
 
   // --- directivesToText helper ---
   function directivesToText(d: ParsedDirectives): string {
@@ -79,13 +121,17 @@
     syncToRaw();
   }
 
-  function setVoicing(value: string) {
-    directives = { ...directives, voicing: value };
+  function setVoicingFromSlider(value: number) {
+    voicingSlider = value;
+    const snapped = snapToNearest(value, VOICING_SNAPS);
+    directives = { ...directives, voicing: snapped.name };
     syncToRaw();
   }
 
-  function setVelocity(value: VelocityLevel) {
-    directives = { ...directives, velocity: value };
+  function setVelocityFromSlider(value: number) {
+    velocitySlider = value;
+    const snapped = snapToNearest(value, VELOCITY_SNAPS);
+    directives = { ...directives, velocity: snapped.name as VelocityLevel };
     syncToRaw();
   }
 
@@ -106,6 +152,15 @@
     const result = parseDirectives(rawText);
     directives = result.directives;
     parseErrors = result.errors.map(e => e.line ? `Line ${e.line}: ${e.message}` : e.message);
+    // Sync slider positions from parsed directives
+    voicingSlider = voicingNameToValue(directives.voicing);
+    velocitySlider = velocityNameToValue(typeof directives.velocity === 'string' ? directives.velocity : 'mf');
+  }
+
+  // --- AI generate (placeholder) ---
+  function handleGenerate() {
+    // Phase 3: AI接続。今はトーストを出す
+    alert('AI機能は準備中です');
   }
 
   // --- Actions ---
@@ -129,23 +184,6 @@
       onClose();
     }
   }
-
-  // --- Presets (placeholder Phase 1) ---
-  const PRESETS: Record<string, Partial<ParsedDirectives>> = {
-    'Jazz Ballad': { mode: 'block', voicing: 'drop2', velocity: 'mp', humanize: 15, swing: 40 },
-    'Pop': { mode: 'block', voicing: 'close', velocity: 'mf', humanize: 8, swing: 0 },
-    'Rock': { mode: '8beat', voicing: 'open', velocity: 'f', humanize: 5, swing: 0 },
-    'Bossa Nova': { mode: 'bossa-nova', voicing: 'spread', velocity: 'mp', humanize: 12, swing: 20 },
-  };
-
-  function applyPreset(name: string) {
-    const preset = PRESETS[name];
-    if (preset) {
-      directives = { ...directives, ...preset };
-      syncToRaw();
-    }
-    presetMenuOpen = false;
-  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -161,45 +199,85 @@
 
     <!-- Body -->
     <div class="popover-body">
-      <!-- Pattern dropdown -->
+      <!-- AI prompt input + generate button -->
       <div class="field">
-        <label class="field-label">Pattern</label>
-        <select
-          class="field-select"
-          value={directives.mode ?? ''}
-          onchange={(e) => setMode((e.target as HTMLSelectElement).value)}
-        >
-          <option value="" disabled>Select...</option>
-          {#each PATTERN_OPTIONS as opt}
-            <option value={opt}>{opt}</option>
-          {/each}
-        </select>
-      </div>
-
-      <!-- Voicing chips -->
-      <div class="field">
-        <label class="field-label">Voicing</label>
+        <div class="ai-input-row">
+          <input
+            type="text"
+            class="ai-input"
+            placeholder="スタイルを入力... (例: ジャズバラード風)"
+            bind:value={aiPrompt}
+            onkeydown={(e) => { if (e.key === 'Enter') handleGenerate(); }}
+          />
+          <button class="btn btn-primary btn-sm btn-generate" onclick={handleGenerate}>
+            生成
+          </button>
+        </div>
+        <!-- Mode preset chips -->
         <div class="chip-group">
-          {#each VOICING_OPTIONS as opt}
+          {#each MODE_CHIPS as opt}
             <button
               class="chip"
-              class:chip--active={directives.voicing === opt}
-              onclick={() => setVoicing(opt)}
+              class:chip--active={directives.mode === opt}
+              onclick={() => setMode(opt)}
             >{opt}</button>
           {/each}
         </div>
       </div>
 
-      <!-- Velocity chips -->
+      <!-- Section divider: パラメータ -->
+      <div class="section-divider">
+        <span class="section-label">パラメータ</span>
+      </div>
+
+      <!-- Voicing slider -->
+      <div class="field">
+        <label class="field-label">Voicing</label>
+        <div class="bar-row">
+          <span class="bar-label-left">close</span>
+          <input
+            type="range"
+            class="slider"
+            min={0}
+            max={100}
+            step={1}
+            value={voicingSlider}
+            oninput={(e) => setVoicingFromSlider(Number((e.target as HTMLInputElement).value))}
+          />
+          <span class="bar-label-right">spread</span>
+        </div>
+        <div class="snap-labels">
+          {#each VOICING_SNAPS as snap}
+            <span
+              class="snap-label"
+              class:snap-label--active={snappedVoicing.name === snap.name}
+            >{snap.name}</span>
+          {/each}
+        </div>
+      </div>
+
+      <!-- Velocity slider -->
       <div class="field">
         <label class="field-label">Velocity</label>
-        <div class="chip-group">
-          {#each VELOCITY_OPTIONS as opt}
-            <button
-              class="chip"
-              class:chip--active={typeof directives.velocity === 'string' && directives.velocity === opt}
-              onclick={() => setVelocity(opt)}
-            >{opt}</button>
+        <div class="bar-row">
+          <span class="bar-label-left">pp</span>
+          <input
+            type="range"
+            class="slider"
+            min={0}
+            max={100}
+            step={1}
+            value={velocitySlider}
+            oninput={(e) => setVelocityFromSlider(Number((e.target as HTMLInputElement).value))}
+          />
+          <span class="bar-label-right">ff</span>
+        </div>
+        <div class="snap-labels snap-labels--6">
+          {#each VELOCITY_SNAPS as snap}
+            <span
+              class="snap-label"
+              class:snap-label--active={snappedVelocity.name === snap.name}
+            >{snap.name}</span>
           {/each}
         </div>
       </div>
@@ -236,11 +314,21 @@
         </div>
       </div>
 
+      <!-- Section divider: プレビュー -->
+      <div class="section-divider">
+        <span class="section-label">プレビュー</span>
+      </div>
+
+      <!-- MIDI preview placeholder -->
+      <div class="preview-box">
+        <span class="preview-placeholder">パラメータに基づくMIDIプレビュー（準備中）</span>
+      </div>
+
       <!-- Raw text toggle -->
       <div class="raw-section">
         <button class="raw-toggle" onclick={() => (rawOpen = !rawOpen)}>
           <span class="raw-toggle-icon">{rawOpen ? '▾' : '▸'}</span>
-          Raw テキストで編集
+          Raw テキスト
         </button>
         {#if rawOpen}
           <textarea
@@ -262,23 +350,7 @@
 
     <!-- Footer -->
     <div class="popover-footer">
-      <div class="footer-left">
-        <div class="preset-wrapper">
-          <button class="btn btn-secondary btn-sm" onclick={() => (presetMenuOpen = !presetMenuOpen)}>
-            Preset
-          </button>
-          {#if presetMenuOpen}
-            <div class="preset-menu">
-              {#each Object.keys(PRESETS) as name}
-                <button class="preset-item" onclick={() => applyPreset(name)}>{name}</button>
-              {/each}
-            </div>
-          {/if}
-        </div>
-        <button class="btn btn-secondary btn-sm" disabled title="Phase 3で実装">
-          AI Suggest
-        </button>
-      </div>
+      <div class="footer-left"></div>
       <div class="footer-right">
         {#if onPreview}
           <button class="btn btn-ghost btn-sm" onclick={handlePreview}>
@@ -312,7 +384,7 @@
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-modal);
-    width: 360px;
+    width: 400px;
     max-width: 95vw;
     max-height: 85vh;
     display: flex;
@@ -379,21 +451,37 @@
     letter-spacing: 0.05em;
   }
 
-  .field-select {
-    width: 100%;
-    padding: 6px 10px;
+  /* AI input row */
+  .ai-input-row {
+    display: flex;
+    gap: var(--space-xs);
+    align-items: center;
+  }
+
+  .ai-input {
+    flex: 1;
+    padding: 7px 10px;
     font-size: 0.85rem;
     background: var(--bg-base);
     color: var(--text-primary);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-sm);
-    cursor: pointer;
   }
 
-  .field-select:focus {
+  .ai-input:focus {
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
     outline: none;
+  }
+
+  .ai-input::placeholder {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+
+  .btn-generate {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   /* Chip group */
@@ -404,8 +492,8 @@
   }
 
   .chip {
-    padding: 4px 10px;
-    font-size: 0.78rem;
+    padding: 3px 9px;
+    font-size: 0.72rem;
     font-weight: 500;
     border: 1px solid var(--border-default);
     border-radius: var(--radius-full);
@@ -431,6 +519,75 @@
     color: #fff;
   }
 
+  /* Section divider */
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-subtle);
+  }
+
+  .section-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  /* Bar row (slider with left/right labels) */
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
+  .bar-label-left,
+  .bar-label-right {
+    font-size: 8px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    min-width: 30px;
+  }
+
+  .bar-label-left {
+    text-align: right;
+  }
+
+  .bar-label-right {
+    text-align: left;
+  }
+
+  /* Snap labels under slider */
+  .snap-labels {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 34px;
+  }
+
+  .snap-labels--6 {
+    padding: 0 34px;
+  }
+
+  .snap-label {
+    font-size: 7px;
+    color: var(--text-muted);
+    text-align: center;
+    transition: color 0.15s, font-weight 0.15s;
+  }
+
+  .snap-label--active {
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+
   /* Slider */
   .slider-row {
     display: flex;
@@ -446,6 +603,7 @@
     background: var(--border-default);
     border-radius: 2px;
     outline: none;
+    accent-color: var(--accent-primary);
   }
 
   .slider::-webkit-slider-thumb {
@@ -476,6 +634,23 @@
     color: var(--text-secondary);
     min-width: 36px;
     text-align: right;
+  }
+
+  /* Preview box */
+  .preview-box {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-sm);
+  }
+
+  .preview-placeholder {
+    font-size: 0.75rem;
+    color: var(--text-muted);
   }
 
   /* Raw text section */
@@ -558,40 +733,5 @@
   .btn-sm {
     padding: 5px 12px;
     font-size: 0.78rem;
-  }
-
-  /* Preset menu */
-  .preset-wrapper {
-    position: relative;
-  }
-
-  .preset-menu {
-    position: absolute;
-    bottom: calc(100% + 4px);
-    left: 0;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-elevated);
-    min-width: 140px;
-    z-index: 10;
-    overflow: hidden;
-  }
-
-  .preset-item {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 6px 12px;
-    font-size: 0.8rem;
-    background: none;
-    border: none;
-    color: var(--text-primary);
-    cursor: pointer;
-    transition: background 0.1s;
-  }
-
-  .preset-item:hover {
-    background: var(--bg-hover);
   }
 </style>
