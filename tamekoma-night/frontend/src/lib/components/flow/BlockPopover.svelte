@@ -447,17 +447,8 @@
 
     <!-- Footer -->
     <div class="popover-footer">
-      <div class="footer-left"></div>
-      <div class="footer-right">
-        {#if onPreview}
-          <button class="btn btn-ghost btn-sm" onclick={handlePreview}>
-            &#9654; Preview
-          </button>
-        {/if}
-        <button class="btn btn-primary btn-sm" onclick={handleOk}>
-          OK
-        </button>
-      </div>
+      <button class="footer-btn" onclick={handlePreview}>&#9654; Preview</button>
+      <button class="footer-btn footer-btn--primary" onclick={handleOk}>OK</button>
     </div>
   </div>
 </div>
@@ -530,22 +521,23 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
+    gap: 8px;
   }
 
   /* Field */
   .field {
     display: flex;
     flex-direction: column;
-    gap: var(--space-xs);
+    gap: 3px;
   }
 
   .field-label {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 500;
     color: var(--text-secondary);
     text-transform: none;
     letter-spacing: 0;
+    margin-bottom: 2px;
   }
 
   /* AI input row */
@@ -656,16 +648,17 @@
     content: '';
     flex: 1;
     height: 1px;
-    background: rgba(138, 126, 104, 0.15);
+    background: rgba(138, 126, 104, 0.1);
   }
 
   .section-label {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     font-weight: 500;
     color: var(--text-muted);
     text-transform: none;
     letter-spacing: 0.02em;
     white-space: nowrap;
+    opacity: 0.7;
   }
 
   /* Bar row (slider with left/right labels) */
@@ -844,21 +837,43 @@
   .popover-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     padding: var(--space-sm) var(--space-md);
     border-top: 1px solid var(--border-subtle);
     background: var(--bg-elevated);
-    gap: var(--space-sm);
+    gap: var(--space-xs);
     position: sticky;
     bottom: 0;
     flex-shrink: 0;
   }
 
-  .footer-left,
-  .footer-right {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
+  .footer-btn {
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--bg-base);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .footer-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+  }
+
+  .footer-btn--primary {
+    background: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+  }
+
+  .footer-btn--primary:hover {
+    background: #d09440;
+    border-color: #d09440;
+    color: #fff;
   }
 
   .btn-sm {
