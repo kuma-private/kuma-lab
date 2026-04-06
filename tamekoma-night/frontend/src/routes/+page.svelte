@@ -264,33 +264,33 @@
 		overflow: hidden;
 		pointer-events: none;
 		z-index: -1;
-		background: linear-gradient(180deg, #030010 0%, #0a0820 40%, #0f0c2e 70%, #1a1040 100%);
+		background: linear-gradient(180deg, #080604 0%, #0f0a04 40%, #1a1408 70%, #241c0e 100%);
 	}
 
 	.bg-stars {
 		position: absolute;
 		inset: 0;
 		background-image:
-			radial-gradient(2px 2px at 8% 10%, #fff, transparent),
-			radial-gradient(2px 2px at 22% 6%, #fff, transparent),
-			radial-gradient(3px 3px at 38% 18%, #c4b5fd, transparent),
-			radial-gradient(2px 2px at 52% 4%, #fff, transparent),
-			radial-gradient(2px 2px at 68% 14%, #fff, transparent),
-			radial-gradient(3px 3px at 82% 9%, #93c5fd, transparent),
-			radial-gradient(1.5px 1.5px at 12% 26%, #e0e0f0, transparent),
-			radial-gradient(2px 2px at 32% 30%, #fff, transparent),
-			radial-gradient(1.5px 1.5px at 58% 24%, #e0e0f0, transparent),
-			radial-gradient(3px 3px at 78% 28%, #f9a8d4, transparent),
-			radial-gradient(2px 2px at 90% 20%, #fff, transparent),
-			radial-gradient(4px 4px at 18% 2%, #c4b5fd, transparent),
-			radial-gradient(1.5px 1.5px at 45% 34%, #e0e0f0, transparent),
-			radial-gradient(2px 2px at 95% 6%, #fff, transparent),
-			radial-gradient(2px 2px at 5% 38%, #fff, transparent),
-			radial-gradient(3px 3px at 65% 8%, #93c5fd, transparent),
-			radial-gradient(2px 2px at 28% 16%, #fff, transparent),
-			radial-gradient(1.5px 1.5px at 72% 36%, #e0e0f0, transparent),
-			radial-gradient(2px 2px at 48% 12%, #fff, transparent),
-			radial-gradient(3px 3px at 85% 22%, #c4b5fd, transparent);
+			radial-gradient(2px 2px at 8% 10%, #f0e0c8, transparent),
+			radial-gradient(2px 2px at 22% 6%, #f0e0c8, transparent),
+			radial-gradient(3px 3px at 38% 18%, #e8a84c, transparent),
+			radial-gradient(2px 2px at 52% 4%, #f0e0c8, transparent),
+			radial-gradient(2px 2px at 68% 14%, #f0e0c8, transparent),
+			radial-gradient(3px 3px at 82% 9%, #f0c060, transparent),
+			radial-gradient(1.5px 1.5px at 12% 26%, #e8e0d0, transparent),
+			radial-gradient(2px 2px at 32% 30%, #f0e0c8, transparent),
+			radial-gradient(1.5px 1.5px at 58% 24%, #e8e0d0, transparent),
+			radial-gradient(3px 3px at 78% 28%, #c4956a, transparent),
+			radial-gradient(2px 2px at 90% 20%, #f0e0c8, transparent),
+			radial-gradient(4px 4px at 18% 2%, #e8a84c, transparent),
+			radial-gradient(1.5px 1.5px at 45% 34%, #e8e0d0, transparent),
+			radial-gradient(2px 2px at 95% 6%, #f0e0c8, transparent),
+			radial-gradient(2px 2px at 5% 38%, #f0e0c8, transparent),
+			radial-gradient(3px 3px at 65% 8%, #f0c060, transparent),
+			radial-gradient(2px 2px at 28% 16%, #f0e0c8, transparent),
+			radial-gradient(1.5px 1.5px at 72% 36%, #e8e0d0, transparent),
+			radial-gradient(2px 2px at 48% 12%, #f0e0c8, transparent),
+			radial-gradient(3px 3px at 85% 22%, #e8a84c, transparent);
 		animation: twinkle 3s ease-in-out infinite alternate;
 	}
 
@@ -305,7 +305,7 @@
 		left: 0;
 		right: 0;
 		height: 35%;
-		background: linear-gradient(180deg, transparent 0%, rgba(167,139,250,0.03) 50%, rgba(139,92,246,0.06) 100%);
+		background: linear-gradient(180deg, transparent 0%, rgba(232,168,76,0.03) 50%, rgba(192,148,106,0.06) 100%);
 	}
 
 	.orb {
@@ -592,7 +592,7 @@
 	}
 
 	.btn-new:hover {
-		background: #9374e8;
+		background: #d09440;
 		transform: translateY(-1px);
 		box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
 	}
@@ -696,7 +696,7 @@
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-md);
 		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-		z-index: 20;
+		z-index: var(--z-dropdown);
 		overflow: hidden;
 		animation: menu-in 0.15s ease;
 	}
