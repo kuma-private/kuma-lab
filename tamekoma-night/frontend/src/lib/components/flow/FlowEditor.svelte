@@ -126,24 +126,23 @@
 <div class="flow-editor">
   <!-- Tab bar -->
   <div class="tab-bar">
-    <div class="tab-group">
+    <div class="tab-group" role="tablist">
       <button
         class="tab"
+        role="tab"
+        aria-selected={activeTab === 'flow'}
         class:tab--active={activeTab === 'flow'}
         onclick={() => activeTab = 'flow'}
       >Flow</button>
       <button
         class="tab"
+        role="tab"
+        aria-selected={activeTab === 'text'}
         class:tab--active={activeTab === 'text'}
         onclick={() => activeTab = 'text'}
       >Text</button>
     </div>
-    <div class="tab-meta">
-      <span class="meta-title">{song.title}</span>
-      <span class="meta-badge">{song.bpm} BPM</span>
-      <span class="meta-badge">{song.key}</span>
-      <span class="meta-badge">{song.timeSignature}</span>
-    </div>
+    <!-- Song metadata shown in page header, not duplicated here -->
   </div>
 
   {#if activeTab === 'flow'}
@@ -250,34 +249,12 @@
     border-bottom-color: var(--accent-warm);
   }
 
-  .tab-meta {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-  }
-
-  .meta-title {
-    font-family: var(--font-display);
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-right: var(--space-sm);
-  }
-
-  .meta-badge {
-    font-size: 0.68rem;
-    padding: 1px 6px;
-    border-radius: var(--radius-sm);
-    background: var(--bg-elevated);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-subtle);
-    font-family: var(--font-mono);
-  }
-
   /* ---- Flow content ---- */
   .flow-content {
     overflow-x: auto;
-    padding: var(--space-sm) 0;
+    padding: var(--space-md) 0;
+    flex: 1;
+    min-height: 300px;
   }
 
   .flow-grid {
