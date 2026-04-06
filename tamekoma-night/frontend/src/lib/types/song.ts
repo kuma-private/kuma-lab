@@ -51,6 +51,15 @@ export interface DirectiveBlock {
 	startBar: number;            // 0-based, inclusive
 	endBar: number;              // exclusive
 	directives: string;          // raw text: "@mode: arpUp\n@velocity: mf"
+	generatedMidi?: GeneratedMidiData;  // AI生成MIDIデータ（オプション）
+}
+
+export interface GeneratedMidiData {
+	notes: MidiNote[];
+	style: string;
+	expression: number;          // 0-100
+	feel: number;                // 0-100
+	generatedAt: string;         // ISO 8601
 }
 
 export interface GeneratedBlockMidi {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Song, DirectiveBlock, Track, MidiNote } from '$lib/types/song';
+  import type { Song, DirectiveBlock, Track, MidiNote, GeneratedMidiData } from '$lib/types/song';
   import { suggestArrangement, type ArrangeRequest, type ArrangeResponse } from '$lib/api';
   import { showToast } from '$lib/stores/toast.svelte';
   import SectionBar from './SectionBar.svelte';
@@ -131,13 +131,14 @@
     popoverTrack = track;
   }
 
-  function handlePopoverSave(directives: string) {
+  function handlePopoverSave(directives: string, generatedMidi?: GeneratedMidiData) {
     if (!popoverBlock || !popoverTrack) return;
     const track = song.tracks.find(t => t.id === popoverTrack!.id);
     if (!track) return;
     const block = track.blocks.find(b => b.id === popoverBlock!.id);
     if (block) {
       block.directives = directives;
+      block.generatedMidi = generatedMidi;
       emit();
     }
   }

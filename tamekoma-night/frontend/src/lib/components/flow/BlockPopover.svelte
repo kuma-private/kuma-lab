@@ -1,10 +1,10 @@
 <script lang="ts">
   import { parseDirectives, type ParsedDirectives, type VelocityLevel } from '$lib/directive-parser';
-  import type { DirectiveBlock, MidiNote } from '$lib/types/song';
+  import type { DirectiveBlock, MidiNote, GeneratedMidiData } from '$lib/types/song';
   import { parseProgression, resolveRepeats } from '$lib/chord-parser';
   import { voiceChords, type VoicingConfig } from '$lib/voicing-engine';
   import { generateRhythm, type RhythmConfig } from '$lib/rhythm-engine';
-  import { suggestDirectives } from '$lib/api';
+  import { suggestDirectives, generateMidi } from '$lib/api';
   import { showToast } from '$lib/stores/toast.svelte';
   import MiniPianoRoll from './MiniPianoRoll.svelte';
 
@@ -17,7 +17,7 @@
     chordProgression?: string;
     bpm?: number;
     timeSignature?: string;
-    onSave: (directives: string) => void;
+    onSave: (directives: string, generatedMidi?: GeneratedMidiData) => void;
     onClose: () => void;
     onPreview?: () => void;
   }
@@ -69,6 +69,12 @@
   let aiPrompt = $state('');
   let aiLoading = $state(false);
   let aiError = $state<string | null>(null);
+
+  // --- AI MIDI generation state ---
+  let expressionSlider = $state(block.generatedMidi?.expression ?? 50);
+  let feelSlider = $state(block.generatedMidi?.feel ?? 50);
+  let generatedMidiData = $state<GeneratedMidiData | undefined>(block.generatedMidi);
+  let detailOpen = $state(false);
 
   // --- Free mode / melody ---
   let isFreeMode = $derived(directives.mode === 'free');
@@ -186,7 +192,7 @@
     melodyText = extractMelodyText(rawText);
   }
 
-  // --- AI generate ---
+  // --- AI generate (MIDI generation) ---
   async function handleGenerate() {
     if (!songId) {
       showToast('Song ID が不明です', 'error');
@@ -205,24 +211,29 @@
         ? `${block.startBar + 1}-${block.endBar}`
         : '';
 
-      const result = await suggestDirectives(songId, {
+      const result = await generateMidi(songId, {
         chordProgression: chordProgression ?? '',
-        genre: aiPrompt.trim(),
-        trackName,
+        style: aiPrompt.trim(),
         instrument,
+        bpm,
+        expression: expressionSlider,
+        feel: feelSlider,
         barRange,
       });
 
-      // Apply the returned directives
-      const parsed2 = parseDirectives(result.directives);
-      directives = parsed2.directives;
-      rawText = directivesToText(directives);
-      parseErrors = parsed2.errors.map(e => e.line ? `Line ${e.line}: ${e.message}` : e.message);
-      // Sync sliders
-      voicingSlider = voicingNameToValue(directives.voicing);
-      velocitySlider = velocityNameToValue(typeof directives.velocity === 'string' ? directives.velocity : 'mf');
+      // Store as GeneratedMidiData
+      generatedMidiData = {
+        notes: result.notes,
+        style: result.style,
+        expression: result.expression,
+        feel: result.feel,
+        generatedAt: new Date().toISOString(),
+      };
 
-      showToast('ディレクティブを生成しました', 'success');
+      // Show AI-generated notes in preview
+      previewNotes = result.notes;
+
+      showToast('MIDIを生成しました', 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : '生成に失敗しました';
       aiError = message;
@@ -234,7 +245,7 @@
 
   // --- Actions ---
   function handleOk() {
-    onSave(rawText);
+    onSave(rawText, generatedMidiData);
     onClose();
   }
 
@@ -418,10 +429,16 @@
     void chordProgression;
     void bpm;
     void timeSignature;
+    void generatedMidiData;
 
     if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
     previewDebounceTimer = setTimeout(() => {
-      previewNotes = generatePreviewNotes();
+      // If AI-generated MIDI exists, use those notes for preview
+      if (generatedMidiData && generatedMidiData.notes.length > 0) {
+        previewNotes = generatedMidiData.notes;
+      } else {
+        previewNotes = generatePreviewNotes();
+      }
     }, 200);
 
     return () => {
@@ -476,104 +493,39 @@
         {#if aiError}
           <div class="ai-error">{aiError}</div>
         {/if}
-        <!-- Mode preset chips -->
-        <div class="chip-group">
-          {#each MODE_CHIPS as opt}
-            <button
-              class="chip"
-              class:chip--active={directives.mode === opt}
-              onclick={() => setMode(opt)}
-            >{opt}</button>
-          {/each}
-        </div>
       </div>
 
-      <!-- Section divider: パラメータ -->
-      <div class="section-divider">
-        <span class="section-label">パラメータ</span>
-      </div>
-
-      <!-- Voicing slider -->
+      <!-- Expression slider -->
       <div class="field">
-        <label class="field-label">Voicing</label>
+        <label class="field-label">Expression</label>
         <div class="bar-row">
-          <span class="bar-label-left">close</span>
+          <span class="bar-label-left">Subtle</span>
           <input
             type="range"
             class="slider"
             min={0}
             max={100}
             step={1}
-            value={voicingSlider}
-            oninput={(e) => setVoicingFromSlider(Number((e.target as HTMLInputElement).value))}
+            bind:value={expressionSlider}
           />
-          <span class="bar-label-right">spread</span>
-        </div>
-        <div class="snap-labels">
-          {#each VOICING_SNAPS as snap}
-            <span
-              class="snap-label"
-              class:snap-label--active={snappedVoicing.name === snap.name}
-            >{snap.name}</span>
-          {/each}
+          <span class="bar-label-right">Dramatic</span>
         </div>
       </div>
 
-      <!-- Velocity slider -->
+      <!-- Feel slider -->
       <div class="field">
-        <label class="field-label">Velocity</label>
+        <label class="field-label">Feel</label>
         <div class="bar-row">
-          <span class="bar-label-left">pp</span>
+          <span class="bar-label-left">Tight</span>
           <input
             type="range"
             class="slider"
             min={0}
             max={100}
             step={1}
-            value={velocitySlider}
-            oninput={(e) => setVelocityFromSlider(Number((e.target as HTMLInputElement).value))}
+            bind:value={feelSlider}
           />
-          <span class="bar-label-right">ff</span>
-        </div>
-        <div class="snap-labels snap-labels--6">
-          {#each VELOCITY_SNAPS as snap}
-            <span
-              class="snap-label"
-              class:snap-label--active={snappedVelocity.name === snap.name}
-            >{snap.name}</span>
-          {/each}
-        </div>
-      </div>
-
-      <!-- Humanize slider -->
-      <div class="field">
-        <label class="field-label">Humanize</label>
-        <div class="slider-row">
-          <input
-            type="range"
-            class="slider"
-            min={HUMANIZE_MIN}
-            max={HUMANIZE_MAX}
-            value={directives.humanize ?? 0}
-            oninput={(e) => setHumanize(Number((e.target as HTMLInputElement).value))}
-          />
-          <span class="slider-value">{directives.humanize ?? 0}%</span>
-        </div>
-      </div>
-
-      <!-- Swing slider -->
-      <div class="field">
-        <label class="field-label">Swing</label>
-        <div class="slider-row">
-          <input
-            type="range"
-            class="slider"
-            min={SWING_MIN}
-            max={SWING_MAX}
-            value={directives.swing ?? 0}
-            oninput={(e) => setSwing(Number((e.target as HTMLInputElement).value))}
-          />
-          <span class="slider-value">{directives.swing ?? 0}%</span>
+          <span class="bar-label-right">Loose</span>
         </div>
       </div>
 
@@ -584,13 +536,122 @@
 
       <!-- MIDI preview -->
       <div class="preview-box">
-        {#if hasDirectives && !isFreeMode}
+        {#if generatedMidiData && generatedMidiData.notes.length > 0}
+          <canvas
+            class="preview-canvas"
+            bind:this={previewCanvas}
+          ></canvas>
+        {:else if hasDirectives && !isFreeMode}
           <canvas
             class="preview-canvas"
             bind:this={previewCanvas}
           ></canvas>
         {:else}
-          <span class="preview-placeholder">ディレクティブを設定するとプレビューが表示されます</span>
+          <span class="preview-placeholder">スタイルを入力して「生成」を押すか、詳細設定でパラメータを調整してください</span>
+        {/if}
+      </div>
+
+      <!-- Collapsible detail settings (conventional directive sliders) -->
+      <div class="raw-section">
+        <button class="raw-toggle" onclick={() => (detailOpen = !detailOpen)}>
+          <span class="raw-toggle-icon">{detailOpen ? '▾' : '▸'}</span>
+          詳細設定
+        </button>
+        {#if detailOpen}
+          <!-- Mode preset chips -->
+          <div class="chip-group">
+            {#each MODE_CHIPS as opt}
+              <button
+                class="chip"
+                class:chip--active={directives.mode === opt}
+                onclick={() => setMode(opt)}
+              >{opt}</button>
+            {/each}
+          </div>
+
+          <!-- Voicing slider -->
+          <div class="field">
+            <label class="field-label">Voicing</label>
+            <div class="bar-row">
+              <span class="bar-label-left">close</span>
+              <input
+                type="range"
+                class="slider"
+                min={0}
+                max={100}
+                step={1}
+                value={voicingSlider}
+                oninput={(e) => setVoicingFromSlider(Number((e.target as HTMLInputElement).value))}
+              />
+              <span class="bar-label-right">spread</span>
+            </div>
+            <div class="snap-labels">
+              {#each VOICING_SNAPS as snap}
+                <span
+                  class="snap-label"
+                  class:snap-label--active={snappedVoicing.name === snap.name}
+                >{snap.name}</span>
+              {/each}
+            </div>
+          </div>
+
+          <!-- Velocity slider -->
+          <div class="field">
+            <label class="field-label">Velocity</label>
+            <div class="bar-row">
+              <span class="bar-label-left">pp</span>
+              <input
+                type="range"
+                class="slider"
+                min={0}
+                max={100}
+                step={1}
+                value={velocitySlider}
+                oninput={(e) => setVelocityFromSlider(Number((e.target as HTMLInputElement).value))}
+              />
+              <span class="bar-label-right">ff</span>
+            </div>
+            <div class="snap-labels snap-labels--6">
+              {#each VELOCITY_SNAPS as snap}
+                <span
+                  class="snap-label"
+                  class:snap-label--active={snappedVelocity.name === snap.name}
+                >{snap.name}</span>
+              {/each}
+            </div>
+          </div>
+
+          <!-- Humanize slider -->
+          <div class="field">
+            <label class="field-label">Humanize</label>
+            <div class="slider-row">
+              <input
+                type="range"
+                class="slider"
+                min={HUMANIZE_MIN}
+                max={HUMANIZE_MAX}
+                value={directives.humanize ?? 0}
+                oninput={(e) => setHumanize(Number((e.target as HTMLInputElement).value))}
+              />
+              <span class="slider-value">{directives.humanize ?? 0}%</span>
+            </div>
+          </div>
+
+          <!-- Swing slider -->
+          <div class="field">
+            <label class="field-label">Swing</label>
+            <div class="slider-row">
+              <input
+                type="range"
+                class="slider"
+                min={SWING_MIN}
+                max={SWING_MAX}
+                value={directives.swing ?? 0}
+                oninput={(e) => setSwing(Number((e.target as HTMLInputElement).value))}
+              />
+              <span class="slider-value">{directives.swing ?? 0}%</span>
+            </div>
+          </div>
         {/if}
       </div>
 
