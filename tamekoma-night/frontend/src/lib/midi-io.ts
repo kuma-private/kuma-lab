@@ -280,3 +280,92 @@ export async function importMidiFile(
   const midi = new Midi(arrayBuffer);
   return midiToPianoRollBars(midi);
 }
+
+// ── Multi-track Song export ──────────────────────────
+
+/** Minimal note descriptor for multi-track export. */
+export interface MidiNote {
+  midi: number;           // 0-127
+  startTick: number;      // absolute tick (480 TPQ)
+  durationTicks: number;
+  velocity: number;       // 0-127
+}
+
+/** Track descriptor for songToMidi. */
+export interface SongTrack {
+  name: string;
+  instrument: string;
+  notes: MidiNote[];
+}
+
+/** Assign MIDI channels: drums → 9, others → 0-8 then 10-15. */
+function assignChannels(tracks: ReadonlyArray<{ instrument: string }>): number[] {
+  let nextChannel = 0;
+  return tracks.map(t => {
+    if (t.instrument === 'drums') return 9;
+    const ch = nextChannel;
+    nextChannel++;
+    if (nextChannel === 9) nextChannel = 10; // skip drum channel
+    return ch;
+  });
+}
+
+/**
+ * Export a multi-track Song to a MIDI file.
+ * Each track becomes a separate MIDI track with its own name and channel.
+ * Drums are assigned to channel 10 (0-indexed: 9).
+ */
+export function songToMidi(
+  tracks: SongTrack[],
+  bpm: number,
+  timeSignature: { beats: number; beatValue: number },
+): Midi {
+  const midi = new Midi();
+  midi.header.setTempo(bpm);
+  midi.header.timeSignatures.push({
+    ticks: 0,
+    timeSignature: [timeSignature.beats, timeSignature.beatValue],
+  });
+
+  const channels = assignChannels(tracks);
+
+  tracks.forEach((t, i) => {
+    const track = midi.addTrack();
+    track.name = t.name;
+    track.channel = channels[i];
+
+    for (const note of t.notes) {
+      track.addNote({
+        midi: note.midi,
+        ticks: note.startTick,
+        durationTicks: note.durationTicks,
+        velocity: note.velocity / 127,
+      });
+    }
+  });
+
+  return midi;
+}
+
+/**
+ * Convert multi-track Song to base64 MIDI string.
+ */
+export function songToBase64(
+  tracks: SongTrack[],
+  bpm: number,
+  timeSignature: { beats: number; beatValue: number },
+): string {
+  return midiToBase64(songToMidi(tracks, bpm, timeSignature));
+}
+
+/**
+ * Download multi-track MIDI file.
+ */
+export function downloadSongMidi(
+  tracks: SongTrack[],
+  bpm: number,
+  timeSignature: { beats: number; beatValue: number },
+  filename: string,
+): void {
+  downloadMidiFile(songToMidi(tracks, bpm, timeSignature), filename);
+}
