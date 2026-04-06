@@ -485,7 +485,7 @@
             placeholder="スタイルを入力... (例: ジャズバラード風)"
             bind:value={aiPrompt}
             disabled={aiLoading}
-            onkeydown={(e) => { if (e.key === 'Enter' && !e.isComposing && !aiLoading) handleGenerate(); }}
+            onkeydown={(e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); e.stopPropagation(); if (!aiLoading) handleGenerate(); } }}
           />
           <button class="btn btn-primary btn-sm btn-generate" onclick={handleGenerate} disabled={aiLoading}>
             {#if aiLoading}
@@ -552,109 +552,6 @@
       </div>
 
       <!-- Collapsible detail settings (conventional directive sliders) -->
-      <div class="raw-section">
-        <button class="raw-toggle" onclick={() => (detailOpen = !detailOpen)}>
-          <span class="raw-toggle-icon">{detailOpen ? '▾' : '▸'}</span>
-          詳細設定
-        </button>
-        {#if detailOpen}
-          <!-- Mode preset chips -->
-          <div class="chip-group">
-            {#each MODE_CHIPS as opt}
-              <button
-                class="chip"
-                class:chip--active={directives.mode === opt}
-                onclick={() => setMode(opt)}
-              >{opt}</button>
-            {/each}
-          </div>
-
-          <!-- Voicing slider -->
-          <div class="field">
-            <label class="field-label">Voicing</label>
-            <div class="bar-row">
-              <span class="bar-label-left">close</span>
-              <input
-                type="range"
-                class="slider"
-                min={0}
-                max={100}
-                step={1}
-                value={voicingSlider}
-                oninput={(e) => setVoicingFromSlider(Number((e.target as HTMLInputElement).value))}
-              />
-              <span class="bar-label-right">spread</span>
-            </div>
-            <div class="snap-labels">
-              {#each VOICING_SNAPS as snap}
-                <span
-                  class="snap-label"
-                  class:snap-label--active={snappedVoicing.name === snap.name}
-                >{snap.name}</span>
-              {/each}
-            </div>
-          </div>
-
-          <!-- Velocity slider -->
-          <div class="field">
-            <label class="field-label">Velocity</label>
-            <div class="bar-row">
-              <span class="bar-label-left">pp</span>
-              <input
-                type="range"
-                class="slider"
-                min={0}
-                max={100}
-                step={1}
-                value={velocitySlider}
-                oninput={(e) => setVelocityFromSlider(Number((e.target as HTMLInputElement).value))}
-              />
-              <span class="bar-label-right">ff</span>
-            </div>
-            <div class="snap-labels snap-labels--6">
-              {#each VELOCITY_SNAPS as snap}
-                <span
-                  class="snap-label"
-                  class:snap-label--active={snappedVelocity.name === snap.name}
-                >{snap.name}</span>
-              {/each}
-            </div>
-          </div>
-
-          <!-- Humanize slider -->
-          <div class="field">
-            <label class="field-label">Humanize</label>
-            <div class="slider-row">
-              <input
-                type="range"
-                class="slider"
-                min={HUMANIZE_MIN}
-                max={HUMANIZE_MAX}
-                value={directives.humanize ?? 0}
-                oninput={(e) => setHumanize(Number((e.target as HTMLInputElement).value))}
-              />
-              <span class="slider-value">{directives.humanize ?? 0}%</span>
-            </div>
-          </div>
-
-          <!-- Swing slider -->
-          <div class="field">
-            <label class="field-label">Swing</label>
-            <div class="slider-row">
-              <input
-                type="range"
-                class="slider"
-                min={SWING_MIN}
-                max={SWING_MAX}
-                value={directives.swing ?? 0}
-                oninput={(e) => setSwing(Number((e.target as HTMLInputElement).value))}
-              />
-              <span class="slider-value">{directives.swing ?? 0}%</span>
-            </div>
-          </div>
-        {/if}
-      </div>
-
       <!-- Mini piano roll (free mode) -->
       {#if isFreeMode}
         <div class="section-divider">
