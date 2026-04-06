@@ -457,6 +457,11 @@
     directives.voicing !== undefined ||
     directives.velocity !== undefined
   );
+
+  let showPreviewCanvas = $derived(
+    (generatedMidiData && generatedMidiData.notes.length > 0) ||
+    (hasDirectives && !isFreeMode)
+  );
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -536,12 +541,7 @@
 
       <!-- MIDI preview -->
       <div class="preview-box">
-        {#if generatedMidiData && generatedMidiData.notes.length > 0}
-          <canvas
-            class="preview-canvas"
-            bind:this={previewCanvas}
-          ></canvas>
-        {:else if hasDirectives && !isFreeMode}
+        {#if showPreviewCanvas}
           <canvas
             class="preview-canvas"
             bind:this={previewCanvas}
