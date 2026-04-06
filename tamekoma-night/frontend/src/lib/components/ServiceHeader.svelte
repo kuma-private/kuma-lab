@@ -6,6 +6,7 @@
 	let user = $state<UserInfo | null>(null);
 	let loaded = $state(false);
 	let helpOpen = $state(false);
+	let menuOpen = $state(false);
 
 	onMount(async () => {
 		try {
@@ -17,13 +18,27 @@
 		loaded = true;
 	});
 
+	const getInitial = (name: string): string => {
+		return name.charAt(0).toUpperCase();
+	};
+
 	const handleLogout = async () => {
+		menuOpen = false;
 		try {
 			await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
 		} catch {}
 		window.location.href = '/';
 	};
+
+	const handleClickOutside = (event: MouseEvent) => {
+		const target = event.target as HTMLElement;
+		if (!target.closest('.avatar-menu-wrapper')) {
+			menuOpen = false;
+		}
+	};
 </script>
+
+<svelte:window onclick={handleClickOutside} />
 
 <nav class="service-header">
 	<a href="/" class="service-logo">
@@ -40,8 +55,23 @@
 		<button class="btn-help" onclick={() => helpOpen = true} title="ヘルプ">?</button>
 		{#if loaded}
 			{#if user}
-				<span class="user-name">{user.name}</span>
-				<button class="btn-logout" onclick={handleLogout}>ログアウト</button>
+				<div class="avatar-menu-wrapper">
+					<button
+						class="avatar-btn"
+						onclick={() => menuOpen = !menuOpen}
+						aria-expanded={menuOpen}
+						aria-haspopup="true"
+						title={user.name}
+					>
+						{getInitial(user.name)}
+					</button>
+					{#if menuOpen}
+						<div class="avatar-dropdown" role="menu">
+							<a href="/me" class="dropdown-item" role="menuitem" onclick={() => menuOpen = false}>マイページ</a>
+							<button class="dropdown-item dropdown-item--logout" role="menuitem" onclick={handleLogout}>ログアウト</button>
+						</div>
+					{/if}
+				</div>
 			{:else}
 				<a href="/auth/google" class="btn-login">ログイン</a>
 			{/if}
@@ -91,27 +121,6 @@
 		gap: var(--space-md);
 	}
 
-	.user-name {
-		font-size: 0.78rem;
-		color: var(--text-secondary);
-	}
-
-	.btn-logout {
-		padding: 3px 12px;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-sm);
-		background: transparent;
-		color: var(--text-muted);
-		font-size: 0.72rem;
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.btn-logout:hover {
-		border-color: var(--error);
-		color: var(--error);
-	}
-
 	.btn-login {
 		padding: 3px 14px;
 		border: 1px solid var(--accent-primary);
@@ -151,13 +160,96 @@
 		background: rgba(232, 168, 76, 0.08);
 	}
 
+	/* Avatar button */
+	.avatar-menu-wrapper {
+		position: relative;
+	}
+
+	.avatar-btn {
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		border: none;
+		background: var(--accent-primary);
+		color: #fff;
+		font-family: var(--font-display);
+		font-size: 0.82rem;
+		font-weight: 700;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.15s;
+		flex-shrink: 0;
+	}
+
+	.avatar-btn:hover {
+		background: #d09440;
+		box-shadow: 0 0 0 2px rgba(232, 168, 76, 0.3);
+	}
+
+	/* Dropdown */
+	.avatar-dropdown {
+		position: absolute;
+		top: calc(100% + 8px);
+		right: 0;
+		min-width: 160px;
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-elevated);
+		z-index: var(--z-dropdown);
+		overflow: hidden;
+		animation: dropdown-in 0.12s ease-out;
+	}
+
+	@keyframes dropdown-in {
+		from {
+			opacity: 0;
+			transform: translateY(-4px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.dropdown-item {
+		display: block;
+		width: 100%;
+		padding: var(--space-sm) var(--space-md);
+		font-size: 0.82rem;
+		color: var(--text-secondary);
+		text-decoration: none;
+		border: none;
+		background: none;
+		text-align: left;
+		cursor: pointer;
+		font-family: var(--font-sans);
+		transition: all 0.12s;
+	}
+
+	.dropdown-item:hover {
+		color: var(--text-primary);
+		background: var(--bg-hover);
+	}
+
+	.dropdown-item--logout {
+		color: var(--error);
+		border-top: 1px solid var(--border-subtle);
+	}
+
+	.dropdown-item--logout:hover {
+		background: rgba(224, 96, 80, 0.08);
+	}
+
 	@media (max-width: 600px) {
 		.service-header {
 			padding: 0 var(--space-md);
 			height: 42px;
 		}
 		.service-logo { font-size: 0.74rem; }
-		.btn-logout, .btn-login {
+		.btn-login {
 			padding: 6px 12px;
 			min-height: 44px;
 		}
@@ -167,14 +259,12 @@
 			font-size: 0.85rem;
 			margin-right: 2px;
 		}
+		.avatar-btn {
+			width: 36px;
+			height: 36px;
+		}
 		.service-right {
 			gap: var(--space-sm);
-		}
-		.user-name {
-			max-width: 80px;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
 		}
 	}
 </style>
