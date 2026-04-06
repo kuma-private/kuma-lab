@@ -73,11 +73,41 @@ module Repository =
 
         // --- Firestore document conversion ---
 
+        let private toMidiNoteData (dict: System.Collections.Generic.IDictionary<string, obj>) : MidiNoteData =
+            { Midi = tryGetDictInt dict "midi" 0
+              StartTick = tryGetDictInt dict "startTick" 0
+              DurationTicks = tryGetDictInt dict "durationTicks" 0
+              Velocity = tryGetDictInt dict "velocity" 0
+              Channel = tryGetDictInt dict "channel" 0 }
+
+        let private toGeneratedMidiData (dict: System.Collections.Generic.IDictionary<string, obj>) : GeneratedMidiData =
+            let notes =
+                match dict.TryGetValue("notes") with
+                | true, (:? System.Collections.IList as list) ->
+                    list
+                    |> Seq.cast<System.Collections.Generic.IDictionary<string, obj>>
+                    |> Seq.map toMidiNoteData
+                    |> Seq.toList
+                | _ -> []
+
+            { Notes = notes
+              Style = tryGetDictString dict "style"
+              Expression = tryGetDictInt dict "expression" 0
+              Feel = tryGetDictInt dict "feel" 0
+              GeneratedAt = tryGetDictString dict "generatedAt" }
+
         let private toDirectiveBlock (dict: System.Collections.Generic.IDictionary<string, obj>) : DirectiveBlock =
+            let generatedMidi =
+                match dict.TryGetValue("generatedMidi") with
+                | true, (:? System.Collections.Generic.IDictionary<string, obj> as midiDict) ->
+                    Some (toGeneratedMidiData midiDict)
+                | _ -> None
+
             { Id = tryGetDictString dict "id"
               StartBar = tryGetDictInt dict "startBar" 0
               EndBar = tryGetDictInt dict "endBar" 0
-              Directives = tryGetDictString dict "directives" }
+              Directives = tryGetDictString dict "directives"
+              GeneratedMidi = generatedMidi }
 
         let private toTrack (dict: System.Collections.Generic.IDictionary<string, obj>) : Track =
             let blocks =
@@ -141,13 +171,38 @@ module Repository =
 
         // --- Firestore serialization helpers ---
 
-        let private directiveBlockToDict (block: DirectiveBlock) : System.Collections.Generic.Dictionary<string, obj> =
+        let private midiNoteDataToDict (note: MidiNoteData) : System.Collections.Generic.Dictionary<string, obj> =
             System.Collections.Generic.Dictionary<string, obj>(
                 dict
-                    [ "id", block.Id :> obj
-                      "startBar", block.StartBar :> obj
-                      "endBar", block.EndBar :> obj
-                      "directives", block.Directives :> obj ])
+                    [ "midi", note.Midi :> obj
+                      "startTick", note.StartTick :> obj
+                      "durationTicks", note.DurationTicks :> obj
+                      "velocity", note.Velocity :> obj
+                      "channel", note.Channel :> obj ])
+
+        let private generatedMidiDataToDict (midi: GeneratedMidiData) : System.Collections.Generic.Dictionary<string, obj> =
+            let noteDicts = midi.Notes |> List.map (fun n -> midiNoteDataToDict n :> obj)
+            System.Collections.Generic.Dictionary<string, obj>(
+                dict
+                    [ "notes", (System.Collections.Generic.List<obj>(noteDicts) :> obj)
+                      "style", midi.Style :> obj
+                      "expression", midi.Expression :> obj
+                      "feel", midi.Feel :> obj
+                      "generatedAt", midi.GeneratedAt :> obj ])
+
+        let private directiveBlockToDict (block: DirectiveBlock) : System.Collections.Generic.Dictionary<string, obj> =
+            let baseFields =
+                [ "id", block.Id :> obj
+                  "startBar", block.StartBar :> obj
+                  "endBar", block.EndBar :> obj
+                  "directives", block.Directives :> obj ]
+
+            let allFields =
+                match block.GeneratedMidi with
+                | Some midi -> baseFields @ [ "generatedMidi", generatedMidiDataToDict midi :> obj ]
+                | None -> baseFields
+
+            System.Collections.Generic.Dictionary<string, obj>(dict allFields)
 
         let private trackToDict (track: Track) : System.Collections.Generic.Dictionary<string, obj> =
             let blockDicts = track.Blocks |> List.map (fun b -> directiveBlockToDict b :> obj)

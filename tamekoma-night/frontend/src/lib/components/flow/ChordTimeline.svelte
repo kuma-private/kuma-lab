@@ -7,12 +7,84 @@
     totalBars,
     musicalKey = 'C Major',
     onBarClick,
+    selectedRange = null,
+    onRangeSelect,
   }: {
     chords: string;
     totalBars: number;
     musicalKey?: string;
     onBarClick?: (barNumber: number) => void;
+    selectedRange?: { startBar: number; endBar: number } | null;
+    onRangeSelect?: (startBar: number, endBar: number) => void;
   } = $props();
+
+  // --- Drag selection state ---
+  let isSelecting = $state(false);
+  let dragStartBar = $state<number | null>(null);
+  let dragCurrentBar = $state<number | null>(null);
+
+  let dragRange = $derived.by(() => {
+    if (dragStartBar === null || dragCurrentBar === null) return null;
+    const lo = Math.min(dragStartBar, dragCurrentBar);
+    const hi = Math.max(dragStartBar, dragCurrentBar);
+    return { startBar: lo, endBar: hi };
+  });
+
+  /** Effective highlight range: drag in progress, or committed selection */
+  let highlightRange = $derived(dragRange ?? selectedRange);
+
+  function isBarHighlighted(barNum: number): boolean {
+    if (!highlightRange) return false;
+    return barNum >= highlightRange.startBar && barNum <= highlightRange.endBar;
+  }
+
+  function handleMouseDown(barNum: number, e: MouseEvent) {
+    // Only primary button
+    if (e.button !== 0) return;
+    e.preventDefault();
+    isSelecting = true;
+    dragStartBar = barNum;
+    dragCurrentBar = barNum;
+
+    const handleMouseMove = (me: MouseEvent) => {
+      if (!isSelecting) return;
+      // Find which bar the mouse is over by checking the timeline grid
+      const timeline = (e.target as HTMLElement).closest('.chord-timeline') as HTMLElement | null;
+      if (!timeline) return;
+      const rect = timeline.getBoundingClientRect();
+      const relX = me.clientX - rect.left;
+      const barWidth = rect.width / totalBars;
+      const bar = Math.max(1, Math.min(totalBars, Math.floor(relX / barWidth) + 1));
+      dragCurrentBar = bar;
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      if (!isSelecting || dragStartBar === null || dragCurrentBar === null) {
+        isSelecting = false;
+        dragStartBar = null;
+        dragCurrentBar = null;
+        return;
+      }
+      const lo = Math.min(dragStartBar, dragCurrentBar);
+      const hi = Math.max(dragStartBar, dragCurrentBar);
+      isSelecting = false;
+      dragStartBar = null;
+      dragCurrentBar = null;
+
+      if (lo === hi) {
+        // Single click — use existing onBarClick
+        onBarClick?.(lo);
+      } else {
+        // Range selection
+        onRangeSelect?.(lo, hi);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }
 
   let parsed = $derived(resolveRepeats(parseProgression(chords).bars));
 
@@ -66,7 +138,7 @@
 <div class="chord-timeline" style:grid-template-columns="repeat({totalBars}, minmax(0, 140px))">
   {#each Array.from({ length: totalBars }, (_, i) => i + 1) as barNum}
     {@const bar = getBar(barNum)}
-    <div class="chord-cell" class:chord-cell--clickable={!!onBarClick} onclick={() => onBarClick?.(barNum)} role={onBarClick ? 'button' : undefined} tabindex={onBarClick ? 0 : undefined} onkeydown={(e) => { if (onBarClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onBarClick(barNum); } }}>
+    <div class="chord-cell" class:chord-cell--clickable={!!onBarClick || !!onRangeSelect} class:chord-cell--selected={isBarHighlighted(barNum)} onmousedown={(e) => handleMouseDown(barNum, e)} role={onBarClick || onRangeSelect ? 'button' : undefined} tabindex={onBarClick || onRangeSelect ? 0 : undefined} onkeydown={(e) => { if (onBarClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onBarClick(barNum); } }}>
       <span class="bar-number">{barNum}</span>
       <div class="chord-entries">
         {#if bar}
@@ -106,6 +178,12 @@
   }
   .chord-cell--clickable:hover {
     background: rgba(232, 168, 76, 0.06);
+  }
+
+  .chord-cell--selected {
+    background: rgba(232, 168, 76, 0.12);
+    outline: 2px solid rgba(232, 168, 76, 0.4);
+    outline-offset: -2px;
   }
 
   .chord-cell:first-child {

@@ -36,58 +36,108 @@
 
   // --- ChordEditDialog state ---
   let editingBar = $state<number | null>(null);
+  let editingEndBar = $state<number | null>(null);
   let editingBarInitialChords = $state('');
 
-  function handleBarClick(barNumber: number) {
-    // Extract current chords for this bar
-    const { bars, comments } = parseProgression(song.chordProgression);
+  // --- Range selection state ---
+  let selectedRange = $state<{ startBar: number; endBar: number } | null>(null);
+
+  function extractBarChords(barNumber: number): string {
+    const { bars } = parseProgression(song.chordProgression);
     const bar = bars.find(b => b.barNumber === barNumber);
-    if (bar) {
-      editingBarInitialChords = bar.entries
-        .map(e => {
-          switch (e.type) {
-            case 'chord': return e.chord.raw;
-            case 'repeat': return '%';
-            case 'rest': return '_';
-            case 'sustain': return '=';
-          }
-        })
-        .join(' ');
-    } else {
-      editingBarInitialChords = '';
-    }
+    if (!bar) return '';
+    return bar.entries
+      .map(e => {
+        switch (e.type) {
+          case 'chord': return e.chord.raw;
+          case 'repeat': return '%';
+          case 'rest': return '_';
+          case 'sustain': return '=';
+        }
+      })
+      .join(' ');
+  }
+
+  function handleBarClick(barNumber: number) {
+    selectedRange = { startBar: barNumber, endBar: barNumber };
+    editingBarInitialChords = extractBarChords(barNumber);
+    editingEndBar = null;
     editingBar = barNumber;
+  }
+
+  function handleRangeSelect(startBar: number, endBar: number) {
+    selectedRange = { startBar, endBar };
+    // Collect chords for all bars in range, separated by |
+    const parts: string[] = [];
+    for (let b = startBar; b <= endBar; b++) {
+      parts.push(extractBarChords(b));
+    }
+    editingBarInitialChords = parts.join(' | ');
+    editingEndBar = endBar;
+    editingBar = startBar;
   }
 
   function handleChordEditOk(newChords: string) {
     if (editingBar === null) return;
     const { bars, comments } = parseProgression(song.chordProgression);
-    const barIndex = bars.findIndex(b => b.barNumber === editingBar);
 
-    // Parse the new chords into entries
-    const newParsed = parseProgression(`| ${newChords} |`);
-    const newEntries = newParsed.bars.length > 0 ? newParsed.bars[0].entries : [];
+    const startBar = editingBar;
+    const endBar = editingEndBar ?? editingBar;
 
-    if (barIndex !== -1) {
-      // Replace existing bar's entries
-      bars[barIndex] = { barNumber: editingBar!, entries: newEntries };
-    } else if (newChords.trim()) {
-      // Add a new bar (fill gaps if needed)
-      const maxExisting = bars.length > 0 ? Math.max(...bars.map(b => b.barNumber)) : 0;
-      for (let i = maxExisting + 1; i < editingBar!; i++) {
-        bars.push({ barNumber: i, entries: [] });
+    if (startBar === endBar) {
+      // Single bar edit (original logic)
+      const barIndex = bars.findIndex(b => b.barNumber === startBar);
+      const newParsed = parseProgression(`| ${newChords} |`);
+      const newEntries = newParsed.bars.length > 0 ? newParsed.bars[0].entries : [];
+
+      if (barIndex !== -1) {
+        bars[barIndex] = { barNumber: startBar, entries: newEntries };
+      } else if (newChords.trim()) {
+        const maxExisting = bars.length > 0 ? Math.max(...bars.map(b => b.barNumber)) : 0;
+        for (let i = maxExisting + 1; i < startBar; i++) {
+          bars.push({ barNumber: i, entries: [] });
+        }
+        bars.push({ barNumber: startBar, entries: newEntries });
+        bars.sort((a, b) => a.barNumber - b.barNumber);
       }
-      bars.push({ barNumber: editingBar!, entries: newEntries });
+    } else {
+      // Multi-bar edit: split input by | into per-bar segments
+      const segments = newChords.split('|').map(s => s.trim());
+      const barCount = endBar - startBar + 1;
+
+      for (let i = 0; i < barCount; i++) {
+        const barNum = startBar + i;
+        const segText = i < segments.length ? segments[i] : '';
+        const newParsed = parseProgression(`| ${segText} |`);
+        const newEntries = newParsed.bars.length > 0 ? newParsed.bars[0].entries : [];
+
+        const barIndex = bars.findIndex(b => b.barNumber === barNum);
+        if (barIndex !== -1) {
+          bars[barIndex] = { barNumber: barNum, entries: newEntries };
+        } else if (segText.trim()) {
+          const maxExisting = bars.length > 0 ? Math.max(...bars.map(b => b.barNumber)) : 0;
+          for (let j = maxExisting + 1; j < barNum; j++) {
+            if (!bars.find(b => b.barNumber === j)) {
+              bars.push({ barNumber: j, entries: [] });
+            }
+          }
+          bars.push({ barNumber: barNum, entries: newEntries });
+        }
+      }
       bars.sort((a, b) => a.barNumber - b.barNumber);
     }
 
     song.chordProgression = serialize(bars, comments);
     emit();
     editingBar = null;
+    editingEndBar = null;
+    selectedRange = null;
   }
 
   function handleChordEditCancel() {
     editingBar = null;
+    editingEndBar = null;
+    selectedRange = null;
   }
 
   // --- AI Arrange state ---
@@ -373,7 +423,7 @@
         <!-- Chord row -->
         <div class="row-label">Chords</div>
         <div class="row-content chord-row">
-          <ChordTimeline chords={song.chordProgression} totalBars={totalBars} musicalKey={song.key} onBarClick={handleBarClick} />
+          <ChordTimeline chords={song.chordProgression} totalBars={totalBars} musicalKey={song.key} onBarClick={handleBarClick} {selectedRange} onRangeSelect={handleRangeSelect} />
         </div>
 
         <!-- Separator -->
@@ -406,6 +456,7 @@
             <FlowTrackRow
               {track}
               totalBars={totalBars}
+              {selectedRange}
               onBlockClick={(b) => handleBlockClick(b, track)}
               onBlockCreate={(s, e) => handleBlockCreate(track.id, s, e)}
               onBlockMove={(bid, s) => handleBlockMove(track.id, bid, s)}
@@ -441,6 +492,7 @@
   {#if editingBar !== null}
     <ChordEditDialog
       barNumber={editingBar}
+      endBarNumber={editingEndBar ?? undefined}
       initialChords={editingBarInitialChords}
       musicalKey={song.key}
       onOk={handleChordEditOk}
