@@ -73,7 +73,7 @@
     onkeydown={handleKeydown}
     spellcheck={false}
     autocomplete="off"
-    autocorrect="off"
+    data-autocorrect="off"
     autocapitalize="off"
   ></textarea>
 

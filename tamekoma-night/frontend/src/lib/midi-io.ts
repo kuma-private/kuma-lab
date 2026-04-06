@@ -283,8 +283,8 @@ export async function importMidiFile(
 
 // ── Multi-track Song export ──────────────────────────
 
-/** Minimal note descriptor for multi-track export. */
-export interface MidiNote {
+/** Minimal note descriptor for multi-track export (no channel — assigned at track level). */
+export interface SongMidiNote {
   midi: number;           // 0-127
   startTick: number;      // absolute tick (480 TPQ)
   durationTicks: number;
@@ -295,7 +295,7 @@ export interface MidiNote {
 export interface SongTrack {
   name: string;
   instrument: string;
-  notes: MidiNote[];
+  notes: SongMidiNote[];
 }
 
 /** Assign MIDI channels: drums → 9, others → 0-8 then 10-15. */

@@ -4,13 +4,8 @@
 
 // ── Types ──────────────────────────────────────────────
 
-export interface MidiNote {
-  midi: number;          // MIDI note number (0-127)
-  startTick: number;     // absolute tick position
-  durationTicks: number;
-  velocity: number;      // 0-127
-  channel: number;       // 0-indexed MIDI channel
-}
+import type { MidiNote } from './types/song';
+export type { MidiNote };
 
 export interface RhythmConfig {
   pattern: DrumPatternName;
