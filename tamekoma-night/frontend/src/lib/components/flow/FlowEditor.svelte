@@ -3,6 +3,7 @@
   import SectionBar from './SectionBar.svelte';
   import ChordTimeline from './ChordTimeline.svelte';
   import FlowTrackRow from './FlowTrackRow.svelte';
+  import TextView from './TextView.svelte';
 
   let {
     song,
@@ -194,8 +195,8 @@
       </div>
     </div>
   {:else}
-    <div class="text-placeholder">
-      <p>Text View will be implemented in Issue #38.</p>
+    <div class="text-view-container">
+      <TextView {song} {onSongChange} />
     </div>
   {/if}
 </div>
@@ -334,13 +335,10 @@
     border-color: var(--accent-primary);
   }
 
-  /* ---- Text placeholder ---- */
-  .text-placeholder {
+  /* ---- Text view container ---- */
+  .text-view-container {
     display: flex;
-    align-items: center;
-    justify-content: center;
+    flex: 1;
     min-height: 200px;
-    color: var(--text-muted);
-    font-size: 0.85rem;
   }
 </style>
