@@ -226,3 +226,48 @@ export const analyzeSelection = async (
 	});
 	return res.json();
 };
+
+// Song API
+import type { Song, Section, Track } from '$lib/types/song';
+
+export interface UpdateSongData {
+	title: string;
+	bpm: number;
+	timeSignature: string;
+	key: string;
+	chordProgression: string;
+	sections: Section[];
+	tracks: Track[];
+}
+
+export const getSongs = async (): Promise<Song[]> => {
+	const res = await apiFetch('/api/songs');
+	return res.json();
+};
+
+export const getSong = async (id: string): Promise<Song> => {
+	const res = await apiFetch(`/api/songs/${id}`);
+	return res.json();
+};
+
+export const createSong = async (data: { title: string }): Promise<{ id: string }> => {
+	const res = await apiFetch('/api/songs', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};
+
+export const updateSong = async (id: string, data: UpdateSongData): Promise<Song> => {
+	const res = await apiFetch(`/api/songs/${id}`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};
+
+export const deleteSong = async (id: string): Promise<void> => {
+	await apiFetch(`/api/songs/${id}`, { method: 'DELETE' });
+};
