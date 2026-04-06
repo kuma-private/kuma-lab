@@ -1,19 +1,33 @@
 <script lang="ts">
-  import type { Song, DirectiveBlock } from '$lib/types/song';
+  import type { Song, DirectiveBlock, Track } from '$lib/types/song';
+  import { suggestArrangement, type ArrangeRequest, type ArrangeResponse } from '$lib/api';
+  import { showToast } from '$lib/stores/toast.svelte';
   import SectionBar from './SectionBar.svelte';
   import ChordTimeline from './ChordTimeline.svelte';
   import FlowTrackRow from './FlowTrackRow.svelte';
   import TextView from './TextView.svelte';
+  import BlockPopover from './BlockPopover.svelte';
 
   let {
     song,
+    songId,
     onSongChange,
   }: {
     song: Song;
+    songId?: string;
     onSongChange: (song: Song) => void;
   } = $props();
 
   let activeTab = $state<'flow' | 'text'>('flow');
+
+  // --- BlockPopover state ---
+  let popoverBlock = $state<DirectiveBlock | null>(null);
+  let popoverTrack = $state<Track | null>(null);
+
+  // --- AI Arrange state ---
+  let arrangeOpen = $state(false);
+  let arrangeGenre = $state('');
+  let arrangeLoading = $state(false);
 
   // --- Computed totalBars ---
   // Derive totalBars from sections and track blocks (max endBar across all, minimum 8)
@@ -46,8 +60,80 @@
   }
 
   // Block callbacks per track
-  function handleBlockClick(_block: DirectiveBlock) {
-    // Will be handled by #15 (popover)
+  function handleBlockClick(block: DirectiveBlock, track: Track) {
+    popoverBlock = block;
+    popoverTrack = track;
+  }
+
+  function handlePopoverSave(directives: string) {
+    if (!popoverBlock || !popoverTrack) return;
+    const track = song.tracks.find(t => t.id === popoverTrack!.id);
+    if (!track) return;
+    const block = track.blocks.find(b => b.id === popoverBlock!.id);
+    if (block) {
+      block.directives = directives;
+      emit();
+    }
+  }
+
+  function handlePopoverClose() {
+    popoverBlock = null;
+    popoverTrack = null;
+  }
+
+  // --- Section name for popover ---
+  function sectionNameForBar(bar: number): string {
+    const sec = song.sections.find(s => bar >= s.startBar && bar < s.endBar);
+    return sec?.name ?? '';
+  }
+
+  // --- AI Arrange ---
+  async function handleArrange() {
+    if (!songId) {
+      showToast('Song ID が不明です', 'error');
+      return;
+    }
+    if (!arrangeGenre.trim()) {
+      showToast('ジャンルを入力してください', 'error');
+      return;
+    }
+
+    arrangeLoading = true;
+    try {
+      const result: ArrangeResponse = await suggestArrangement(songId, {
+        chordProgression: song.chordProgression,
+        genre: arrangeGenre.trim(),
+        key: song.key,
+        bpm: song.bpm,
+      });
+
+      // Apply suggested tracks to song
+      const newTracks: Track[] = result.tracks.map(t => ({
+        id: crypto.randomUUID(),
+        name: t.name,
+        instrument: t.instrument,
+        blocks: t.blocks.map(b => ({
+          id: crypto.randomUUID(),
+          startBar: b.startBar,
+          endBar: b.endBar,
+          directives: b.directives,
+        })),
+        volume: 0,
+        mute: false,
+        solo: false,
+      }));
+
+      song.tracks = newTracks;
+      emit();
+      arrangeOpen = false;
+      arrangeGenre = '';
+      showToast('アレンジを生成しました', 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'アレンジ生成に失敗しました';
+      showToast(message, 'error');
+    } finally {
+      arrangeLoading = false;
+    }
   }
 
   function handleBlockCreate(trackId: string, startBar: number, endBar: number) {
@@ -142,8 +228,34 @@
         onclick={() => activeTab = 'text'}
       >Text</button>
     </div>
-    <!-- Song metadata shown in page header, not duplicated here -->
+    <!-- Right side: AI Arrange button -->
+    <div class="tab-bar-right">
+      <button class="btn-arrange" onclick={() => arrangeOpen = !arrangeOpen}>
+        AI Arrange
+      </button>
+    </div>
   </div>
+
+  {#if arrangeOpen}
+    <div class="arrange-bar">
+      <input
+        type="text"
+        class="arrange-input"
+        placeholder="ジャンルを入力... (例: ボサノバ, ジャズ, ロック)"
+        bind:value={arrangeGenre}
+        disabled={arrangeLoading}
+        onkeydown={(e) => { if (e.key === 'Enter' && !arrangeLoading) handleArrange(); }}
+      />
+      <button class="btn-arrange-go" onclick={handleArrange} disabled={arrangeLoading}>
+        {#if arrangeLoading}
+          <span class="spinner-sm"></span>
+        {:else}
+          アレンジ生成
+        {/if}
+      </button>
+      <button class="btn-arrange-close" onclick={() => arrangeOpen = false} aria-label="Close">&times;</button>
+    </div>
+  {/if}
 
   {#if activeTab === 'flow'}
     <div class="flow-content">
@@ -176,7 +288,7 @@
             <FlowTrackRow
               {track}
               totalBars={totalBars}
-              onBlockClick={handleBlockClick}
+              onBlockClick={(b) => handleBlockClick(b, track)}
               onBlockCreate={(s, e) => handleBlockCreate(track.id, s, e)}
               onBlockMove={(bid, s) => handleBlockMove(track.id, bid, s)}
               onBlockResize={(bid, e) => handleBlockResize(track.id, bid, e)}
@@ -197,6 +309,19 @@
     <div class="text-view-container">
       <TextView {song} {onSongChange} />
     </div>
+  {/if}
+
+  {#if popoverBlock && popoverTrack}
+    <BlockPopover
+      block={popoverBlock}
+      trackName={popoverTrack.name}
+      instrument={popoverTrack.instrument}
+      sectionName={sectionNameForBar(popoverBlock.startBar)}
+      {songId}
+      chordProgression={song.chordProgression}
+      onSave={handlePopoverSave}
+      onClose={handlePopoverClose}
+    />
   {/if}
 </div>
 
@@ -247,6 +372,116 @@
   .tab--active {
     color: var(--accent-warm);
     border-bottom-color: var(--accent-warm);
+  }
+
+  .tab-bar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
+  .btn-arrange {
+    padding: 4px 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--accent-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-arrange:hover {
+    background: var(--accent-primary);
+    color: #fff;
+  }
+
+  /* ---- Arrange bar ---- */
+  .arrange-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-elevated);
+  }
+
+  .arrange-input {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 0.82rem;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+  }
+
+  .arrange-input:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+    outline: none;
+  }
+
+  .arrange-input::placeholder {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+  }
+
+  .btn-arrange-go {
+    padding: 6px 14px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--accent-primary);
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    min-width: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-arrange-go:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  .btn-arrange-go:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn-arrange-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+  }
+
+  .btn-arrange-close:hover {
+    color: var(--text-primary);
+  }
+
+  .spinner-sm {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   /* ---- Flow content ---- */

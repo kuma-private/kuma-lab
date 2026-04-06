@@ -1,11 +1,16 @@
 <script lang="ts">
   import { parseDirectives, type ParsedDirectives, type VelocityLevel } from '$lib/directive-parser';
   import type { DirectiveBlock } from '$lib/types/song';
+  import { suggestDirectives } from '$lib/api';
+  import { showToast } from '$lib/stores/toast.svelte';
 
   interface Props {
     block: DirectiveBlock;
     trackName: string;
+    instrument: string;
     sectionName: string;
+    songId?: string;
+    chordProgression?: string;
     onSave: (directives: string) => void;
     onClose: () => void;
     onPreview?: () => void;
@@ -38,7 +43,10 @@
   let {
     block,
     trackName,
+    instrument,
     sectionName,
+    songId,
+    chordProgression,
     onSave,
     onClose,
     onPreview,
@@ -51,6 +59,8 @@
   let rawOpen = $state(false);
   let parseErrors: string[] = $state([]);
   let aiPrompt = $state('');
+  let aiLoading = $state(false);
+  let aiError = $state<string | null>(null);
 
   // --- Slider state (continuous values) ---
   let voicingSlider = $state(voicingNameToValue(directives.voicing));
@@ -157,10 +167,50 @@
     velocitySlider = velocityNameToValue(typeof directives.velocity === 'string' ? directives.velocity : 'mf');
   }
 
-  // --- AI generate (placeholder) ---
-  function handleGenerate() {
-    // Phase 3: AI接続。今はトーストを出す
-    alert('AI機能は準備中です');
+  // --- AI generate ---
+  async function handleGenerate() {
+    if (!songId) {
+      showToast('Song ID が不明です', 'error');
+      return;
+    }
+    if (!aiPrompt.trim()) {
+      showToast('スタイルを入力してください', 'error');
+      return;
+    }
+
+    aiLoading = true;
+    aiError = null;
+
+    try {
+      const barRange = (block.startBar !== undefined && block.endBar !== undefined)
+        ? `${block.startBar + 1}-${block.endBar}`
+        : '';
+
+      const result = await suggestDirectives(songId, {
+        chordProgression: chordProgression ?? '',
+        genre: aiPrompt.trim(),
+        trackName,
+        instrument,
+        barRange,
+      });
+
+      // Apply the returned directives
+      const parsed2 = parseDirectives(result.directives);
+      directives = parsed2.directives;
+      rawText = directivesToText(directives);
+      parseErrors = parsed2.errors.map(e => e.line ? `Line ${e.line}: ${e.message}` : e.message);
+      // Sync sliders
+      voicingSlider = voicingNameToValue(directives.voicing);
+      velocitySlider = velocityNameToValue(typeof directives.velocity === 'string' ? directives.velocity : 'mf');
+
+      showToast('ディレクティブを生成しました', 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '生成に失敗しました';
+      aiError = message;
+      showToast(message, 'error');
+    } finally {
+      aiLoading = false;
+    }
   }
 
   // --- Actions ---
@@ -206,12 +256,20 @@
             class="ai-input"
             placeholder="スタイルを入力... (例: ジャズバラード風)"
             bind:value={aiPrompt}
-            onkeydown={(e) => { if (e.key === 'Enter') handleGenerate(); }}
+            disabled={aiLoading}
+            onkeydown={(e) => { if (e.key === 'Enter' && !aiLoading) handleGenerate(); }}
           />
-          <button class="btn btn-primary btn-sm btn-generate" onclick={handleGenerate}>
-            生成
+          <button class="btn btn-primary btn-sm btn-generate" onclick={handleGenerate} disabled={aiLoading}>
+            {#if aiLoading}
+              <span class="spinner-sm"></span>
+            {:else}
+              生成
+            {/if}
           </button>
         </div>
+        {#if aiError}
+          <div class="ai-error">{aiError}</div>
+        {/if}
         <!-- Mode preset chips -->
         <div class="chip-group">
           {#each MODE_CHIPS as opt}
@@ -481,6 +539,35 @@
   .btn-generate {
     white-space: nowrap;
     flex-shrink: 0;
+    min-width: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-generate:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .spinner-sm {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .ai-error {
+    font-size: 0.72rem;
+    color: var(--error);
+    padding: 2px 0;
   }
 
   /* Chip group */

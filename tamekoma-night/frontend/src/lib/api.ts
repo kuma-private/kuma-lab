@@ -271,3 +271,45 @@ export const updateSong = async (id: string, data: UpdateSongData): Promise<Song
 export const deleteSong = async (id: string): Promise<void> => {
 	await apiFetch(`/api/songs/${id}`, { method: 'DELETE' });
 };
+
+// AI Suggest / Arrange
+export interface SuggestDirectivesRequest {
+	chordProgression: string;
+	genre: string;
+	trackName: string;
+	instrument: string;
+	barRange: string;
+}
+
+export interface ArrangeRequest {
+	chordProgression: string;
+	genre: string;
+	key: string;
+	bpm: number;
+}
+
+export interface ArrangeResponse {
+	tracks: {
+		name: string;
+		instrument: string;
+		blocks: { startBar: number; endBar: number; directives: string }[];
+	}[];
+}
+
+export const suggestDirectives = async (songId: string, data: SuggestDirectivesRequest): Promise<{ directives: string }> => {
+	const res = await apiFetch(`/api/songs/${songId}/suggest`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};
+
+export const suggestArrangement = async (songId: string, data: ArrangeRequest): Promise<ArrangeResponse> => {
+	const res = await apiFetch(`/api/songs/${songId}/arrange`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};

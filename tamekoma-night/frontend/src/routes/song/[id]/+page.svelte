@@ -121,7 +121,7 @@
 				<div class="loading-spinner"></div>
 			</div>
 		{:else if store.currentSong}
-			<FlowEditor song={store.currentSong} onSongChange={handleSongChange} />
+			<FlowEditor song={store.currentSong} {songId} onSongChange={handleSongChange} />
 		{:else}
 			<div class="loading-container">
 				<p style="color: var(--text-muted);">Song が見つかりません</p>
