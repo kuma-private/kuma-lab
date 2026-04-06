@@ -69,7 +69,7 @@
     <div
       class="section-tag"
       role="group"
-      style:grid-column="{section.startBar} / {section.endBar + 1}"
+      style:grid-column="{section.startBar + 1} / {section.endBar + 1}"
       style:--section-color={color}
       ondblclick={(e) => handleDblClick(section, e)}
     >

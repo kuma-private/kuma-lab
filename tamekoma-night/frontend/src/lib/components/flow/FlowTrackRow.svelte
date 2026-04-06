@@ -121,7 +121,7 @@
   {#each track.blocks as block (block.id)}
     <div
       class="block-wrapper"
-      style:grid-column="{block.startBar} / {block.endBar + 1}"
+      style:grid-column="{block.startBar + 1} / {block.endBar + 1}"
       style:grid-row="1"
       data-block-id={block.id}
     >

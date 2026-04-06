@@ -52,7 +52,7 @@
   style:background={colors.bg}
   style:border-color={colors.border}
   style:color={colors.text}
-  style:grid-column="{block.startBar} / {block.endBar + 1}"
+  style:grid-column="{block.startBar + 1} / {block.endBar + 1}"
   onmousedown={handleMouseDown}
   onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
 >
