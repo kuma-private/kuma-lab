@@ -3,6 +3,7 @@
   import type { DirectiveBlock } from '$lib/types/song';
   import { suggestDirectives } from '$lib/api';
   import { showToast } from '$lib/stores/toast.svelte';
+  import MiniPianoRoll from './MiniPianoRoll.svelte';
 
   interface Props {
     block: DirectiveBlock;
@@ -62,6 +63,10 @@
   let aiLoading = $state(false);
   let aiError = $state<string | null>(null);
 
+  // --- Free mode / melody ---
+  let isFreeMode = $derived(directives.mode === 'free');
+  let melodyText = $state(directives.melody ? extractMelodyText(block.directives) : '');
+
   // --- Slider state (continuous values) ---
   let voicingSlider = $state(voicingNameToValue(directives.voicing));
   let velocitySlider = $state(velocityNameToValue(typeof directives.velocity === 'string' ? directives.velocity : 'mf'));
@@ -117,6 +122,10 @@
     if (d.bass) lines.push(`@bass: ${d.bass}`);
     if (d.instrument) lines.push(`@instrument: ${d.instrument}`);
     if (d.comment) lines.push(`@comment: ${d.comment}`);
+    if (d.melody && d.melody.notes.length > 0) {
+      // Preserve raw melody text if available
+      if (melodyText) lines.push(`@melody: ${melodyText}`);
+    }
     return lines.join('\n');
   }
 
@@ -165,6 +174,8 @@
     // Sync slider positions from parsed directives
     voicingSlider = voicingNameToValue(directives.voicing);
     velocitySlider = velocityNameToValue(typeof directives.velocity === 'string' ? directives.velocity : 'mf');
+    // Sync melody text from raw input
+    melodyText = extractMelodyText(rawText);
   }
 
   // --- AI generate ---
@@ -233,6 +244,26 @@
     if (e.key === 'Escape') {
       onClose();
     }
+  }
+
+  // --- Melody helpers ---
+  function extractMelodyText(directivesText: string): string {
+    const match = directivesText.match(/@melody\s*:\s*(.+)/);
+    return match ? match[1].trim() : '';
+  }
+
+  function handleMelodyChange(text: string) {
+    melodyText = text;
+    // Update rawText: replace or add @melody line
+    const lines = rawText.split('\n').filter(l => !l.trim().startsWith('@melody'));
+    if (text.trim()) {
+      lines.push(`@melody: ${text}`);
+    }
+    rawText = lines.join('\n');
+    // Re-parse to sync directives
+    const result = parseDirectives(rawText);
+    directives = result.directives;
+    parseErrors = result.errors.map(e => e.line ? `Line ${e.line}: ${e.message}` : e.message);
   }
 </script>
 
@@ -380,6 +411,14 @@
       <div class="preview-box">
         <span class="preview-placeholder">パラメータに基づくMIDIプレビュー（準備中）</span>
       </div>
+
+      <!-- Mini piano roll (free mode) -->
+      {#if isFreeMode}
+        <div class="section-divider">
+          <span class="section-label">Melody</span>
+        </div>
+        <MiniPianoRoll melody={melodyText} onMelodyChange={handleMelodyChange} />
+      {/if}
 
       <!-- Raw text toggle -->
       <div class="raw-section">
