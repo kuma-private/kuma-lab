@@ -407,8 +407,8 @@
 		-webkit-appearance: none;
 		appearance: none;
 		width: 60px;
-		height: 3px;
-		border-radius: 2px;
+		height: 2px;
+		border-radius: 1px;
 		background: var(--bg-elevated);
 		outline: none;
 		border: none;

@@ -1,6 +1,9 @@
 <script lang="ts">
   import { parseDirectives, type ParsedDirectives, type VelocityLevel } from '$lib/directive-parser';
-  import type { DirectiveBlock } from '$lib/types/song';
+  import type { DirectiveBlock, MidiNote } from '$lib/types/song';
+  import { parseProgression, resolveRepeats } from '$lib/chord-parser';
+  import { voiceChords, type VoicingConfig } from '$lib/voicing-engine';
+  import { generateRhythm, type RhythmConfig } from '$lib/rhythm-engine';
   import { suggestDirectives } from '$lib/api';
   import { showToast } from '$lib/stores/toast.svelte';
   import MiniPianoRoll from './MiniPianoRoll.svelte';
@@ -12,6 +15,8 @@
     sectionName: string;
     songId?: string;
     chordProgression?: string;
+    bpm?: number;
+    timeSignature?: string;
     onSave: (directives: string) => void;
     onClose: () => void;
     onPreview?: () => void;
@@ -48,6 +53,8 @@
     sectionName,
     songId,
     chordProgression,
+    bpm = 120,
+    timeSignature = '4/4',
     onSave,
     onClose,
     onPreview,
@@ -266,6 +273,173 @@
     directives = result.directives;
     parseErrors = result.errors.map(e => e.line ? `Line ${e.line}: ${e.message}` : e.message);
   }
+
+  // --- MIDI preview ---
+  let previewCanvas: HTMLCanvasElement | undefined = $state();
+  let previewDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Parse timeSignature string "4/4" into { beats, beatValue } */
+  function parseTimeSignature(ts: string): { beats: number; beatValue: number } {
+    const parts = ts.split('/');
+    return { beats: Number(parts[0]) || 4, beatValue: Number(parts[1]) || 4 };
+  }
+
+  /** Extract chord names for this block's bar range from the chord progression */
+  function extractBlockChords(): string[] {
+    if (!chordProgression) return [];
+    const parsed = parseProgression(chordProgression);
+    const resolved = resolveRepeats(parsed.bars);
+
+    const startBar = block.startBar ?? 0;
+    const endBar = block.endBar ?? startBar + 1;
+    const chordNames: string[] = [];
+
+    for (let bar = startBar; bar < endBar; bar++) {
+      const barData = resolved[bar];
+      if (!barData) continue;
+      for (const entry of barData.entries) {
+        if (entry.type === 'chord') {
+          chordNames.push(entry.chord.raw);
+        }
+      }
+    }
+    return chordNames.length > 0 ? chordNames : ['C']; // fallback
+  }
+
+  /** Generate MidiNote[] from current directives */
+  function generatePreviewNotes(): MidiNote[] {
+    try {
+      const mode = directives.mode || 'block';
+      if (mode === 'free') return []; // free mode uses MiniPianoRoll instead
+
+      const chordNames = extractBlockChords();
+      const voicingType = (directives.voicing ?? 'close') as VoicingConfig['type'];
+      const voicingConfig: VoicingConfig = {
+        type: voicingType,
+        lead: directives.lead === 'smooth' ? 'smooth' : undefined,
+      };
+
+      const voiced = voiceChords(chordNames, voicingConfig);
+
+      const rhythmConfig: RhythmConfig = {
+        mode,
+        swing: directives.swing,
+        strum: directives.strum,
+        humanize: directives.humanize,
+        velocity: directives.velocity,
+      };
+
+      const ts = parseTimeSignature(timeSignature);
+      const startBar = 0; // normalize to 0 for preview
+      const channel = 0;
+
+      return generateRhythm(voiced, rhythmConfig, bpm, ts, startBar, channel);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Draw MidiNote[] on the preview canvas */
+  function drawPreview(notes: MidiNote[]) {
+    if (!previewCanvas) return;
+    const ctx = previewCanvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
+    const rect = previewCanvas.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+
+    previewCanvas.width = w * dpr;
+    previewCanvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Clear
+    ctx.clearRect(0, 0, w, h);
+
+    if (notes.length === 0) return;
+
+    // Compute bounds
+    let minPitch = 127, maxPitch = 0;
+    let minTick = Infinity, maxTick = 0;
+    for (const n of notes) {
+      if (n.midi < minPitch) minPitch = n.midi;
+      if (n.midi > maxPitch) maxPitch = n.midi;
+      if (n.startTick < minTick) minTick = n.startTick;
+      const endTick = n.startTick + n.durationTicks;
+      if (endTick > maxTick) maxTick = endTick;
+    }
+
+    // Add padding to pitch range
+    minPitch = Math.max(0, minPitch - 2);
+    maxPitch = Math.min(127, maxPitch + 2);
+    const pitchRange = maxPitch - minPitch || 1;
+    const tickRange = maxTick - minTick || 1;
+
+    const pad = 2;
+    const drawW = w - pad * 2;
+    const drawH = h - pad * 2;
+
+    // Grid lines (beat divisions)
+    const ts = parseTimeSignature(timeSignature);
+    const ticksPerBeat = 480 * (4 / ts.beatValue);
+    ctx.strokeStyle = 'rgba(138, 126, 104, 0.1)';
+    ctx.lineWidth = 1;
+    const firstBeatTick = Math.ceil(minTick / ticksPerBeat) * ticksPerBeat;
+    for (let tick = firstBeatTick; tick <= maxTick; tick += ticksPerBeat) {
+      const x = pad + ((tick - minTick) / tickRange) * drawW;
+      ctx.beginPath();
+      ctx.moveTo(x, pad);
+      ctx.lineTo(x, pad + drawH);
+      ctx.stroke();
+    }
+
+    // Draw notes
+    for (const n of notes) {
+      const x = pad + ((n.startTick - minTick) / tickRange) * drawW;
+      const noteW = Math.max(1.5, (n.durationTicks / tickRange) * drawW);
+      // Invert Y: higher pitch = higher position
+      const y = pad + ((maxPitch - n.midi) / pitchRange) * drawH;
+      const noteH = Math.max(1.5, drawH / pitchRange * 0.8);
+
+      // Amber color with velocity-based opacity
+      const alpha = 0.5 + (n.velocity / 127) * 0.5;
+      ctx.fillStyle = `rgba(232, 168, 76, ${alpha})`;
+      ctx.fillRect(x, y - noteH / 2, noteW, noteH);
+    }
+  }
+
+  // Reactive: regenerate + redraw with debounce
+  let previewNotes: MidiNote[] = $state([]);
+
+  $effect(() => {
+    // Track all reactive dependencies
+    void directives;
+    void chordProgression;
+    void bpm;
+    void timeSignature;
+
+    if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
+    previewDebounceTimer = setTimeout(() => {
+      previewNotes = generatePreviewNotes();
+    }, 200);
+
+    return () => {
+      if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
+    };
+  });
+
+  $effect(() => {
+    void previewNotes;
+    void previewCanvas;
+    drawPreview(previewNotes);
+  });
+
+  let hasDirectives = $derived(
+    directives.mode !== undefined ||
+    directives.voicing !== undefined ||
+    directives.velocity !== undefined
+  );
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -408,9 +582,16 @@
         <span class="section-label">プレビュー</span>
       </div>
 
-      <!-- MIDI preview placeholder -->
+      <!-- MIDI preview -->
       <div class="preview-box">
-        <span class="preview-placeholder">パラメータに基づくMIDIプレビュー（準備中）</span>
+        {#if hasDirectives && !isFreeMode}
+          <canvas
+            class="preview-canvas"
+            bind:this={previewCanvas}
+          ></canvas>
+        {:else}
+          <span class="preview-placeholder">ディレクティブを設定するとプレビューが表示されます</span>
+        {/if}
       </div>
 
       <!-- Mini piano roll (free mode) -->
@@ -521,23 +702,23 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
   }
 
   /* Field */
   .field {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
   }
 
   .field-label {
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: var(--text-secondary);
+    font-size: 0.68rem;
+    font-weight: 400;
+    color: var(--text-muted);
     text-transform: none;
     letter-spacing: 0;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
   }
 
   /* AI input row */
@@ -648,17 +829,17 @@
     content: '';
     flex: 1;
     height: 1px;
-    background: rgba(138, 126, 104, 0.1);
+    background: rgba(138, 126, 104, 0.08);
   }
 
   .section-label {
-    font-size: 0.6rem;
-    font-weight: 500;
+    font-size: 0.55rem;
+    font-weight: 400;
     color: var(--text-muted);
     text-transform: none;
     letter-spacing: 0.02em;
     white-space: nowrap;
-    opacity: 0.7;
+    opacity: 0.5;
   }
 
   /* Bar row (slider with left/right labels) */
@@ -718,33 +899,32 @@
     flex: 1;
     -webkit-appearance: none;
     appearance: none;
-    height: 4px;
+    height: 2px;
     background: var(--border-default);
-    border-radius: 2px;
+    border-radius: 1px;
     outline: none;
-    accent-color: var(--accent-primary);
   }
 
   .slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: var(--accent-primary);
+    background: var(--text-secondary);
     cursor: pointer;
-    border: 2px solid var(--bg-surface);
-    box-shadow: 0 0 3px rgba(232, 168, 76, 0.3);
+    border: none;
+    box-shadow: none;
   }
 
   .slider::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: var(--accent-primary);
+    background: var(--text-secondary);
     cursor: pointer;
-    border: 2px solid var(--bg-surface);
-    box-shadow: 0 0 3px rgba(232, 168, 76, 0.3);
+    border: none;
+    box-shadow: none;
   }
 
   .slider-value {
@@ -760,17 +940,23 @@
     background: var(--bg-base);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-sm);
-    min-height: 56px;
-    max-height: 120px;
+    height: 64px;
+    max-height: 64px;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--space-sm);
+    padding: 0;
     overflow: hidden;
   }
 
+  .preview-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
   .preview-placeholder {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--text-muted);
   }
 

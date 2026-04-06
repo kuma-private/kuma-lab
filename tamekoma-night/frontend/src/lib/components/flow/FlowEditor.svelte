@@ -387,6 +387,8 @@
       sectionName={sectionNameForBar(popoverBlock.startBar)}
       {songId}
       chordProgression={song.chordProgression}
+      bpm={song.bpm}
+      timeSignature={song.timeSignature}
       onSave={handlePopoverSave}
       onClose={handlePopoverClose}
     />
@@ -645,21 +647,38 @@
 
   .track-volume {
     width: 100%;
-    height: 4px;
+    height: 2px;
     -webkit-appearance: none;
     appearance: none;
     background: var(--bg-elevated);
-    border-radius: 2px;
+    border-radius: 1px;
     outline: none;
-    accent-color: var(--accent-primary);
+    border: none;
+    cursor: pointer;
+  }
+  .track-volume:focus-visible {
+    outline: none;
   }
   .track-volume::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--text-secondary);
+    background: var(--text-muted);
     cursor: pointer;
+    border: none;
+    box-shadow: none;
+  }
+  .track-volume:hover::-webkit-slider-thumb {
+    background: var(--text-secondary);
+  }
+  .track-volume::-moz-range-thumb {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    cursor: pointer;
+    border: none;
   }
 
   .row-content {
