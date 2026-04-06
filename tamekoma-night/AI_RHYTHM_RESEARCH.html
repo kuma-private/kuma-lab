@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cadenza.fm — AI Rhythm Generation Research</title>
+<style>
+  :root { --bg: #080604; --bg-card: #1a1408; --bg-elevated: #241c0e; --border: #3a2e1a; --text: #ece4d4; --text-secondary: #b8ad94; --text-muted: #8a7e68; --accent: #e8a84c; --accent-green: #7cb882; --accent-red: #e06050; --accent-blue: #6ea8d0; --font-body: 'Inter', sans-serif; --font-display: 'Space Grotesk', sans-serif; --font-mono: 'JetBrains Mono', monospace; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 15px; line-height: 1.7; padding: 0 0 80px; }
+  .container { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+  .hero { text-align: center; padding: 80px 24px 60px; }
+  .hero h1 { font-family: var(--font-display); font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+  .hero h1 .fm { color: var(--accent); }
+  .hero-sub { color: var(--text-muted); font-size: 0.85rem; }
+  h2 { font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: var(--accent); }
+  h3 { font-size: 1.1rem; font-weight: 600; margin: 28px 0 10px; }
+  p { margin: 12px 0; color: var(--text-secondary); }
+  strong { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.88rem; }
+  th { text-align: left; padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
+  td { padding: 8px 12px; border: 1px solid var(--border); color: var(--text-secondary); }
+  pre { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); margin: 12px 0; }
+  code { font-family: var(--font-mono); font-size: 0.85em; color: var(--accent); background: rgba(232,168,76,0.08); padding: 1px 4px; border-radius: 3px; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin: 16px 0; }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+  .card-sm { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .card-sm h4 { margin: 0 0 6px; color: var(--accent); font-size: 0.85rem; }
+  .card-sm p { font-size: 0.82rem; margin: 0; }
+  .good { border-color: rgba(124,184,130,0.3); } .good h4 { color: var(--accent-green); }
+  .bad { border-color: rgba(224,96,80,0.3); } .bad h4 { color: var(--accent-red); }
+  .recommend { border: 2px solid var(--accent); box-shadow: 0 0 20px rgba(232,168,76,0.1); }
+  .recommend h4 { color: var(--accent); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+  .tag-green { background: rgba(124,184,130,0.15); color: var(--accent-green); }
+  .tag-red { background: rgba(224,96,80,0.15); color: var(--accent-red); }
+  .tag-amber { background: rgba(232,168,76,0.15); color: var(--accent); }
+  ul, ol { padding-left: 20px; margin: 8px 0; color: var(--text-secondary); font-size: 0.9rem; }
+  li { margin-bottom: 4px; }
+  blockquote { border-left: 3px solid var(--accent); padding: 10px 16px; margin: 16px 0; background: rgba(232,168,76,0.04); border-radius: 0 6px 6px 0; color: var(--text-secondary); font-size: 0.9rem; }
+  @media (max-width: 640px) { .card-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Cadenza<span class="fm">.fm</span> Research</h1>
+  <p class="hero-sub">AI-First Rhythm Generation — 調査レポート 2026-04-06</p>
+</header>
+
+<div class="container">
+
+<h2>1. 現状の問題</h2>
+<p>現在のリズム生成は <code>rhythm-engine.ts</code> の11個の固定パターンに基づいており、<strong>人工感が強い</strong>。特にアルペジオ（arpUp/Down）は毎拍まったく同じタイミング（0, 120, 240, 360 ticks）で機械的。</p>
+
+<table>
+<tr><th>パターン</th><th>特徴</th><th>問題</th></tr>
+<tr><td>arpUp/Down</td><td>低→高/高→低の固定分割</td><td>毎拍完全に同じタイミング</td></tr>
+<tr><td>bossa-nova</td><td>beat偶奇で bass/upper 交互</td><td>パターンが硬く固定</td></tr>
+<tr><td>comp-jazz</td><td>Charleston風の3ヒット</td><td>位置が固定</td></tr>
+<tr><td>block</td><td>全音同時</td><td>単調</td></tr>
+</table>
+
+<p><code>@humanize</code> と <code>@swing</code> は後処理で乱数を加算するが、<strong>パターン自体の「個性」はコントロールできない</strong>。また <code>Math.random()</code> を使っているため再現性がない。</p>
+
+<h2>2. 検討した4つのアプローチ</h2>
+
+<div class="card-grid">
+  <div class="card-sm bad">
+    <h4>案A: 現状延長</h4>
+    <p>AIは既存パターン名のみ提案。人工感は消えない。<span class="tag tag-red">効果なし</span></p>
+  </div>
+  <div class="card-sm">
+    <h4>案B: AIがカスタムパターン生成</h4>
+    <p>AIがPatternHit[]をJSON的に出力。自由度は高いがAI出力制御が複雑。<span class="tag tag-amber">1.5-2週間</span></p>
+  </div>
+  <div class="card-sm bad">
+    <h4>案C: AIがMIDI直接生成</h4>
+    <p>決定論的エンジンの原則に矛盾。再現性なし。テキストファースト破壊。<span class="tag tag-red">非推奨</span></p>
+  </div>
+  <div class="card-sm recommend">
+    <h4>案D: ハイブリッド (推奨)</h4>
+    <p>AIがパラメータ + humanize-seed を提案。既存枠組み内で最大限の個別化。<span class="tag tag-green">1-1.5週間</span></p>
+  </div>
+</div>
+
+<h2>3. 推奨案: ハイブリッド (案D)</h2>
+
+<blockquote>
+  <strong>コアアイデア:</strong> <code>@humanize-seed</code> ディレクティブの導入。シード値で再現可能な「揺れ」を生成。AIが曲に合ったシード値を提案する。
+</blockquote>
+
+<h3>ユーザーフロー</h3>
+<ol>
+  <li>BlockPopover で「ジャズバラード風」と入力</li>
+  <li>AI が以下を一括生成:
+    <pre>@mode: arpUp
+@voicing: close
+@velocity: p→mf
+@humanize: 18%
+@swing: 35%
+@strum: 6ms
+@humanize-seed: 4276</pre>
+  </li>
+  <li>MIDIプレビューで即座に確認</li>
+  <li>「もう少しルーズに」→ humanize を 20% に微調整</li>
+  <li>OK で確定</li>
+</ol>
+
+<h3>AIの出力例 — 3ジャンル比較</h3>
+<pre>
+<strong>[ロックステディ]</strong>
+@mode: 8beat
+@velocity: f
+@humanize: 8%
+@swing: 15%
+@strum: -8ms
+@humanize-seed: 5421
+
+<strong>[ボサノバ]</strong>
+@mode: bossa-nova
+@velocity: mp→mf
+@humanize: 22%
+@swing: 40%
+@strum: 3ms
+@humanize-seed: 1203
+
+<strong>[ジャズバラード]</strong>
+@mode: arpUp
+@velocity: p→mf
+@humanize: 18%
+@swing: 35%
+@strum: 6ms
+@humanize-seed: 3847
+</pre>
+
+<h3>humanize-seed の技術詳細</h3>
+<pre>
+// 線形合同法による決定論的乱数
+function seededRandom(seed: number): () => number {
+  let state = seed;
+  return () => {
+    state = (state * 1103515245 + 12345) & 0x7fffffff;
+    return state / 0x7fffffff;
+  };
+}
+
+// 同じseed → 常に同じ「揺れ方」
+// seed を変える → 異なる「揺れ方」（パターンは同じ）
+</pre>
+
+<h2>4. UI の方向性</h2>
+
+<p>現在のBlockPopoverはスライダーが前面に出すぎている。<strong>「パラメータを知らなくても使える」UI</strong>に転換。</p>
+
+<h3>変更点</h3>
+<table>
+<tr><th>現在</th><th>改善後</th></tr>
+<tr><td>スライダーがメインUI</td><td>AI入力 → プレビュー → 確認がメインフロー</td></tr>
+<tr><td>スライダーを手動で調整</td><td>スライダーは「詳細設定」に折りたたみ</td></tr>
+<tr><td>プレビューがプレースホルダー</td><td>リアルタイムMIDIプレビュー（実装済み）</td></tr>
+<tr><td>humanize は毎回異なる結果</td><td>humanize-seed で再現可能</td></tr>
+</table>
+
+<h2>5. 導入効果</h2>
+
+<table>
+<tr><th>項目</th><th>現状</th><th>導入後</th></tr>
+<tr><td>入力→結果</td><td>スタイル入力後、スライダーで手探り</td><td>スタイル入力後、すぐにプレビューで確認</td></tr>
+<tr><td>「AI感」</td><td>パラメータの羅列</td><td>AIが曲のためにチューニングしたと感じる</td></tr>
+<tr><td>再現性</td><td>なし（毎回異なる乱数）</td><td>あり（seedで再現可能）</td></tr>
+<tr><td>バリエーション</td><td>11パターン固定</td><td>11パターン × humanize × swing × strum × seed = 数百通り</td></tr>
+</table>
+
+<h2>6. 実装スケジュール</h2>
+
+<table>
+<tr><th>Day</th><th>タスク</th><th>担当</th></tr>
+<tr><td>1-2</td><td>humanize-seed パラメータ実装（rhythm-engine + directive-parser）</td><td>Eng A</td></tr>
+<tr><td>3-4</td><td>MIDIプレビュー音声再生（Tone.js統合、1小節再生）</td><td>Eng C</td></tr>
+<tr><td>5</td><td>BlockPopover UI リファクタリング（スライダー折りたたみ化）</td><td>Eng B</td></tr>
+<tr><td>6-7</td><td>AI Prompt更新（seed提案指示）+ E2Eテスト</td><td>Eng A</td></tr>
+</table>
+
+<h2>7. 結論</h2>
+
+<div class="card recommend">
+  <h4>案D（ハイブリッド）を推奨</h4>
+  <ul>
+    <li><strong>1〜1.5週間</strong>で完成可能</li>
+    <li>テキストファースト・決定論的エンジンの原則を守る</li>
+    <li>再現性を完全に保つ（humanize-seed）</li>
+    <li>既存パターンの枠内で最大限の個別化</li>
+    <li>UIは「AI入力 → プレビュー → 微調整」の自然なフロー</li>
+  </ul>
+</div>
+
+</div>
+
+<footer style="text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 0.75rem;">
+  Cadenza.fm Research — 2026-04-06
+</footer>
+</body>
+</html>
