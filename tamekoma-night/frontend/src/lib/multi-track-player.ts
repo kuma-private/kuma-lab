@@ -5,7 +5,7 @@
 
 import * as Tone from 'tone';
 import type { Song, Track, MidiNote } from './types/song';
-import type { ParsedDirectives, NoteRange as DirectiveNoteRange } from './directive-parser';
+import type { ParsedDirectives, NoteRange as DirectiveNoteRange, VelocityValue } from './directive-parser';
 import type { VoicingConfig, NoteRange as VoicingNoteRange } from './voicing-engine';
 import type { RhythmConfig } from './rhythm-engine';
 import { parseProgression, resolveRepeats } from './chord-parser';
@@ -14,6 +14,8 @@ import { parseDirectives } from './directive-parser';
 import { voiceChords } from './voicing-engine';
 import { generateRhythm } from './rhythm-engine';
 import { rootToMidi, midiToNoteName, getPianoSampler } from './chord-player';
+import { generateDrumRhythm } from './drum-patterns';
+import type { RhythmConfig as DrumRhythmConfig, DrumPatternName } from './drum-patterns';
 
 // ── Types ──────────────────────────────────────────────
 
@@ -116,6 +118,17 @@ function hashBlock(chordText: string, directives: string): string {
 
 function tickToSeconds(tick: number, bpm: number): number {
   return (tick / TICKS_PER_QUARTER) * (60 / bpm);
+}
+
+const VELOCITY_LEVEL_MAP: Record<string, number> = {
+  pp: 30, p: 50, mp: 70, mf: 85, f: 105, ff: 120,
+};
+
+function resolveDrumVelocity(v: VelocityValue | undefined): number | undefined {
+  if (v == null) return undefined;
+  if (typeof v === 'string') return VELOCITY_LEVEL_MAP[v] ?? 100;
+  // Gradient: use start value
+  return VELOCITY_LEVEL_MAP[v.from] ?? 100;
 }
 
 // ── Instrument factory ────────────────────────────────
@@ -301,6 +314,19 @@ export class MultiTrackPlayer {
 
         if (cached && cached.hash === hash) {
           notes = cached.notes;
+        } else if (trackDef.instrument === 'drums') {
+          // Drum track: use drum-patterns generator
+          const drumPatternName = (directives.mode ?? '8beat') as DrumPatternName;
+          const drumConfig: DrumRhythmConfig = {
+            pattern: drumPatternName,
+            velocity: resolveDrumVelocity(directives.velocity),
+            humanize: directives.humanize,
+            swing: directives.swing,
+          };
+          const barCount = endBar - startBar;
+          notes = generateDrumRhythm(drumConfig, bpm, timeSig, startBar, barCount, 9);
+
+          this.blockCache.set(cacheKey, { hash, notes });
         } else {
           // Voice chords
           const voicingConfig = toVoicingConfig(directives);

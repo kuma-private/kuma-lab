@@ -1,16 +1,18 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { createSongStore } from '$lib/stores/song.svelte';
-	import type { Song } from '$lib/types/song';
+	import type { Song, MidiNote } from '$lib/types/song';
 	import FlowEditor from '$lib/components/flow/FlowEditor.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { MultiTrackPlayer } from '$lib/multi-track-player';
+	import { songToMidi, downloadMidi } from '$lib/midi-export';
 
 	const store = createSongStore();
 	const songId = page.params.id as string;
 
-	// Player state (stub wiring for now)
+	// Player state
 	let playerState = $state<'stopped' | 'playing' | 'paused'>('stopped');
 	let currentTime = $state(0);
 	let totalDuration = $state(0);
@@ -18,12 +20,60 @@
 	let playerVolume = $state(-10);
 	let playerLoop = $state(false);
 
+	// Track notes for Visualizer
+	let trackNotes = $state<Map<string, { name: string; instrument: string; notes: MidiNote[] }>>(new Map());
+
+	// MultiTrackPlayer instance
+	let player: MultiTrackPlayer | null = null;
+
 	// Inline title editing
 	let editingTitle = $state(false);
 	let titleInput = $state('');
 
+	function updateTrackNotes() {
+		if (!player || !store.currentSong) return;
+		const notes = player.getAllTrackNotes();
+		trackNotes = new Map(
+			store.currentSong.tracks.map(t => [t.id, { name: t.name, instrument: t.instrument, notes: notes.get(t.id) ?? [] }])
+		);
+	}
+
+	function loadSongIntoPlayer() {
+		if (!player || !store.currentSong) return;
+		player.load(store.currentSong);
+		totalDuration = player.totalDuration;
+		updateTrackNotes();
+	}
+
 	onMount(async () => {
+		player = new MultiTrackPlayer({
+			onStateChange: (state) => { playerState = state; },
+			onProgress: (ct, td) => { currentTime = ct; totalDuration = td; },
+			onBarChange: (_idx) => { /* reserved */ },
+			onChordChange: (chord) => { currentChord = chord; },
+		});
+
 		await store.loadSong(songId);
+		if (store.currentSong) {
+			loadSongIntoPlayer();
+		}
+	});
+
+	onDestroy(() => {
+		player?.dispose();
+		player = null;
+	});
+
+	// Reload player when song changes
+	let lastSongJson = $state('');
+	$effect(() => {
+		const song = store.currentSong;
+		if (!song || !player) return;
+		const json = JSON.stringify({ chords: song.chordProgression, tracks: song.tracks, bpm: song.bpm, ts: song.timeSignature });
+		if (json !== lastSongJson) {
+			lastSongJson = json;
+			loadSongIntoPlayer();
+		}
 	});
 
 	const handleSave = async () => {
@@ -52,8 +102,33 @@
 		}
 	};
 
-	const handlePlay = () => { playerState = 'playing'; };
-	const handlePause = () => { playerState = 'paused'; };
+	function parseTimeSignature(ts: string): { beats: number; beatValue: number } {
+		const parts = ts.split('/');
+		if (parts.length === 2) {
+			const beats = Number(parts[0]);
+			const beatValue = Number(parts[1]);
+			if (Number.isFinite(beats) && Number.isFinite(beatValue) && beats > 0 && beatValue > 0) {
+				return { beats, beatValue };
+			}
+		}
+		return { beats: 4, beatValue: 4 };
+	}
+
+	function handleExport() {
+		if (!player || !store.currentSong) return;
+		const allNotes = player.getAllTrackNotes();
+		const tracks = store.currentSong.tracks.map(t => ({
+			name: t.name,
+			instrument: t.instrument,
+			notes: allNotes.get(t.id) ?? [],
+		}));
+		const ts = parseTimeSignature(store.currentSong.timeSignature);
+		const midi = songToMidi(tracks, store.currentSong.bpm, ts);
+		downloadMidi(midi, store.currentSong.title);
+	}
+
+	const handlePlay = async () => { await player?.play(); };
+	const handlePause = () => { player?.pause(); };
 
 	const handleKeydown = (e: KeyboardEvent) => {
 		// Cmd/Ctrl+S: 保存
@@ -66,7 +141,7 @@
 		if (e.key === ' ' && !(e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement)) {
 			e.preventDefault();
 			if (playerState === 'playing') handlePause();
-			else handlePlay();
+			else void handlePlay();
 			return;
 		}
 		// Escape: ポップオーバーを閉じる（フォーカス解除）
@@ -115,6 +190,7 @@
 			{/if}
 		</div>
 		<div class="header-right">
+			<button class="btn-export" onclick={handleExport}>Export .mid</button>
 			<button class="btn-save" onclick={handleSave}>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -138,7 +214,7 @@
 				<div class="loading-spinner"></div>
 			</div>
 		{:else if store.currentSong}
-			<FlowEditor song={store.currentSong} {songId} onSongChange={handleSongChange} />
+			<FlowEditor song={store.currentSong} {songId} onSongChange={handleSongChange} {trackNotes} {currentTime} {totalDuration} />
 		{:else}
 			<div class="loading-container">
 				<p style="color: var(--text-muted);">Song が見つかりません</p>
@@ -158,9 +234,9 @@
 			loop={playerLoop}
 			onplay={handlePlay}
 			onpause={handlePause}
-			onstop={() => { playerState = 'stopped'; currentTime = 0; }}
-			onseek={(t) => { currentTime = t; }}
-			onVolumeChange={(v) => { playerVolume = v; }}
+			onstop={() => { player?.stop(); }}
+			onseek={(t) => { player?.seekTo(t); }}
+			onVolumeChange={(v) => { playerVolume = v; player?.setVolume(v); }}
 			onLoopChange={(l) => { playerLoop = l; }}
 		/>
 	</div>
@@ -273,6 +349,28 @@
 		border: 1px solid var(--border-subtle);
 		padding: 2px 10px;
 		border-radius: var(--radius-full);
+	}
+
+	.btn-export {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 6px 12px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.15s;
+		white-space: nowrap;
+	}
+
+	.btn-export:hover {
+		background: var(--bg-hover);
+		border-color: var(--accent-primary);
+		color: var(--accent-primary);
 	}
 
 	.btn-save {
