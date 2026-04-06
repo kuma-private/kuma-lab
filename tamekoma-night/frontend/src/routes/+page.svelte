@@ -97,7 +97,7 @@
 </script>
 
 <svelte:head>
-	<title>Tamekoma Night</title>
+	<title>Cadenza.fm</title>
 </svelte:head>
 
 <div class="page-bg" aria-hidden="true">
@@ -122,8 +122,8 @@
 						<circle cx="18" cy="16" r="3" />
 					</svg>
 				</div>
-				<h1 class="login-title">Tamekoma Night</h1>
-				<p class="login-sub">溜め込まないで、コードを放て。</p>
+				<h1 class="login-title">Cadenza.fm</h1>
+				<p class="login-sub">Arrange by text, hear it live.</p>
 				<p class="login-tagline">コード進行エディタ</p>
 				<a href="/auth/google" class="btn-google">
 					<svg width="18" height="18" viewBox="0 0 24 24">
@@ -138,7 +138,7 @@
 		</div>
 	{:else}
 
-		<div class="slogan">溜め込まないで、コードを放て。</div>
+		<div class="slogan">Arrange by text, hear it live.</div>
 
 		{#if recentThreads.length > 0}
 			<div class="recent-activity">
@@ -250,7 +250,7 @@
 		</main>
 
 		<footer class="app-footer">
-			<span>Tamekoma Night</span>
+			<span>Cadenza.fm</span>
 			<span>·</span>
 			<span>コード進行エディタ</span>
 		</footer>

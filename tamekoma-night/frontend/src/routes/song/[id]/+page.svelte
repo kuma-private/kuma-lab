@@ -63,7 +63,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
-	<title>{store.currentSong?.title ?? 'Song'} - Tamekoma Night</title>
+	<title>{store.currentSong?.title ?? 'Song'} - Cadenza.fm</title>
 </svelte:head>
 
 <div class="song-page">
@@ -120,8 +120,12 @@
 			<div class="loading-container">
 				<div class="loading-spinner"></div>
 			</div>
+		{:else if store.currentSong}
+			<FlowEditor song={store.currentSong} onSongChange={handleSongChange} />
 		{:else}
-			<FlowEditor song={store.currentSong!} onSongChange={handleSongChange} />
+			<div class="loading-container">
+				<p style="color: var(--text-muted);">Song が見つかりません</p>
+			</div>
 		{/if}
 	</main>
 
