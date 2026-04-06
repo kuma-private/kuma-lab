@@ -1,17 +1,19 @@
 <script lang="ts">
   import { parseProgression, resolveRepeats, type ParsedBar, type BarEntry } from '$lib/chord-parser';
+  import { chordToDegree } from '$lib/chord-degree';
 
   let {
     chords,
     totalBars,
+    musicalKey = 'C Major',
   }: {
     chords: string;
     totalBars: number;
+    musicalKey?: string;
   } = $props();
 
   let parsed = $derived(resolveRepeats(parseProgression(chords).bars));
 
-  /** Get the bar data for a 1-based bar number, or null */
   function getBar(barNum: number): ParsedBar | undefined {
     return parsed.find(b => b.barNumber === barNum);
   }
@@ -28,6 +30,11 @@
       case 'sustain': return '\u2500';
     }
   }
+
+  function degreeOf(entry: BarEntry): string | null {
+    if (entry.type !== 'chord') return null;
+    return chordToDegree(entry.chord.raw, musicalKey);
+  }
 </script>
 
 <div class="chord-timeline" style:grid-template-columns="repeat({totalBars}, minmax(0, 1fr))">
@@ -39,8 +46,14 @@
         {#if bar}
           {#each bar.entries as entry}
             {@const root = rootOf(entry)}
+            {@const degree = degreeOf(entry)}
             {#if root}
-              <span class="chord-chip" data-root={root}>{displayText(entry)}</span>
+              <div class="chord-entry">
+                {#if degree}
+                  <span class="chord-degree">{degree}</span>
+                {/if}
+                <span class="chord-chip" data-root={root}>{displayText(entry)}</span>
+              </div>
             {:else}
               <span class="chord-special">{displayText(entry)}</span>
             {/if}
@@ -55,18 +68,18 @@
   .chord-timeline {
     display: grid;
     gap: 0;
-    padding: 0 2px;
+    padding: 0;
   }
 
   .chord-cell {
     position: relative;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
     justify-content: center;
-    min-height: 36px;
+    min-height: 44px;
     border-left: 1px solid rgba(138, 126, 104, 0.4);
-    padding: 2px 3px;
+    padding: 2px 4px;
+    padding-top: 12px;
   }
 
   .chord-cell:first-child {
@@ -77,39 +90,61 @@
     position: absolute;
     top: 1px;
     left: 3px;
-    font-size: 0.55rem;
+    font-size: 0.5rem;
     color: var(--text-muted);
-    opacity: 0.5;
+    opacity: 0.4;
     font-family: var(--font-sans);
   }
 
   .chord-entries {
     display: flex;
-    align-items: center;
-    gap: 3px;
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    align-items: stretch;
+    gap: 2px;
+    width: 100%;
   }
 
-  /* Compact chord chip for timeline (smaller than the standalone ChordChip) */
+  .chord-entry {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .chord-degree {
+    font-size: 0.5rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    line-height: 1;
+    opacity: 0.7;
+  }
+
   .chord-chip {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2px 6px;
-    border-radius: 6px;
+    width: 100%;
+    padding: 2px 4px;
+    border-radius: 4px;
     border: none;
     font-family: var(--font-mono);
     font-weight: 500;
-    font-size: 0.68rem;
+    font-size: 0.65rem;
     white-space: nowrap;
     cursor: default;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .chord-special {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: 0.6rem;
     color: var(--text-muted);
-    opacity: 0.5;
+    opacity: 0.4;
   }
 </style>

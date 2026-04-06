@@ -321,7 +321,7 @@
         <!-- Chord row -->
         <div class="row-label">Chords</div>
         <div class="row-content chord-row">
-          <ChordTimeline chords={song.chordProgression} totalBars={totalBars} />
+          <ChordTimeline chords={song.chordProgression} totalBars={totalBars} musicalKey={song.key} />
         </div>
 
         <!-- Separator -->
