@@ -12,6 +12,9 @@
     <Compile Include="Thread/Repository.fs" />
     <Compile Include="Analysis/AnthropicClient.fs" />
     <Compile Include="Thread/Handlers.fs" />
+    <Compile Include="Song/Models.fs" />
+    <Compile Include="Song/Repository.fs" />
+    <Compile Include="Song/Handlers.fs" />
     <Compile Include="Middleware/RateLimit.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

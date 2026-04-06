@@ -84,6 +84,7 @@ module Program =
     let main args =
         let config = Config.load ()
         let repo = Repository.create config.FirestoreProjectId
+        let songRepo = TamekomaNight.Api.Song.Repository.create config.FirestoreProjectId
 
         let builder = WebApplication.CreateBuilder(args)
 
@@ -163,6 +164,13 @@ module Program =
         mapRouteWithId app "POST" "/api/threads/{id}/annotations" (withId (ThreadHandlers.addAnnotation repo))
         mapRouteWithId app "GET" "/api/threads/{id}/annotations" (withId (ThreadHandlers.listAnnotations repo))
         mapRouteWith2Ids app "DELETE" "/api/threads/{id}/annotations/{aid}" (with2Ids (ThreadHandlers.deleteAnnotation repo))
+
+        // Song API
+        mapRoute app "GET" "/api/songs" (auth (TamekomaNight.Api.Song.SongHandlers.listSongs songRepo))
+        mapRoute app "POST" "/api/songs" (authRL (TamekomaNight.Api.Song.SongHandlers.createSong songRepo))
+        mapRouteWithId app "GET" "/api/songs/{id}" (withId (TamekomaNight.Api.Song.SongHandlers.getSong songRepo))
+        mapRouteWithId app "PUT" "/api/songs/{id}" (withId (TamekomaNight.Api.Song.SongHandlers.updateSong songRepo))
+        mapRouteWithId app "DELETE" "/api/songs/{id}" (withId (TamekomaNight.Api.Song.SongHandlers.deleteSong songRepo))
 
         // SPA fallback
         app.MapFallbackToFile("index.html") |> ignore
