@@ -1,7 +1,6 @@
 namespace TamekomaNight.Api.Song
 
 open System
-open System.Security.Claims
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open TamekomaNight.Api
@@ -12,46 +11,15 @@ module SongHandlers =
 
     let private devMode = Config.devMode
 
-    // --- Pure helper functions ---
+    // --- Delegate to Shared helpers ---
 
-    let private getUserInfo (ctx: HttpContext) : UserInfo =
-        if devMode && (ctx.User = null || ctx.User.Identity = null || not ctx.User.Identity.IsAuthenticated) then
-            { UserId = "dev-user"; UserName = "Dev User"; Email = "" }
-        else
-            let findClaim (claimType: string) defaultValue =
-                ctx.User.FindFirst(claimType)
-                |> Option.ofObj
-                |> Option.map (fun c -> c.Value)
-                |> Option.defaultValue defaultValue
-
-            { UserId = findClaim ClaimTypes.NameIdentifier "anonymous"
-              UserName = findClaim ClaimTypes.Name "Anonymous"
-              Email = findClaim ClaimTypes.Email "" }
-
-    // --- HTTP response helpers ---
-
-    let private respondJson (ctx: HttpContext) (statusCode: int) (body: obj) : Task =
-        ctx.Response.StatusCode <- statusCode
-        ctx.Response.WriteAsJsonAsync(body)
-
-    let private respond404 ctx = respondJson ctx 404 {| error = "Song not found" |}
-    let private respond403 ctx msg = respondJson ctx 403 {| error = msg |}
-    let private respond400 ctx msg = respondJson ctx 400 {| error = msg |}
-    let private respond500 ctx msg = respondJson ctx 500 {| error = msg |}
-
-    // --- Request parsing with Result type ---
-
-    let private parseRequest<'T> (ctx: HttpContext) : Task<Result<'T, string>> =
-        task {
-            try
-                let! req = ctx.Request.ReadFromJsonAsync<'T>()
-                if obj.ReferenceEquals(req, null) then
-                    return Error "Invalid request body"
-                else
-                    return Ok req
-            with _ ->
-                return Error "Invalid request body"
-        }
+    let private getUserInfo ctx = Shared.getUserInfo devMode ctx
+    let private respondJson = Shared.respondJson
+    let private respond404 ctx = Shared.respond404 ctx "Song"
+    let private respond403 = Shared.respond403
+    let private respond400 = Shared.respond400
+    let private respond500 = Shared.respond500
+    let private withParsedRequest<'T> = Shared.withParsedRequest<'T>
 
     // --- Higher-order handler combinators ---
 
@@ -94,23 +62,6 @@ module SongHandlers =
                 do! respond403 ctx errorMsg
             | Some s ->
                 do! handler s user
-        }
-
-    /// Parse request and run handler if valid, else return 400.
-    let private withParsedRequest<'T>
-        (ctx: HttpContext)
-        (validate: 'T -> bool)
-        (handler: 'T -> Task)
-        : Task =
-        task {
-            let! result = parseRequest<'T> ctx
-            match result with
-            | Error msg ->
-                do! respond400 ctx msg
-            | Ok req when not (validate req) ->
-                do! respond400 ctx "Invalid request body"
-            | Ok req ->
-                do! handler req
         }
 
     // --- Handlers ---

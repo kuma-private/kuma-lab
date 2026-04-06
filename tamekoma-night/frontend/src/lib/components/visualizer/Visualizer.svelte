@@ -1,13 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-
-	// ── MidiNote type (matches piano-roll-model's note shape) ──
-	export interface MidiNote {
-		midi: number;
-		startTick: number;
-		durationTicks: number;
-		velocity: number;
-	}
+	import type { MidiNote } from '$lib/types/song';
 
 	interface Props {
 		trackNotes: Map<string, { name: string; instrument: string; notes: MidiNote[] }>;

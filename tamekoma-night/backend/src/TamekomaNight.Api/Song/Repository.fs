@@ -3,6 +3,7 @@ namespace TamekomaNight.Api.Song
 open System
 open System.Collections.Concurrent
 open System.Threading.Tasks
+open TamekomaNight.Api
 open TamekomaNight.Api.Song.Models
 
 module Repository =
@@ -58,66 +59,17 @@ module Repository =
                 FirestoreDb.Create(projectId)
             )
 
-        // --- Type-safe document field extraction helpers ---
-
-        let private tryGetString (dict: System.Collections.Generic.IDictionary<string, obj>) (key: string) =
-            match dict.TryGetValue(key) with
-            | true, v when v <> null -> v :?> string
-            | _ -> ""
-
-        let private tryGetDocString (doc: DocumentSnapshot) (key: string) (defaultValue: string) =
-            match doc.TryGetValue<string>(key) with
-            | true, v when v <> null -> v
-            | _ -> defaultValue
-
-        let private tryGetDocInt (doc: DocumentSnapshot) (key: string) (defaultValue: int) =
-            match doc.TryGetValue<int>(key) with
-            | true, v -> v
-            | _ -> defaultValue
-
-        let private tryGetDocFloat (doc: DocumentSnapshot) (key: string) (defaultValue: float) =
-            match doc.TryGetValue<float>(key) with
-            | true, v -> v
-            | _ -> defaultValue
-
-        let private tryGetDocBool (doc: DocumentSnapshot) (key: string) (defaultValue: bool) =
-            match doc.TryGetValue<bool>(key) with
-            | true, v -> v
-            | _ -> defaultValue
-
-        let private tryGetDocTimestamp (doc: DocumentSnapshot) (key: string) (defaultValue: DateTime) =
-            match doc.TryGetValue<Timestamp>(key) with
-            | true, v -> v.ToDateTime()
-            | _ -> defaultValue
-
-        let private tryGetStringList (doc: DocumentSnapshot) (key: string) =
-            match doc.TryGetValue<obj>(key) with
-            | true, (:? System.Collections.IList as list) ->
-                list |> Seq.cast<obj> |> Seq.map (fun o -> o :?> string) |> Seq.toList
-            | _ -> []
-
-        let private tryGetDictString (dict: System.Collections.Generic.IDictionary<string, obj>) (key: string) =
-            match dict.TryGetValue(key) with
-            | true, v when v <> null -> v :?> string
-            | _ -> ""
-
-        let private tryGetDictInt (dict: System.Collections.Generic.IDictionary<string, obj>) (key: string) (defaultValue: int) =
-            match dict.TryGetValue(key) with
-            | true, v when v <> null ->
-                try System.Convert.ToInt32(v) with _ -> defaultValue
-            | _ -> defaultValue
-
-        let private tryGetDictFloat (dict: System.Collections.Generic.IDictionary<string, obj>) (key: string) (defaultValue: float) =
-            match dict.TryGetValue(key) with
-            | true, v when v <> null ->
-                try System.Convert.ToDouble(v) with _ -> defaultValue
-            | _ -> defaultValue
-
-        let private tryGetDictBool (dict: System.Collections.Generic.IDictionary<string, obj>) (key: string) (defaultValue: bool) =
-            match dict.TryGetValue(key) with
-            | true, v when v <> null ->
-                try System.Convert.ToBoolean(v) with _ -> defaultValue
-            | _ -> defaultValue
+        // Aliases for shared Firestore helpers
+        let private tryGetDocString = FirestoreHelpers.tryGetDocString
+        let private tryGetDocTimestamp = FirestoreHelpers.tryGetDocTimestamp
+        let private tryGetStringList = FirestoreHelpers.tryGetStringList
+        let private tryGetDictString = FirestoreHelpers.tryGetDictString
+        let private tryGetDictInt = FirestoreHelpers.tryGetDictInt
+        let private tryGetDictFloat = FirestoreHelpers.tryGetDictFloat
+        let private tryGetDictBool = FirestoreHelpers.tryGetDictBool
+        let private toStringList = FirestoreHelpers.toStringList
+        let private toTimestamp = FirestoreHelpers.toTimestamp
+        let private updateFields = FirestoreHelpers.updateFields
 
         // --- Firestore document conversion ---
 
@@ -189,12 +141,6 @@ module Repository =
 
         // --- Firestore serialization helpers ---
 
-        let private toStringList (items: string list) =
-            System.Collections.Generic.List<obj>(items |> List.map (fun s -> s :> obj)) :> obj
-
-        let private toTimestamp (dt: DateTime) =
-            Timestamp.FromDateTime(dt.ToUniversalTime()) :> obj
-
         let private directiveBlockToDict (block: DirectiveBlock) : System.Collections.Generic.Dictionary<string, obj> =
             System.Collections.Generic.Dictionary<string, obj>(
                 dict
@@ -243,15 +189,6 @@ module Repository =
                       "lastEditedAt", toTimestamp song.LastEditedAt
                       "visibility", song.Visibility :> obj
                       "sharedWith", toStringList song.SharedWith ])
-
-        let private updateFields (docRef: DocumentReference) (updates: (string * obj) list) =
-            task {
-                let dict = System.Collections.Generic.Dictionary<string, obj>()
-                for (k, v) in updates do
-                    dict.[k] <- v
-                let! _ = docRef.UpdateAsync(dict)
-                ()
-            }
 
         // --- CRUD operations ---
 
