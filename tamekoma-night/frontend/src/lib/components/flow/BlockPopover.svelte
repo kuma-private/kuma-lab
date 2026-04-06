@@ -449,7 +449,10 @@
   $effect(() => {
     void previewNotes;
     void previewCanvas;
-    drawPreview(previewNotes);
+    // Wait a tick for canvas to mount when showPreviewCanvas transitions to true
+    requestAnimationFrame(() => {
+      drawPreview(previewNotes);
+    });
   });
 
   let hasDirectives = $derived(
@@ -547,7 +550,7 @@
             bind:this={previewCanvas}
           ></canvas>
         {:else}
-          <span class="preview-placeholder">スタイルを入力して「生成」を押すか、詳細設定でパラメータを調整してください</span>
+          <span class="preview-placeholder">スタイルを入力して「生成」を押してください</span>
         {/if}
       </div>
 
