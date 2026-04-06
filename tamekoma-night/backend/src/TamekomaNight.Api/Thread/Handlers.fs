@@ -98,7 +98,7 @@ module ThreadHandlers =
         }
 
     let createThread (repo: IThreadRepository) (ctx: HttpContext) : Task =
-        withParsedRequest<CreateThreadRequest> ctx (fun req -> isNotNull req.title) (fun req ->
+        withParsedRequest<CreateThreadRequest> ctx (fun req -> isNotNull req.title && not (System.String.IsNullOrWhiteSpace(req.title))) (fun req ->
             task {
                 let user = getUserInfo ctx
 

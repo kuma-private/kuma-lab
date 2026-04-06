@@ -91,7 +91,7 @@ module SongHandlers =
         }
 
     let createSong (repo: ISongRepository) (ctx: HttpContext) : Task =
-        withParsedRequest<CreateSongRequest> ctx (fun req -> isNotNull req.title) (fun req ->
+        withParsedRequest<CreateSongRequest> ctx (fun req -> isNotNull req.title && not (System.String.IsNullOrWhiteSpace(req.title))) (fun req ->
             task {
                 let user = getUserInfo ctx
 
@@ -122,7 +122,7 @@ module SongHandlers =
 
     let updateSong (repo: ISongRepository) (songId: string) (ctx: HttpContext) : Task =
         withSong repo songId ctx (fun s user ->
-            withParsedRequest<UpdateSongRequest> ctx (fun req -> isNotNull req.title) (fun req ->
+            withParsedRequest<UpdateSongRequest> ctx (fun req -> isNotNull req.title && not (System.String.IsNullOrWhiteSpace(req.title))) (fun req ->
                 task {
                     let updated =
                         { s with
