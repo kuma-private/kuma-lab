@@ -228,7 +228,7 @@ export const analyzeSelection = async (
 };
 
 // Song API
-import type { Song, Section, Track } from '$lib/types/song';
+import type { Song, SongListItem, Section, Track } from '$lib/types/song';
 
 export interface UpdateSongData {
 	title: string;
@@ -240,7 +240,7 @@ export interface UpdateSongData {
 	tracks: Track[];
 }
 
-export const getSongs = async (): Promise<Song[]> => {
+export const getSongs = async (): Promise<SongListItem[]> => {
 	const res = await apiFetch('/api/songs');
 	return res.json();
 };

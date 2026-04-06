@@ -121,7 +121,7 @@
 				<div class="loading-spinner"></div>
 			</div>
 		{:else}
-			<FlowEditor song={store.currentSong} onchange={handleSongChange} />
+			<FlowEditor song={store.currentSong!} onSongChange={handleSongChange} />
 		{/if}
 	</main>
 

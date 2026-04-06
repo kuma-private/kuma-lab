@@ -12,6 +12,22 @@ export interface Song {
 	lastEditedAt: string;
 }
 
+/** List API returns summary with counts instead of full arrays */
+export interface SongListItem {
+	id: string;
+	title: string;
+	bpm: number;
+	timeSignature: string;
+	key: string;
+	createdByName: string;
+	createdAt: string;
+	lastEditedBy: string;
+	lastEditedAt: string;
+	trackCount: number;
+	sectionCount: number;
+	visibility: string;
+}
+
 export interface Section {
 	id: string;
 	name: string;                // "A", "Chorus"

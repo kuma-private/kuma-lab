@@ -14,6 +14,21 @@
 
   let activeTab = $state<'flow' | 'text'>('flow');
 
+  // --- Computed totalBars ---
+  // Derive totalBars from sections and track blocks (max endBar across all, minimum 8)
+  let totalBars = $derived.by(() => {
+    let max = 8;
+    for (const sec of song.sections) {
+      if (sec.endBar > max) max = sec.endBar;
+    }
+    for (const track of song.tracks) {
+      for (const block of track.blocks) {
+        if (block.endBar > max) max = block.endBar;
+      }
+    }
+    return max;
+  });
+
   // --- Helpers ---
 
   function emit() {
@@ -99,7 +114,9 @@
       name,
       instrument: next,
       blocks: [],
-      muted: false,
+      volume: 0,
+      mute: false,
+      solo: false,
     });
     emit();
   }
@@ -137,7 +154,7 @@
         <div class="row-content">
           <SectionBar
             sections={song.sections}
-            totalBars={song.totalBars}
+            totalBars={totalBars}
             onSectionNameChange={handleSectionNameChange}
           />
         </div>
@@ -145,7 +162,7 @@
         <!-- Chord row -->
         <div class="row-label">Chords</div>
         <div class="row-content chord-row">
-          <ChordTimeline chords={song.chords} totalBars={song.totalBars} />
+          <ChordTimeline chords={song.chordProgression} totalBars={totalBars} />
         </div>
 
         <!-- Separator -->
@@ -158,7 +175,7 @@
           <div class="row-content">
             <FlowTrackRow
               {track}
-              totalBars={song.totalBars}
+              totalBars={totalBars}
               onBlockClick={handleBlockClick}
               onBlockCreate={(s, e) => handleBlockCreate(track.id, s, e)}
               onBlockMove={(bid, s) => handleBlockMove(track.id, bid, s)}

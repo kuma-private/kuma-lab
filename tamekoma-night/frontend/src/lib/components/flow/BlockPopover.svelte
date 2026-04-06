@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { parseDirectives, type ParsedDirectives } from '$lib/directive-parser';
+  import { parseDirectives, type ParsedDirectives, type VelocityLevel } from '$lib/directive-parser';
   import type { DirectiveBlock } from '$lib/types/song';
 
   interface Props {
@@ -34,7 +34,8 @@
   }: Props = $props();
 
   // --- State ---
-  let directives: ParsedDirectives = $state(parseDirectives(block.directives));
+  let parsed = $state(parseDirectives(block.directives));
+  let directives: ParsedDirectives = $state(parsed.directives);
   let rawText = $state(directivesToText(directives));
   let rawOpen = $state(false);
   let parseErrors: string[] = $state([]);
@@ -42,7 +43,7 @@
 
   // --- Derived header ---
   let headerLabel = $derived.by(() => {
-    const bars = block.bars ? ` (bars ${block.bars})` : '';
+    const bars = (block.startBar !== undefined && block.endBar !== undefined) ? ` (bars ${block.startBar + 1}–${block.endBar})` : '';
     return `${trackName} — ${sectionName}${bars}`;
   });
 
@@ -83,7 +84,7 @@
     syncToRaw();
   }
 
-  function setVelocity(value: string) {
+  function setVelocity(value: VelocityLevel) {
     directives = { ...directives, velocity: value };
     syncToRaw();
   }
@@ -102,19 +103,9 @@
   function onRawInput(e: Event) {
     const target = e.target as HTMLTextAreaElement;
     rawText = target.value;
-    try {
-      const parsed = parseDirectives(rawText);
-      directives = parsed;
-      parseErrors = [];
-    } catch (err: any) {
-      if (err.errors && Array.isArray(err.errors)) {
-        parseErrors = err.errors.map((e: any) =>
-          e.line ? `Line ${e.line}: ${e.message}` : e.message
-        );
-      } else {
-        parseErrors = [err.message ?? 'Parse error'];
-      }
-    }
+    const result = parseDirectives(rawText);
+    directives = result.directives;
+    parseErrors = result.errors.map(e => e.line ? `Line ${e.line}: ${e.message}` : e.message);
   }
 
   // --- Actions ---

@@ -1,8 +1,8 @@
-import type { Song, Track, DirectiveBlock, Section } from '$lib/types/song';
+import type { Song, SongListItem, Track, DirectiveBlock, Section } from '$lib/types/song';
 import * as api from '$lib/api';
 
 export const createSongStore = () => {
-	let songs = $state<Song[]>([]);
+	let songs = $state<SongListItem[]>([]);
 	let currentSong = $state<Song | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
@@ -12,7 +12,11 @@ export const createSongStore = () => {
 		const updated = updater(currentSong);
 		updated.lastEditedAt = new Date().toISOString();
 		currentSong = updated;
-		songs = songs.map((s) => (s.id === updated.id ? updated : s));
+		songs = songs.map((s) =>
+			s.id === updated.id
+				? { ...s, title: updated.title, bpm: updated.bpm, key: updated.key, lastEditedAt: updated.lastEditedAt, trackCount: updated.tracks.length, sectionCount: updated.sections.length }
+				: s
+		);
 	};
 
 	return {
@@ -75,7 +79,11 @@ export const createSongStore = () => {
 					tracks: currentSong.tracks,
 				});
 				currentSong = saved;
-				songs = songs.map((s) => (s.id === saved.id ? saved : s));
+				songs = songs.map((s) =>
+					s.id === saved.id
+						? { ...s, title: saved.title, bpm: saved.bpm, key: saved.key, timeSignature: saved.timeSignature, lastEditedAt: saved.lastEditedAt, trackCount: saved.tracks.length, sectionCount: saved.sections.length }
+						: s
+				);
 			} catch (e) {
 				error = e instanceof Error ? e.message : String(e);
 				throw e;

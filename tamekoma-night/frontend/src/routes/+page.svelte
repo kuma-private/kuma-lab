@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import { createAppStore } from '$lib/stores/app.svelte';
 	import { createSongStore } from '$lib/stores/song.svelte';
-	import type { Song } from '$lib/types/song';
 	import ThreadList from '$lib/components/ThreadList.svelte';
 
 	const store = createAppStore();
@@ -184,7 +183,7 @@
 							<span class="song-card-title">{song.title}</span>
 						</div>
 						<div class="song-card-meta">
-							<span class="song-meta-item">{song.tracks.length} tracks</span>
+							<span class="song-meta-item">{song.trackCount ?? 0} tracks</span>
 							<span class="song-meta-sep">·</span>
 							<span class="song-meta-item">{song.key || 'C'}</span>
 							<span class="song-meta-sep">·</span>
