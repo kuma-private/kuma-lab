@@ -1,27 +1,42 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { createAppStore } from '$lib/stores/app.svelte';
-	import ThreadList from '$lib/components/ThreadList.svelte';
+	import { createSongStore } from '$lib/stores/song.svelte';
+	import { getMe } from '$lib/api';
+	import type { UserInfo } from '$lib/api';
 
-	const store = createAppStore();
-	let threadFilter = $state('all');
+	const songStore = createSongStore();
 	let authChecked = $state(false);
-	let sortMode = $state<'latest' | 'name'>('latest');
-	let templateMenuOpen = $state(false);
-
-	const TEMPLATES: { label: string; score: string }[] = [
-		{ label: '空のスコア', score: '' },
-		{ label: 'カノン進行', score: '| C | G | Am | Em |\n| F | C | F | G |' },
-		{ label: 'ブルース進行', score: '| C7 | C7 | C7 | C7 |\n| F7 | F7 | C7 | C7 |\n| G7 | F7 | C7 | G7 |' },
-	];
+	let user = $state<UserInfo | null>(null);
+	let loggedIn = $derived(user !== null);
 
 	onMount(async () => {
-		await store.checkLogin();
+		try {
+			user = await getMe();
+		} catch {
+			user = null;
+		}
 		authChecked = true;
-		if (store.loggedIn) {
-			store.loadThreads();
+		if (loggedIn) {
+			songStore.loadSongs();
 		}
 	});
+
+	const sortedSongs = $derived.by(() => {
+		return [...songStore.songs].sort(
+			(a, b) => new Date(b.lastEditedAt).getTime() - new Date(a.lastEditedAt).getTime()
+		);
+	});
+
+	const handleNewSong = async () => {
+		try {
+			const song = await songStore.createSong('無題のスコア');
+			if (song) {
+				window.location.href = `/song/${song.id}`;
+			}
+		} catch {
+			// error is set in store
+		}
+	};
 
 	const formatTime = (iso: string): string => {
 		try {
@@ -37,46 +52,10 @@
 			return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
 		} catch { return ''; }
 	};
-
-	const filteredThreads = $derived.by(() => {
-		let list = store.threads;
-		const userId = store.user?.sub || '';
-		if (threadFilter === 'mine') list = list.filter(t => t.createdBy === userId);
-		if (threadFilter === 'shared') list = list.filter(t => t.visibility === 'shared' || t.visibility === 'public');
-
-		if (sortMode === 'name') {
-			list = [...list].sort((a, b) => a.title.localeCompare(b.title, 'ja'));
-		} else {
-			list = [...list].sort((a, b) => new Date(b.lastEditedAt).getTime() - new Date(a.lastEditedAt).getTime());
-		}
-		return list;
-	});
-
-	const recentThreads = $derived(
-		[...store.threads].sort((a, b) => new Date(b.lastEditedAt).getTime() - new Date(a.lastEditedAt).getTime()).slice(0, 3)
-	);
-
-	const handleNewSession = async (initialScore?: string) => {
-		templateMenuOpen = false;
-		const result = await store.createThread({ title: '無題のスコア' });
-		if (result) {
-			if (initialScore) {
-				try {
-					const { saveScore } = await import('$lib/api');
-					await saveScore(result.id, { score: initialScore, comment: 'テンプレートから作成' });
-				} catch { /* proceed even if save fails */ }
-			}
-			window.location.href = `/thread/${result.id}`;
-		}
-	};
-
-	const toggleTemplateMenu = () => {
-		templateMenuOpen = !templateMenuOpen;
-	};
 </script>
 
 <svelte:head>
-	<title>Tamekoma Night</title>
+	<title>Cadenza.fm</title>
 </svelte:head>
 
 <div class="page-bg" aria-hidden="true">
@@ -91,7 +70,7 @@
 		<div class="loading-full">
 			<div class="loading-spinner"></div>
 		</div>
-	{:else if !store.loggedIn}
+	{:else if !loggedIn}
 		<div class="login-screen">
 			<div class="login-card">
 				<div class="login-icon">
@@ -101,8 +80,8 @@
 						<circle cx="18" cy="16" r="3" />
 					</svg>
 				</div>
-				<h1 class="login-title">Tamekoma Night</h1>
-				<p class="login-sub">溜め込まないで、コードを放て。</p>
+				<h1 class="login-title">Cadenza.fm</h1>
+				<p class="login-sub">Arrange by text, hear it live.</p>
 				<p class="login-tagline">コード進行エディタ</p>
 				<a href="/auth/google" class="btn-google">
 					<svg width="18" height="18" viewBox="0 0 24 24">
@@ -117,69 +96,59 @@
 		</div>
 	{:else}
 
-		<div class="slogan">溜め込まないで、コードを放て。</div>
+		<div class="slogan">Arrange by text, hear it live.</div>
 
-		{#if recentThreads.length > 0}
-			<div class="recent-activity">
-				<h3 class="recent-title">最近の編集</h3>
-				{#each recentThreads as thread}
-					<a href="/thread/{thread.id}" class="recent-item">
-						<span class="recent-name">{thread.title}</span>
-						<span class="recent-time">{formatTime(thread.lastEditedAt)}</span>
+		<!-- Song section -->
+		<div class="section-bar">
+			<div class="section-left">
+				<h2 class="section-title">Song</h2>
+				{#if songStore.songs.length > 0}
+					<span class="top-count">{songStore.songs.length}</span>
+				{/if}
+			</div>
+			<button class="btn-new btn-new--song" onclick={handleNewSong}>
+				<span class="btn-new-icon">+</span>
+				新規Song
+			</button>
+		</div>
+
+		{#if songStore.loading}
+			<div class="skeleton-cards" role="status" aria-label="読み込み中">
+				{#each [1,2] as _}
+					<div class="skeleton-card">
+						<div class="skeleton-line skeleton-title"></div>
+						<div class="skeleton-line skeleton-meta"></div>
+					</div>
+				{/each}
+			</div>
+		{:else if sortedSongs.length > 0}
+			<div class="song-cards">
+				{#each sortedSongs as song}
+					<a href="/song/{song.id}" class="song-card">
+						<div class="song-card-header">
+							<span class="song-card-title">{song.title}</span>
+						</div>
+						<div class="song-card-meta">
+							<span class="song-meta-item">{song.trackCount ?? 0} tracks</span>
+							<span class="song-meta-sep">·</span>
+							<span class="song-meta-item">{song.key || 'C'}</span>
+							<span class="song-meta-sep">·</span>
+							<span class="song-meta-item">{song.bpm || 120} BPM</span>
+						</div>
+						<div class="song-card-time">{formatTime(song.lastEditedAt)}</div>
 					</a>
 				{/each}
 			</div>
+		{:else if !songStore.error}
+			<div class="empty-hint">まだSongがありません。「新規Song」で曲を作りましょう。</div>
 		{/if}
 
-		<div class="top-bar">
-			<div class="top-left">
-				<h1 class="top-title">スコア</h1>
-				{#if store.threads.length > 0}
-					<span class="top-count">{store.threads.length}</span>
-				{/if}
-				<div class="sort-pills">
-					<button class="sort-pill" class:sort-pill--active={sortMode === 'latest'} onclick={() => sortMode = 'latest'}>最新順</button>
-					<button class="sort-pill" class:sort-pill--active={sortMode === 'name'} onclick={() => sortMode = 'name'}>名前順</button>
-				</div>
-			</div>
-			<div class="btn-new-wrap">
-				<button class="btn-new" onclick={toggleTemplateMenu}>
-					<span class="btn-new-icon">+</span>
-					新規作成
-				</button>
-				{#if templateMenuOpen}
-					<div class="template-menu">
-						{#each TEMPLATES as tmpl}
-							<button class="template-option" onclick={() => handleNewSession(tmpl.score || undefined)}>
-								{tmpl.label}
-							</button>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		</div>
-
-		{#if store.error}
-			<div class="error-banner" role="alert">{store.error}</div>
+		{#if songStore.error}
+			<div class="error-banner" role="alert">{songStore.error}</div>
 		{/if}
-
-		<main class="main">
-			{#if store.loading}
-				<div class="skeleton-cards" role="status" aria-label="読み込み中">
-					{#each [1,2,3] as _}
-						<div class="skeleton-card">
-							<div class="skeleton-line skeleton-title"></div>
-							<div class="skeleton-line skeleton-meta"></div>
-						</div>
-					{/each}
-				</div>
-			{:else}
-				<ThreadList threads={filteredThreads} filter={threadFilter} onFilterChange={(f) => { threadFilter = f; }} onCreate={() => handleNewSession()} />
-			{/if}
-		</main>
 
 		<footer class="app-footer">
-			<span>Tamekoma Night</span>
+			<span>Cadenza.fm</span>
 			<span>·</span>
 			<span>コード進行エディタ</span>
 		</footer>
@@ -193,33 +162,33 @@
 		overflow: hidden;
 		pointer-events: none;
 		z-index: -1;
-		background: linear-gradient(180deg, #030010 0%, #0a0820 40%, #0f0c2e 70%, #1a1040 100%);
+		background: linear-gradient(180deg, #080604 0%, #0f0a04 40%, #1a1408 70%, #241c0e 100%);
 	}
 
 	.bg-stars {
 		position: absolute;
 		inset: 0;
 		background-image:
-			radial-gradient(2px 2px at 8% 10%, #fff, transparent),
-			radial-gradient(2px 2px at 22% 6%, #fff, transparent),
-			radial-gradient(3px 3px at 38% 18%, #c4b5fd, transparent),
-			radial-gradient(2px 2px at 52% 4%, #fff, transparent),
-			radial-gradient(2px 2px at 68% 14%, #fff, transparent),
-			radial-gradient(3px 3px at 82% 9%, #93c5fd, transparent),
-			radial-gradient(1.5px 1.5px at 12% 26%, #e0e0f0, transparent),
-			radial-gradient(2px 2px at 32% 30%, #fff, transparent),
-			radial-gradient(1.5px 1.5px at 58% 24%, #e0e0f0, transparent),
-			radial-gradient(3px 3px at 78% 28%, #f9a8d4, transparent),
-			radial-gradient(2px 2px at 90% 20%, #fff, transparent),
-			radial-gradient(4px 4px at 18% 2%, #c4b5fd, transparent),
-			radial-gradient(1.5px 1.5px at 45% 34%, #e0e0f0, transparent),
-			radial-gradient(2px 2px at 95% 6%, #fff, transparent),
-			radial-gradient(2px 2px at 5% 38%, #fff, transparent),
-			radial-gradient(3px 3px at 65% 8%, #93c5fd, transparent),
-			radial-gradient(2px 2px at 28% 16%, #fff, transparent),
-			radial-gradient(1.5px 1.5px at 72% 36%, #e0e0f0, transparent),
-			radial-gradient(2px 2px at 48% 12%, #fff, transparent),
-			radial-gradient(3px 3px at 85% 22%, #c4b5fd, transparent);
+			radial-gradient(2px 2px at 8% 10%, #f0e0c8, transparent),
+			radial-gradient(2px 2px at 22% 6%, #f0e0c8, transparent),
+			radial-gradient(3px 3px at 38% 18%, #e8a84c, transparent),
+			radial-gradient(2px 2px at 52% 4%, #f0e0c8, transparent),
+			radial-gradient(2px 2px at 68% 14%, #f0e0c8, transparent),
+			radial-gradient(3px 3px at 82% 9%, #f0c060, transparent),
+			radial-gradient(1.5px 1.5px at 12% 26%, #e8e0d0, transparent),
+			radial-gradient(2px 2px at 32% 30%, #f0e0c8, transparent),
+			radial-gradient(1.5px 1.5px at 58% 24%, #e8e0d0, transparent),
+			radial-gradient(3px 3px at 78% 28%, #c4956a, transparent),
+			radial-gradient(2px 2px at 90% 20%, #f0e0c8, transparent),
+			radial-gradient(4px 4px at 18% 2%, #e8a84c, transparent),
+			radial-gradient(1.5px 1.5px at 45% 34%, #e8e0d0, transparent),
+			radial-gradient(2px 2px at 95% 6%, #f0e0c8, transparent),
+			radial-gradient(2px 2px at 5% 38%, #f0e0c8, transparent),
+			radial-gradient(3px 3px at 65% 8%, #f0c060, transparent),
+			radial-gradient(2px 2px at 28% 16%, #f0e0c8, transparent),
+			radial-gradient(1.5px 1.5px at 72% 36%, #e8e0d0, transparent),
+			radial-gradient(2px 2px at 48% 12%, #f0e0c8, transparent),
+			radial-gradient(3px 3px at 85% 22%, #e8a84c, transparent);
 		animation: twinkle 3s ease-in-out infinite alternate;
 	}
 
@@ -234,7 +203,7 @@
 		left: 0;
 		right: 0;
 		height: 35%;
-		background: linear-gradient(180deg, transparent 0%, rgba(167,139,250,0.03) 50%, rgba(139,92,246,0.06) 100%);
+		background: linear-gradient(180deg, transparent 0%, rgba(232,168,76,0.03) 50%, rgba(192,148,106,0.06) 100%);
 	}
 
 	.orb {
@@ -302,7 +271,7 @@
 		align-items: center;
 		gap: var(--space-md);
 		padding: var(--space-2xl) var(--space-xl);
-		background: rgba(20, 20, 50, 0.6);
+		background: rgba(26, 20, 8, 0.8);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 		backdrop-filter: blur(12px);
@@ -347,8 +316,8 @@
 	.btn-google {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 12px 32px;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-xl);
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-md);
 		background: #fff;
@@ -366,149 +335,29 @@
 		background: #f8f8ff;
 	}
 
-	.welcome-msg {
-		text-align: center;
-		font-size: 0.78rem;
-		color: var(--text-muted);
-		margin: 0;
-		padding: var(--space-md) 0 0;
-		opacity: 0.7;
-	}
-
 	.slogan {
 		text-align: center;
 		font-size: 0.85rem;
 		color: var(--text-muted);
 		padding: var(--space-lg) 0 var(--space-sm);
 		letter-spacing: 0.15em;
-		opacity: 0.6;
-	}
-
-	/* Recent activity */
-	.recent-activity {
-		margin-bottom: var(--space-lg);
-		padding: var(--space-md);
-		background: rgba(167, 139, 250, 0.04);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-lg);
-	}
-
-	.recent-title {
-		font-size: 0.72rem;
-		font-weight: 600;
-		color: var(--text-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		margin: 0 0 var(--space-sm);
-	}
-
-	.recent-item {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: var(--space-xs) var(--space-sm);
-		border-radius: var(--radius-sm);
-		text-decoration: none;
-		color: inherit;
-		transition: background 0.15s;
-	}
-
-	.recent-item:not(:last-child) {
-		border-bottom: 1px solid var(--border-subtle);
-	}
-
-	.recent-item:hover {
-		background: rgba(167, 139, 250, 0.08);
-	}
-
-	.recent-item:hover .recent-name {
-		color: var(--accent-primary);
-	}
-
-	.recent-name {
-		font-size: 0.82rem;
-		color: var(--text-secondary);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		transition: color 0.15s;
-	}
-
-	.recent-time {
-		font-size: 0.68rem;
-		color: var(--text-muted);
-		opacity: 0.6;
-		flex-shrink: 0;
-		margin-left: var(--space-md);
-	}
-
-	/* Sort pills */
-	.sort-pills {
-		display: flex;
-		gap: 2px;
-		margin-left: var(--space-sm);
-	}
-
-	.sort-pill {
-		padding: 2px 10px;
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-md);
-		background: transparent;
-		color: var(--text-muted);
-		font-size: 0.68rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.sort-pill:hover {
-		color: var(--text-secondary);
-		border-color: var(--border-default);
-	}
-
-	.sort-pill--active {
-		color: var(--accent-primary);
-		border-color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.08);
-	}
-
-	.top-bar {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: var(--space-md) 0 var(--space-lg);
-		border-bottom: 1px solid var(--border-subtle);
-		margin-bottom: var(--space-lg);
-	}
-
-	.top-left {
-		display: flex;
-		align-items: center;
-		gap: var(--space-sm);
-	}
-
-	.top-title {
-		font-family: var(--font-display);
-		font-size: 1.3rem;
-		font-weight: 700;
-		color: var(--text-primary);
-		margin: 0;
+		opacity: 0.8;
 	}
 
 	.top-count {
 		font-family: var(--font-mono);
 		font-size: 0.7rem;
 		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.12);
-		padding: 2px 8px;
-		border-radius: 10px;
+		background: rgba(232, 168, 76, 0.12);
+		padding: 2px var(--space-sm);
+		border-radius: var(--radius-full);
 	}
 
 	.btn-new {
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		padding: 8px 18px;
+		gap: var(--space-xs);
+		padding: var(--space-sm) var(--space-md);
 		border: none;
 		border-radius: var(--radius-md);
 		background: var(--accent-primary);
@@ -521,9 +370,9 @@
 	}
 
 	.btn-new:hover {
-		background: #9374e8;
+		background: #d09440;
 		transform: translateY(-1px);
-		box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
+		box-shadow: 0 4px 16px rgba(232, 168, 76, 0.35);
 	}
 
 	.btn-new:focus-visible {
@@ -544,12 +393,6 @@
 		padding: var(--space-sm) var(--space-md);
 		color: var(--error);
 		margin-bottom: var(--space-md);
-	}
-
-	.loading {
-		display: flex;
-		justify-content: center;
-		padding: var(--space-2xl);
 	}
 
 	.loading-spinner {
@@ -573,7 +416,7 @@
 		padding: var(--space-2xl) 0 var(--space-lg);
 		font-size: 0.7rem;
 		color: var(--text-muted);
-		opacity: 0.4;
+		opacity: 0.6;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -612,49 +455,100 @@
 		100% { background-position: -200% 0; }
 	}
 
-	.btn-new-wrap {
-		position: relative;
+	/* Song section */
+	.section-bar {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--space-md) 0 var(--space-sm);
 	}
 
-	.template-menu {
-		position: absolute;
-		top: calc(100% + 6px);
-		right: 0;
-		min-width: 180px;
+	.section-left {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+	}
+
+	.section-title {
+		font-family: var(--font-display);
+		font-size: 1.1rem;
+		font-weight: 700;
+		color: var(--text-primary);
+		margin: 0;
+	}
+
+	.btn-new--song {
+		font-size: 0.78rem;
+		padding: var(--space-xs) var(--space-sm);
+	}
+
+	.song-cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+		gap: var(--space-md);
+		margin-bottom: var(--space-xl);
+	}
+
+	.song-card {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+		padding: var(--space-md);
 		background: var(--bg-surface);
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-		z-index: 20;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
+		text-decoration: none;
+		color: inherit;
+		transition: all 0.15s;
+	}
+
+	.song-card:hover {
+		border-color: var(--accent-primary);
+		background: var(--bg-elevated);
+		transform: translateY(-2px);
+		box-shadow: var(--shadow-card);
+	}
+
+	.song-card-header {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+	}
+
+	.song-card-title {
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: var(--text-primary);
 		overflow: hidden;
-		animation: menu-in 0.15s ease;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	@keyframes menu-in {
-		from { opacity: 0; transform: translateY(-4px); }
-		to { opacity: 1; transform: translateY(0); }
+	.song-card-meta {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		font-size: 0.72rem;
+		color: var(--text-muted);
 	}
 
-	.template-option {
-		display: block;
-		width: 100%;
-		padding: 10px 16px;
-		border: none;
-		background: transparent;
-		color: var(--text-secondary);
-		font-size: 0.82rem;
-		text-align: left;
-		cursor: pointer;
-		transition: all 0.12s;
+	.song-meta-sep {
+		opacity: 0.4;
 	}
 
-	.template-option:hover {
-		background: rgba(167, 139, 250, 0.1);
-		color: var(--accent-primary);
+	.song-card-time {
+		font-size: 0.68rem;
+		color: var(--text-muted);
+		opacity: 0.6;
 	}
 
-	.template-option:not(:last-child) {
-		border-bottom: 1px solid var(--border-subtle);
+	.empty-hint {
+		font-size: 0.8rem;
+		color: var(--text-muted);
+		text-align: center;
+		padding: var(--space-lg) 0;
+		opacity: 0.6;
+		margin-bottom: var(--space-lg);
 	}
 
 	@media (max-width: 600px) {
@@ -662,16 +556,6 @@
 
 		.page {
 			padding: var(--space-md) var(--space-md);
-		}
-
-		.top-bar {
-			flex-direction: column;
-			align-items: stretch;
-			gap: var(--space-md);
-		}
-
-		.btn-new {
-			justify-content: center;
 		}
 
 		.skeleton-cards {

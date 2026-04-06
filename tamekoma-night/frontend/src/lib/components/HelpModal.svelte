@@ -15,7 +15,7 @@
     <div class="help-modal">
         <div class="help-header">
             <h2>ヘルプ</h2>
-            <button class="help-close" onclick={onclose}>&#x2715;</button>
+            <button class="help-close" onclick={onclose} aria-label="ヘルプを閉じる">&#x2715;</button>
         </div>
         <div class="help-body">
             <section>
@@ -55,7 +55,7 @@
         position: fixed;
         inset: 0;
         background: rgba(0, 0, 0, 0.6);
-        z-index: 300;
+        z-index: var(--z-modal);
         backdrop-filter: blur(4px);
     }
 
@@ -64,7 +64,7 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        z-index: 301;
+        z-index: calc(var(--z-modal) + 1);
         background: var(--bg-surface);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-lg);

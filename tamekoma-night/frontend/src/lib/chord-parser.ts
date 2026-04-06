@@ -24,7 +24,7 @@ export interface ParsedChord {
 }
 
 export type BarEntry =
-  | { type: 'chord'; chord: ParsedChord }
+  | { type: 'chord'; chord: ParsedChord; overrides?: Record<string, string> }
   | { type: 'repeat' }   // %
   | { type: 'rest' }     // _
   | { type: 'sustain' }; // =
@@ -89,7 +89,51 @@ export function parseChord(raw: string): ParsedChord {
   return { raw, root, quality, bass };
 }
 
+// ── Inline directive overrides ─────────────────────────
+
+const KNOWN_MODES = new Set(['arp', 'block', 'strum']);
+const KNOWN_VOICINGS = new Set(['close', 'open', 'drop2', 'drop3', 'spread']);
+const KNOWN_VELOCITIES = new Set(['pp', 'p', 'mp', 'mf', 'f', 'ff']);
+
+const STRUM_MS_PATTERN = /^strum:(\d+)ms$/;
+
+/** Parse a single shorthand item inside [...] into a key-value pair. */
+function classifyShorthand(item: string): [string, string] {
+  // key:value pair (e.g. "strum:40ms")
+  const colonIdx = item.indexOf(':');
+  if (colonIdx !== -1) {
+    const key = item.slice(0, colonIdx);
+    const value = item.slice(colonIdx + 1);
+    // Special case: "strum:40ms" → { strum: "40" }
+    const strumMatch = item.match(STRUM_MS_PATTERN);
+    if (strumMatch) return ['strum', strumMatch[1]];
+    return [key, value];
+  }
+  // velocity level
+  if (KNOWN_VELOCITIES.has(item)) return ['velocity', item];
+  // mode
+  if (KNOWN_MODES.has(item)) return ['mode', item];
+  // voicing
+  if (KNOWN_VOICINGS.has(item)) return ['voicing', item];
+  // unknown → store as-is under its own key
+  return [item, 'true'];
+}
+
+/** Parse "[arp]" or "[strum:40ms, f]" annotation text (without brackets) into overrides. */
+function parseOverrides(text: string): Record<string, string> {
+  const overrides: Record<string, string> = {};
+  const items = text.split(',').map(s => s.trim()).filter(Boolean);
+  for (const item of items) {
+    const [key, value] = classifyShorthand(item);
+    overrides[key] = value;
+  }
+  return overrides;
+}
+
 // ── Token parsing ──────────────────────────────────────
+
+/** Pattern to match a chord token optionally followed by [...] annotation. */
+const TOKEN_OVERRIDE_PATTERN = /^(.+?)\s*\[([^\]]*)\]$/;
 
 function parseToken(token: string): BarEntry | null {
   if (token === '%') return { type: 'repeat' };
@@ -129,12 +173,44 @@ function partitionLines(lines: ReadonlyArray<string>): { comments: string[]; con
   return { comments, contentParts };
 }
 
+/**
+ * Tokenize a bar segment, keeping `token [...]` as a single unit.
+ * E.g. "Am7 Dm7 [arp] G7 [strum:40ms, f]" →
+ *   ["Am7", "Dm7 [arp]", "G7 [strum:40ms, f]"]
+ */
+function tokenizeBarSegment(text: string): string[] {
+  const tokens: string[] = [];
+  // Match: (non-bracket-word)(optional whitespace + bracketed annotation)
+  const re = /(\S+?)(\s*\[[^\]]*\])|\S+/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    tokens.push(m[0]);
+  }
+  return tokens;
+}
+
+/** Parse a single annotated token (may include [...]) into a BarEntry. */
+function parseAnnotatedToken(raw: string): BarEntry | null {
+  const overrideMatch = raw.match(TOKEN_OVERRIDE_PATTERN);
+  if (overrideMatch) {
+    const chordPart = overrideMatch[1].trim();
+    const overrideText = overrideMatch[2];
+    const entry = parseToken(chordPart);
+    if (entry && entry.type === 'chord') {
+      const overrides = parseOverrides(overrideText);
+      return { ...entry, overrides };
+    }
+    return entry;
+  }
+  return parseToken(raw);
+}
+
 /** Parse a single bar segment (text between | delimiters) into a ParsedBar. Pure. */
 function parseBarSegment(segment: string, barNumber: number): ParsedBar | null {
   const trimmed = segment.trim();
   if (!trimmed) return null;
-  const entries = trimmed.split(/\s+/).filter(Boolean)
-    .map(parseToken)
+  const entries = tokenizeBarSegment(trimmed)
+    .map(parseAnnotatedToken)
     .filter((e): e is BarEntry => e !== null);
   return { barNumber, entries };
 }
@@ -236,6 +312,12 @@ export const transpose = (input: string, semitones: number): string => {
       if (segment === '|') return segment;
       return segment.split(/(\s+)/).map(token => {
         if (!token.trim() || token === '%' || token === '_' || token === '=') return token;
+        // Preserve [...] annotations during transposition
+        if (token.startsWith('[') || token.endsWith(']')) return token;
+        const bracketMatch = token.match(/^(.+?)(\s*\[[^\]]*\])$/);
+        if (bracketMatch) {
+          return transposeToken(bracketMatch[1], semitones) + bracketMatch[2];
+        }
         return transposeToken(token, semitones);
       }).join('');
     }).join('');
@@ -244,9 +326,37 @@ export const transpose = (input: string, semitones: number): string => {
 
 // ── Serialization ──────────────────────────────────────
 
+/** Convert an overrides record back to shorthand items. */
+function overridesToShorthand(overrides: Record<string, string>): string[] {
+  const items: string[] = [];
+  for (const [key, value] of Object.entries(overrides)) {
+    if (key === 'velocity') {
+      items.push(value); // pp, f, etc.
+    } else if (key === 'mode') {
+      items.push(value); // arp, block, etc.
+    } else if (key === 'voicing') {
+      items.push(value); // close, open, etc.
+    } else if (key === 'strum') {
+      items.push(`strum:${value}ms`);
+    } else if (value === 'true') {
+      items.push(key);
+    } else {
+      items.push(`${key}:${value}`);
+    }
+  }
+  return items;
+}
+
 function entryToString(entry: BarEntry): string {
   switch (entry.type) {
-    case 'chord': return entry.chord.raw;
+    case 'chord': {
+      const base = entry.chord.raw;
+      if (entry.overrides && Object.keys(entry.overrides).length > 0) {
+        const items = overridesToShorthand(entry.overrides);
+        return `${base} [${items.join(', ')}]`;
+      }
+      return base;
+    }
     case 'repeat': return '%';
     case 'rest': return '_';
     case 'sustain': return '=';

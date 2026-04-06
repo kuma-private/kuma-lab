@@ -8,7 +8,7 @@
     {#each toasts as toast (toast.id)}
         <div class="toast toast--{toast.type}">
             <span>{toast.message}</span>
-            <button class="toast-dismiss" onclick={() => dismissToast(toast.id)}>&#x2715;</button>
+            <button class="toast-dismiss" aria-label="通知を閉じる" onclick={() => dismissToast(toast.id)}>&#x2715;</button>
         </div>
     {/each}
 </div>
@@ -16,10 +16,10 @@
 <style>
     .toast-container {
         position: fixed;
-        bottom: 90px;
+        bottom: calc(var(--player-height) + var(--space-sm));
         left: 50%;
         transform: translateX(-50%);
-        z-index: 200;
+        z-index: var(--z-toast);
         display: flex;
         flex-direction: column;
         gap: 8px;
@@ -54,7 +54,7 @@
     }
 
     .toast--info {
-        background: rgba(167, 139, 250, 0.15);
+        background: rgba(232, 168, 76, 0.15);
         border: 1px solid var(--accent-primary);
         color: var(--accent-primary);
     }

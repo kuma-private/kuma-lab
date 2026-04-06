@@ -1,6 +1,7 @@
 namespace TamekomaNight.Api.Thread
 
 open System
+open TamekomaNight.Api
 
 module Models =
 
@@ -100,20 +101,11 @@ module Models =
           key: string
           timeSignature: string }
 
-    /// Represents authenticated user information extracted from HttpContext
-    type UserInfo =
-        { UserId: string
-          UserName: string
-          Email: string }
+    // Re-export shared helpers for backward compatibility within Thread namespace
+    type UserInfo = Shared.UserInfo
 
-    // --- Validation helpers ---
-
-    /// Safely coalesce a possibly-null string to a default value
-    let defaultIfNull (defaultValue: string) (value: string) =
-        if obj.ReferenceEquals(value, null) then defaultValue else value
-
-    /// Check if a deserialized request object is non-null
-    let isNotNull (value: 'T) = not (obj.ReferenceEquals(value, null))
+    let defaultIfNull = Shared.defaultIfNull
+    let isNotNull = Shared.isNotNull
 
     /// Validate that a Base64 string contains a valid MIDI file (starts with MThd header)
     let isValidMidiData (base64: string) =

@@ -2,8 +2,6 @@ namespace TamekomaNight.Api.Thread
 
 open System
 open System.Net.Http
-open System.Security.Claims
-open System.Text
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
@@ -16,49 +14,19 @@ module ThreadHandlers =
 
     let private devMode = Config.devMode
 
-    // --- Pure helper functions ---
+    // --- Delegate to Shared helpers ---
 
-    let private getUserInfo (ctx: HttpContext) : UserInfo =
-        if devMode && (ctx.User = null || ctx.User.Identity = null || not ctx.User.Identity.IsAuthenticated) then
-            { UserId = "dev-user"; UserName = "Dev User"; Email = "" }
-        else
-            let findClaim (claimType: string) defaultValue =
-                ctx.User.FindFirst(claimType)
-                |> Option.ofObj
-                |> Option.map (fun c -> c.Value)
-                |> Option.defaultValue defaultValue
-
-            { UserId = findClaim ClaimTypes.NameIdentifier "anonymous"
-              UserName = findClaim ClaimTypes.Name "Anonymous"
-              Email = findClaim ClaimTypes.Email "" }
+    let private getUserInfo ctx = Shared.getUserInfo devMode ctx
 
     let private getHttpClient (ctx: HttpContext) =
         ctx.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("Anthropic")
 
-    // --- HTTP response helpers ---
-
-    let private respondJson (ctx: HttpContext) (statusCode: int) (body: obj) : Task =
-        ctx.Response.StatusCode <- statusCode
-        ctx.Response.WriteAsJsonAsync(body)
-
-    let private respond404 ctx = respondJson ctx 404 {| error = "Thread not found" |}
-    let private respond403 ctx msg = respondJson ctx 403 {| error = msg |}
-    let private respond400 ctx msg = respondJson ctx 400 {| error = msg |}
-    let private respond500 ctx msg = respondJson ctx 500 {| error = msg |}
-
-    // --- Request parsing with Result type ---
-
-    let private parseRequest<'T> (ctx: HttpContext) : Task<Result<'T, string>> =
-        task {
-            try
-                let! req = ctx.Request.ReadFromJsonAsync<'T>()
-                if obj.ReferenceEquals(req, null) then
-                    return Error "Invalid request body"
-                else
-                    return Ok req
-            with _ ->
-                return Error "Invalid request body"
-        }
+    let private respondJson = Shared.respondJson
+    let private respond404 ctx = Shared.respond404 ctx "Thread"
+    let private respond403 = Shared.respond403
+    let private respond400 = Shared.respond400
+    let private respond500 = Shared.respond500
+    let private withParsedRequest<'T> = Shared.withParsedRequest<'T>
 
     // --- Higher-order handler combinators ---
 
@@ -103,23 +71,6 @@ module ThreadHandlers =
                 do! handler t user
         }
 
-    /// Parse request and run handler if valid, else return 400.
-    let private withParsedRequest<'T>
-        (ctx: HttpContext)
-        (validate: 'T -> bool)
-        (handler: 'T -> Task)
-        : Task =
-        task {
-            let! result = parseRequest<'T> ctx
-            match result with
-            | Error msg ->
-                do! respond400 ctx msg
-            | Ok req when not (validate req) ->
-                do! respond400 ctx "Invalid request body"
-            | Ok req ->
-                do! handler req
-        }
-
     // --- Handlers ---
 
     let listThreads (repo: IThreadRepository) (ctx: HttpContext) : Task =
@@ -147,7 +98,7 @@ module ThreadHandlers =
         }
 
     let createThread (repo: IThreadRepository) (ctx: HttpContext) : Task =
-        withParsedRequest<CreateThreadRequest> ctx (fun req -> isNotNull req.title) (fun req ->
+        withParsedRequest<CreateThreadRequest> ctx (fun req -> isNotNull req.title && not (System.String.IsNullOrWhiteSpace(req.title))) (fun req ->
             task {
                 let user = getUserInfo ctx
 

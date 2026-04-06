@@ -1,41 +1,41 @@
 /* ============================================
-   Tamekoma Night - Theme
+   Cadenza.fm - Theme (Warm Amber)
    ============================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap');
 
 :root {
   /* ---- Background layers ---- */
-  --bg-deepest: #06060f;
-  --bg-base: #0c0c1e;
-  --bg-surface: #141432;
-  --bg-elevated: #1c1c44;
-  --bg-hover: #24245a;
+  --bg-deepest: #080604;
+  --bg-base: #0f0a04;
+  --bg-surface: #1a1408;
+  --bg-elevated: #241c0e;
+  --bg-hover: #2e2414;
 
   /* ---- Borders ---- */
-  --border-subtle: #2a2a5a;
-  --border-default: #3a3a7a;
-  --border-strong: #5a5aaa;
+  --border-subtle: #3a2e1a;
+  --border-default: #4a3e28;
+  --border-strong: #6a5a3a;
 
   /* ---- Text ---- */
-  --text-primary: #e8e8f0;
-  --text-secondary: #9090b0;
-  --text-muted: #8888a8;
+  --text-primary: #ece4d4;
+  --text-secondary: #b8ad94;
+  --text-muted: #8a7e68;
 
   /* ---- Accent ---- */
-  --accent-primary: #a78bfa;
-  --accent-secondary: #60a5fa;
-  --accent-warm: #fbbf24;
+  --accent-primary: #e8a84c;
+  --accent-secondary: #6ea8d0;
+  --accent-warm: #f0c060;
 
   /* ---- Semantic ---- */
-  --success: #34d399;
-  --error: #f87171;
-  --warning: #fbbf24;
+  --success: #7cb882;
+  --error: #e06050;
+  --warning: #e8a84c;
 
   /* ---- Player ---- */
-  --player-bg: rgba(10, 10, 26, 0.92);
-  --player-progress: #a78bfa;
-  --player-button: #e8e8f0;
+  --player-bg: rgba(10, 8, 4, 0.92);
+  --player-progress: #e8a84c;
+  --player-button: #e8e0d0;
 
   /* ---- Spacing ---- */
   --space-xs: 4px;
@@ -62,7 +62,15 @@
   --font-display: 'Space Grotesk', var(--font-sans);
 
   /* ---- Player bar height (for bottom padding) ---- */
-  --player-height: 60px;
+  --player-height: 80px;
+
+  /* ---- Z-index layers ---- */
+  --z-dropdown: 20;
+  --z-player: 50;
+  --z-popover: 60;
+  --z-modal: 100;
+  --z-toast: 150;
+  --z-context-menu: 200;
 }
 
 /* ============================================
@@ -71,9 +79,9 @@
 
 [data-theme="oled"] {
   --bg-deepest: #000000;
-  --bg-base: #050508;
-  --bg-surface: #0a0a12;
-  --bg-elevated: #101020;
+  --bg-base: #050402;
+  --bg-surface: #0a0804;
+  --bg-elevated: #100e08;
 }
 
 /* ============================================
@@ -89,6 +97,7 @@
 }
 
 html {
+  color-scheme: dark;
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -166,7 +175,7 @@ input:focus,
 textarea:focus,
 select:focus {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.15);
+  box-shadow: 0 0 0 3px rgba(232, 168, 76, 0.15);
 }
 
 input::placeholder,
@@ -210,8 +219,8 @@ textarea.chord-input {
 }
 
 .btn-primary:hover {
-  background: #9374e8;
-  box-shadow: 0 4px 12px rgba(167, 139, 250, 0.3);
+  background: #d09440;
+  box-shadow: 0 4px 12px rgba(232, 168, 76, 0.3);
 }
 
 .btn-secondary {
@@ -282,7 +291,7 @@ textarea.chord-input {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: var(--z-modal);
 }
 
 .modal {
@@ -311,7 +320,7 @@ textarea.chord-input {
   display: flex;
   align-items: center;
   padding: 0 var(--space-lg);
-  z-index: 50;
+  z-index: var(--z-player);
 }
 
 /* ============================================
@@ -385,6 +394,9 @@ textarea.chord-input {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
+    }
+    html {
+        scroll-behavior: auto;
     }
 }
 

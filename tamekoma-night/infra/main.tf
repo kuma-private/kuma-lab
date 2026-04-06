@@ -79,7 +79,7 @@ resource "google_secret_manager_secret_version" "jwt_signing_key" {
 
 resource "google_service_account" "app" {
   account_id   = "tamekoma-night"
-  display_name = "tamekoma-night Cloud Run"
+  display_name = "Cadenza.fm Cloud Run"
 }
 
 resource "google_secret_manager_secret_iam_member" "app_anthropic" {
@@ -113,7 +113,7 @@ resource "google_artifact_registry_repository" "app" {
   location      = var.region
   repository_id = "tamekoma-night"
   format        = "DOCKER"
-  description   = "Docker images for tamekoma-night (Tamekoma Night)"
+  description   = "Docker images for tamekoma-night (Cadenza.fm)"
 
   depends_on = [google_project_service.apis]
 }

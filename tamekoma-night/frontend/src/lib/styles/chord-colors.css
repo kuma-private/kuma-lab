@@ -6,65 +6,65 @@
    ============================================ */
 
 :root {
-  /* C - Red */
-  --chord-c-bg: #3d1520;
-  --chord-c-text: #f87171;
-  --chord-c-border: #7f1d1d;
+  /* C - Warm Red */
+  --chord-c-bg: rgba(224, 96, 80, 0.10);
+  --chord-c-text: #d8887c;
+  --chord-c-border: rgba(224, 96, 80, 0.15);
 
-  /* C# / Db - Red-Orange */
-  --chord-cs-bg: #3d1f15;
-  --chord-cs-text: #fb923c;
-  --chord-cs-border: #7f3d1d;
+  /* C# / Db - Warm Red-Orange */
+  --chord-cs-bg: rgba(224, 128, 64, 0.10);
+  --chord-cs-text: #d0946c;
+  --chord-cs-border: rgba(224, 128, 64, 0.15);
 
-  /* D - Orange */
-  --chord-d-bg: #3d2a15;
-  --chord-d-text: #fbbf24;
-  --chord-d-border: #7f5a1d;
+  /* D - Warm Orange */
+  --chord-d-bg: rgba(232, 168, 76, 0.10);
+  --chord-d-text: #d4a864;
+  --chord-d-border: rgba(232, 168, 76, 0.15);
 
-  /* D# / Eb - Yellow-Orange */
-  --chord-ds-bg: #3d3315;
-  --chord-ds-text: #fde047;
-  --chord-ds-border: #7f6d1d;
+  /* D# / Eb - Warm Gold */
+  --chord-ds-bg: rgba(240, 192, 60, 0.10);
+  --chord-ds-text: #d0b458;
+  --chord-ds-border: rgba(240, 192, 60, 0.15);
 
-  /* E - Yellow-Green */
-  --chord-e-bg: #333d15;
-  --chord-e-text: #a3e635;
-  --chord-e-border: #5a7f1d;
+  /* E - Warm Yellow-Green */
+  --chord-e-bg: rgba(176, 200, 80, 0.08);
+  --chord-e-text: #a8b86c;
+  --chord-e-border: rgba(176, 200, 80, 0.12);
 
-  /* F - Green */
-  --chord-f-bg: #153d20;
-  --chord-f-text: #34d399;
-  --chord-f-border: #1d7f3d;
+  /* F - Warm Green */
+  --chord-f-bg: rgba(100, 180, 120, 0.08);
+  --chord-f-text: #88b890;
+  --chord-f-border: rgba(100, 180, 120, 0.12);
 
-  /* F# / Gb - Teal */
-  --chord-fs-bg: #153d33;
-  --chord-fs-text: #2dd4bf;
-  --chord-fs-border: #1d7f6d;
+  /* F# / Gb - Warm Teal */
+  --chord-fs-bg: rgba(80, 176, 160, 0.08);
+  --chord-fs-text: #80b0a8;
+  --chord-fs-border: rgba(80, 176, 160, 0.12);
 
-  /* G - Cyan */
-  --chord-g-bg: #152a3d;
-  --chord-g-text: #22d3ee;
-  --chord-g-border: #1d5a7f;
+  /* G - Warm Cyan */
+  --chord-g-bg: rgba(80, 168, 200, 0.08);
+  --chord-g-text: #78a8b8;
+  --chord-g-border: rgba(80, 168, 200, 0.12);
 
-  /* G# / Ab - Blue */
-  --chord-gs-bg: #15203d;
-  --chord-gs-text: #60a5fa;
-  --chord-gs-border: #1d3d7f;
+  /* G# / Ab - Warm Blue */
+  --chord-gs-bg: rgba(100, 148, 208, 0.08);
+  --chord-gs-text: #8098c0;
+  --chord-gs-border: rgba(100, 148, 208, 0.12);
 
-  /* A - Indigo */
-  --chord-a-bg: #1f153d;
-  --chord-a-text: #818cf8;
-  --chord-a-border: #3d1d7f;
+  /* A - Warm Indigo */
+  --chord-a-bg: rgba(120, 128, 200, 0.08);
+  --chord-a-text: #9090b8;
+  --chord-a-border: rgba(120, 128, 200, 0.12);
 
-  /* A# / Bb - Purple */
-  --chord-as-bg: #2a153d;
-  --chord-as-text: #a78bfa;
-  --chord-as-border: #5a1d7f;
+  /* A# / Bb - Warm Purple */
+  --chord-as-bg: rgba(152, 120, 200, 0.08);
+  --chord-as-text: #a090b8;
+  --chord-as-border: rgba(152, 120, 200, 0.12);
 
-  /* B - Violet */
-  --chord-b-bg: #33153d;
-  --chord-b-text: #c084fc;
-  --chord-b-border: #6d1d7f;
+  /* B - Warm Violet */
+  --chord-b-bg: rgba(168, 112, 200, 0.08);
+  --chord-b-text: #a888b8;
+  --chord-b-border: rgba(168, 112, 200, 0.12);
 }
 
 /* ============================================
@@ -79,11 +79,11 @@
   height: 36px;
   padding: 4px 12px;
   border-radius: 6px;
-  border: 1px solid;
+  border: none;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-weight: 500;
   font-size: 0.9rem;
-  transition: border-color 0.15s, background 0.15s;
+  transition: background 0.15s;
   cursor: default;
   white-space: nowrap;
 }
@@ -95,78 +95,66 @@
 .chord-chip[data-root="C"] {
   background: var(--chord-c-bg);
   color: var(--chord-c-text);
-  border-color: var(--chord-c-border);
 }
 
 .chord-chip[data-root="C#"],
 .chord-chip[data-root="Db"] {
   background: var(--chord-cs-bg);
   color: var(--chord-cs-text);
-  border-color: var(--chord-cs-border);
 }
 
 .chord-chip[data-root="D"] {
   background: var(--chord-d-bg);
   color: var(--chord-d-text);
-  border-color: var(--chord-d-border);
 }
 
 .chord-chip[data-root="D#"],
 .chord-chip[data-root="Eb"] {
   background: var(--chord-ds-bg);
   color: var(--chord-ds-text);
-  border-color: var(--chord-ds-border);
 }
 
 .chord-chip[data-root="E"] {
   background: var(--chord-e-bg);
   color: var(--chord-e-text);
-  border-color: var(--chord-e-border);
 }
 
 .chord-chip[data-root="F"] {
   background: var(--chord-f-bg);
   color: var(--chord-f-text);
-  border-color: var(--chord-f-border);
 }
 
 .chord-chip[data-root="F#"],
 .chord-chip[data-root="Gb"] {
   background: var(--chord-fs-bg);
   color: var(--chord-fs-text);
-  border-color: var(--chord-fs-border);
 }
 
 .chord-chip[data-root="G"] {
   background: var(--chord-g-bg);
   color: var(--chord-g-text);
-  border-color: var(--chord-g-border);
 }
 
 .chord-chip[data-root="G#"],
 .chord-chip[data-root="Ab"] {
   background: var(--chord-gs-bg);
   color: var(--chord-gs-text);
-  border-color: var(--chord-gs-border);
 }
 
 .chord-chip[data-root="A"] {
   background: var(--chord-a-bg);
   color: var(--chord-a-text);
-  border-color: var(--chord-a-border);
 }
 
 .chord-chip[data-root="A#"],
 .chord-chip[data-root="Bb"] {
   background: var(--chord-as-bg);
   color: var(--chord-as-text);
-  border-color: var(--chord-as-border);
 }
 
 .chord-chip[data-root="B"] {
   background: var(--chord-b-bg);
   color: var(--chord-b-text);
-  border-color: var(--chord-b-border);
 }
 
 /* ============================================
@@ -181,16 +169,17 @@
 }
 
 .measure-bar {
-  width: 2px;
+  width: 1px;
   height: 36px;
-  background: var(--border-subtle, #2a2a5a);
+  background: var(--border-subtle, #3a2e1a);
+  opacity: 0.5;
   flex-shrink: 0;
 }
 
 .measure-number {
   font-family: var(--font-sans, 'Inter', sans-serif);
   font-size: 0.7rem;
-  color: var(--text-muted, #606080);
+  color: var(--text-muted, #706850);
   position: absolute;
   top: -14px;
 }
@@ -208,5 +197,5 @@
 
 .chord-progression .measure-bar:first-child,
 .chord-progression .measure-bar:last-child {
-  background: var(--border-default, #3a3a7a);
+  background: var(--border-default, #4a3e28);
 }

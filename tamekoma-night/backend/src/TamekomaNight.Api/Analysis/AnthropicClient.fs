@@ -97,7 +97,7 @@ module AnthropicClient =
            messages = messages |}
         |> fun body -> JsonSerializer.Serialize(body, jsonOptions)
 
-    let private callApi (httpClient: HttpClient) (apiKey: string) (model: string) (systemPrompt: string) (userMessage: string) (maxTokens: int) : Async<Result<string, string>> =
+    let callApi (httpClient: HttpClient) (apiKey: string) (model: string) (systemPrompt: string) (userMessage: string) (maxTokens: int) : Async<Result<string, string>> =
         [| {| role = "user"; content = userMessage |} |]
         |> box
         |> fun msgs -> buildPayload model systemPrompt maxTokens msgs
