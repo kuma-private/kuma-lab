@@ -563,7 +563,7 @@
 {/if}
 
 <svelte:head>
-	<title>{store.currentThread?.title || 'Thread'} - Cadenza.fm</title>
+	<title>{store.currentThread?.title || 'Thread'} - Tamekoma Night</title>
 </svelte:head>
 
 <div
@@ -708,19 +708,12 @@
 	{currentChord}
 	volume={playerVolume}
 	loop={playerLoop}
-	metronome={playerMetronome}
-	voicingMode={playerVoicingMode}
-	{oscPreset}
-	playingNotes={currentChordNotes}
 	onplay={handlePlay}
 	onpause={handlePause}
 	onstop={handleStop}
 	onseek={handleSeek}
 	onVolumeChange={handleVolumeChange}
 	onLoopChange={handleLoopChange}
-	onMetronomeChange={handleMetronomeChange}
-	onVoicingModeChange={handleVoicingModeChange}
-	onOscPresetChange={handleOscPresetChange}
 />
 
 <!-- Delete confirmation dialog -->
@@ -1040,7 +1033,7 @@
 	.error-back-btn:hover {
 		border-color: var(--accent-primary);
 		color: var(--accent-primary);
-		background: rgba(232, 168, 76, 0.08);
+		background: rgba(167, 139, 250, 0.08);
 	}
 
 	/* Swipe-to-go-back */
@@ -1062,7 +1055,7 @@
 		color: #fff;
 		font-size: 1.5rem;
 		font-weight: 700;
-		box-shadow: 0 4px 16px rgba(232, 168, 76, 0.4);
+		box-shadow: 0 4px 16px rgba(167, 139, 250, 0.4);
 		cursor: pointer;
 		z-index: 49;
 		transition: transform 0.15s, box-shadow 0.15s;
@@ -1098,7 +1091,7 @@
 		align-items: center;
 		justify-content: center;
 		z-index: 200;
-		box-shadow: 0 2px 12px rgba(232, 168, 76, 0.4);
+		box-shadow: 0 2px 12px rgba(167, 139, 250, 0.4);
 		pointer-events: none;
 	}
 </style>
