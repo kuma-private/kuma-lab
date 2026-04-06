@@ -188,9 +188,8 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div class="popover-overlay" onclick={handleOverlayClick}>
-  <div class="popover" role="dialog" aria-label="Block Popover">
+<div class="popover-overlay" role="presentation" onclick={handleOverlayClick}>
+  <div class="popover" role="dialog" aria-modal="true" aria-label="Block Popover">
     <!-- Header -->
     <div class="popover-header">
       <span class="popover-title">{headerLabel}</span>
@@ -639,7 +638,7 @@
   /* Preview box */
   .preview-box {
     background: var(--bg-surface);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-default);
     border-radius: 6px;
     min-height: 64px;
     display: flex;

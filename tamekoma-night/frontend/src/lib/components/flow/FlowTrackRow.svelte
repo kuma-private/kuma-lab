@@ -144,6 +144,7 @@
   <div
     class="context-menu"
     role="menu"
+    tabindex="-1"
     onkeydown={(e) => { if (e.key === 'Escape') closeContextMenu(); }}
     style:left="{contextMenu.x}px"
     style:top="{contextMenu.y}px"

@@ -420,7 +420,6 @@
 		<div class="canvas-area" onwheel={handleWheel}>
 			<canvas
 				bind:this={canvasEl}
-				role="img"
 				aria-label="MIDI ノートビジュアライザー"
 				style="width: {canvasWidth}px; height: {canvasHeight}px;"
 			></canvas>

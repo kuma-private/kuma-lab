@@ -66,16 +66,18 @@
 <div class="section-bar" style:grid-template-columns="repeat({totalBars}, 1fr)">
   {#each sections as section (section.id)}
     {@const color = getColor(section.name)}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="section-tag"
+      role="group"
       style:grid-column="{section.startBar} / {section.endBar + 1}"
       style:--section-color={color}
       ondblclick={(e) => handleDblClick(section, e)}
     >
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <span
         class="section-label"
+        role="textbox"
+        tabindex="0"
+        aria-label="セクション名"
         onblur={(e) => handleBlur(section, e)}
         onkeydown={(e) => handleKeyDown(section, e)}
       >{section.name}</span>
