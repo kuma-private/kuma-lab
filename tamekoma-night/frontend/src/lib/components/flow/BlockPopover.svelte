@@ -667,7 +667,7 @@
       <div class="raw-section">
         <button class="raw-toggle" onclick={() => (rawOpen = !rawOpen)}>
           <span class="raw-toggle-icon">{rawOpen ? '▾' : '▸'}</span>
-          Raw テキスト
+          パラメータ
         </button>
         {#if rawOpen}
           <textarea
