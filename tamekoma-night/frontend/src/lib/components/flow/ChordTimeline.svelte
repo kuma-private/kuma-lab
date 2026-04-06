@@ -69,7 +69,7 @@
       <div class="chord-entries">
         {#if bar}
           {#each resolveDisplay(bar.entries) as item}
-            <div class="chord-entry" style:flex={item.weight}>
+            <div class="chord-entry" style="flex-grow: {item.weight}; flex-basis: 0; min-width: 0;">
               <span class="chord-degree">{item.degree ?? ''}</span>
               <span class="chord-chip" data-root={item.root}>{item.text}</span>
             </div>
@@ -94,8 +94,9 @@
     justify-content: center;
     min-height: 44px;
     border-left: 1px solid rgba(138, 126, 104, 0.4);
-    padding: 2px 4px;
+    padding: 2px 2px;
     padding-top: 12px;
+    overflow: hidden;
   }
 
   .chord-cell:first-child {
