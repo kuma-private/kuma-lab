@@ -1,13 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createAppStore } from '$lib/stores/app.svelte';
+	import { createSongStore } from '$lib/stores/song.svelte';
+	import type { Song } from '$lib/types/song';
 	import ThreadList from '$lib/components/ThreadList.svelte';
 
 	const store = createAppStore();
+	const songStore = createSongStore();
 	let threadFilter = $state('all');
 	let authChecked = $state(false);
 	let sortMode = $state<'latest' | 'name'>('latest');
 	let templateMenuOpen = $state(false);
+	let songLoading = $state(false);
 
 	const TEMPLATES: { label: string; score: string }[] = [
 		{ label: '空のスコア', score: '' },
@@ -20,8 +24,26 @@
 		authChecked = true;
 		if (store.loggedIn) {
 			store.loadThreads();
+			songStore.loadSongs();
 		}
 	});
+
+	const sortedSongs = $derived.by(() => {
+		return [...songStore.songs].sort(
+			(a, b) => new Date(b.lastEditedAt).getTime() - new Date(a.lastEditedAt).getTime()
+		);
+	});
+
+	const handleNewSong = async () => {
+		try {
+			const song = await songStore.createSong('無題のスコア');
+			if (song) {
+				window.location.href = `/song/${song.id}`;
+			}
+		} catch {
+			// error is set in store
+		}
+	};
 
 	const formatTime = (iso: string): string => {
 		try {
@@ -76,7 +98,7 @@
 </script>
 
 <svelte:head>
-	<title>Cadenza.fm</title>
+	<title>Tamekoma Night</title>
 </svelte:head>
 
 <div class="page-bg" aria-hidden="true">
@@ -101,8 +123,8 @@
 						<circle cx="18" cy="16" r="3" />
 					</svg>
 				</div>
-				<h1 class="login-title">Cadenza.fm</h1>
-				<p class="login-sub">Arrange by text, hear it live.</p>
+				<h1 class="login-title">Tamekoma Night</h1>
+				<p class="login-sub">溜め込まないで、コードを放て。</p>
 				<p class="login-tagline">コード進行エディタ</p>
 				<a href="/auth/google" class="btn-google">
 					<svg width="18" height="18" viewBox="0 0 24 24">
@@ -117,7 +139,7 @@
 		</div>
 	{:else}
 
-		<div class="slogan">Arrange by text, hear it live.</div>
+		<div class="slogan">溜め込まないで、コードを放て。</div>
 
 		{#if recentThreads.length > 0}
 			<div class="recent-activity">
@@ -131,6 +153,56 @@
 			</div>
 		{/if}
 
+		<!-- Song section -->
+		<div class="section-bar">
+			<div class="section-left">
+				<h2 class="section-title">Song</h2>
+				{#if songStore.songs.length > 0}
+					<span class="top-count">{songStore.songs.length}</span>
+				{/if}
+			</div>
+			<button class="btn-new btn-new--song" onclick={handleNewSong}>
+				<span class="btn-new-icon">+</span>
+				新規Song
+			</button>
+		</div>
+
+		{#if songStore.loading}
+			<div class="skeleton-cards" role="status" aria-label="読み込み中">
+				{#each [1,2] as _}
+					<div class="skeleton-card">
+						<div class="skeleton-line skeleton-title"></div>
+						<div class="skeleton-line skeleton-meta"></div>
+					</div>
+				{/each}
+			</div>
+		{:else if sortedSongs.length > 0}
+			<div class="song-cards">
+				{#each sortedSongs as song}
+					<a href="/song/{song.id}" class="song-card">
+						<div class="song-card-header">
+							<span class="song-card-title">{song.title}</span>
+						</div>
+						<div class="song-card-meta">
+							<span class="song-meta-item">{song.tracks.length} tracks</span>
+							<span class="song-meta-sep">·</span>
+							<span class="song-meta-item">{song.key || 'C'}</span>
+							<span class="song-meta-sep">·</span>
+							<span class="song-meta-item">{song.bpm || 120} BPM</span>
+						</div>
+						<div class="song-card-time">{formatTime(song.lastEditedAt)}</div>
+					</a>
+				{/each}
+			</div>
+		{:else if !songStore.error}
+			<div class="empty-hint">まだSongがありません。「新規Song」で曲を作りましょう。</div>
+		{/if}
+
+		{#if songStore.error}
+			<div class="error-banner" role="alert">{songStore.error}</div>
+		{/if}
+
+		<!-- Thread section -->
 		<div class="top-bar">
 			<div class="top-left">
 				<h1 class="top-title">スコア</h1>
@@ -179,7 +251,7 @@
 		</main>
 
 		<footer class="app-footer">
-			<span>Cadenza.fm</span>
+			<span>Tamekoma Night</span>
 			<span>·</span>
 			<span>コード進行エディタ</span>
 		</footer>
@@ -193,33 +265,33 @@
 		overflow: hidden;
 		pointer-events: none;
 		z-index: -1;
-		background: linear-gradient(180deg, #040200 0%, #0a0604 40%, #120c04 70%, #1a1208 100%);
+		background: linear-gradient(180deg, #030010 0%, #0a0820 40%, #0f0c2e 70%, #1a1040 100%);
 	}
 
 	.bg-stars {
 		position: absolute;
 		inset: 0;
 		background-image:
-			radial-gradient(2px 2px at 8% 10%, #ffe8c0, transparent),
-			radial-gradient(2px 2px at 22% 6%, #fff0d0, transparent),
-			radial-gradient(3px 3px at 38% 18%, #f0c060, transparent),
-			radial-gradient(2px 2px at 52% 4%, #ffe8c0, transparent),
-			radial-gradient(2px 2px at 68% 14%, #fff0d0, transparent),
-			radial-gradient(3px 3px at 82% 9%, #e8a84c, transparent),
-			radial-gradient(1.5px 1.5px at 12% 26%, #e8dcc0, transparent),
-			radial-gradient(2px 2px at 32% 30%, #ffe8c0, transparent),
-			radial-gradient(1.5px 1.5px at 58% 24%, #e8dcc0, transparent),
-			radial-gradient(3px 3px at 78% 28%, #f0a860, transparent),
-			radial-gradient(2px 2px at 90% 20%, #fff0d0, transparent),
-			radial-gradient(4px 4px at 18% 2%, #f0c060, transparent),
-			radial-gradient(1.5px 1.5px at 45% 34%, #e8dcc0, transparent),
-			radial-gradient(2px 2px at 95% 6%, #ffe8c0, transparent),
-			radial-gradient(2px 2px at 5% 38%, #fff0d0, transparent),
-			radial-gradient(3px 3px at 65% 8%, #e8a84c, transparent),
-			radial-gradient(2px 2px at 28% 16%, #ffe8c0, transparent),
-			radial-gradient(1.5px 1.5px at 72% 36%, #e8dcc0, transparent),
-			radial-gradient(2px 2px at 48% 12%, #fff0d0, transparent),
-			radial-gradient(3px 3px at 85% 22%, #f0c060, transparent);
+			radial-gradient(2px 2px at 8% 10%, #fff, transparent),
+			radial-gradient(2px 2px at 22% 6%, #fff, transparent),
+			radial-gradient(3px 3px at 38% 18%, #c4b5fd, transparent),
+			radial-gradient(2px 2px at 52% 4%, #fff, transparent),
+			radial-gradient(2px 2px at 68% 14%, #fff, transparent),
+			radial-gradient(3px 3px at 82% 9%, #93c5fd, transparent),
+			radial-gradient(1.5px 1.5px at 12% 26%, #e0e0f0, transparent),
+			radial-gradient(2px 2px at 32% 30%, #fff, transparent),
+			radial-gradient(1.5px 1.5px at 58% 24%, #e0e0f0, transparent),
+			radial-gradient(3px 3px at 78% 28%, #f9a8d4, transparent),
+			radial-gradient(2px 2px at 90% 20%, #fff, transparent),
+			radial-gradient(4px 4px at 18% 2%, #c4b5fd, transparent),
+			radial-gradient(1.5px 1.5px at 45% 34%, #e0e0f0, transparent),
+			radial-gradient(2px 2px at 95% 6%, #fff, transparent),
+			radial-gradient(2px 2px at 5% 38%, #fff, transparent),
+			radial-gradient(3px 3px at 65% 8%, #93c5fd, transparent),
+			radial-gradient(2px 2px at 28% 16%, #fff, transparent),
+			radial-gradient(1.5px 1.5px at 72% 36%, #e0e0f0, transparent),
+			radial-gradient(2px 2px at 48% 12%, #fff, transparent),
+			radial-gradient(3px 3px at 85% 22%, #c4b5fd, transparent);
 		animation: twinkle 3s ease-in-out infinite alternate;
 	}
 
@@ -234,7 +306,7 @@
 		left: 0;
 		right: 0;
 		height: 35%;
-		background: linear-gradient(180deg, transparent 0%, rgba(232,168,76,0.03) 50%, rgba(240,192,96,0.06) 100%);
+		background: linear-gradient(180deg, transparent 0%, rgba(167,139,250,0.03) 50%, rgba(139,92,246,0.06) 100%);
 	}
 
 	.orb {
@@ -302,7 +374,7 @@
 		align-items: center;
 		gap: var(--space-md);
 		padding: var(--space-2xl) var(--space-xl);
-		background: rgba(26, 20, 8, 0.6);
+		background: rgba(20, 20, 50, 0.6);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 		backdrop-filter: blur(12px);
@@ -388,7 +460,7 @@
 	.recent-activity {
 		margin-bottom: var(--space-lg);
 		padding: var(--space-md);
-		background: rgba(232, 168, 76, 0.04);
+		background: rgba(167, 139, 250, 0.04);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 	}
@@ -418,7 +490,7 @@
 	}
 
 	.recent-item:hover {
-		background: rgba(232, 168, 76, 0.08);
+		background: rgba(167, 139, 250, 0.08);
 	}
 
 	.recent-item:hover .recent-name {
@@ -469,7 +541,7 @@
 	.sort-pill--active {
 		color: var(--accent-primary);
 		border-color: var(--accent-primary);
-		background: rgba(232, 168, 76, 0.08);
+		background: rgba(167, 139, 250, 0.08);
 	}
 
 	.top-bar {
@@ -499,7 +571,7 @@
 		font-family: var(--font-mono);
 		font-size: 0.7rem;
 		color: var(--accent-primary);
-		background: rgba(232, 168, 76, 0.12);
+		background: rgba(167, 139, 250, 0.12);
 		padding: 2px 8px;
 		border-radius: 10px;
 	}
@@ -521,9 +593,9 @@
 	}
 
 	.btn-new:hover {
-		background: #d09440;
+		background: #9374e8;
 		transform: translateY(-1px);
-		box-shadow: 0 4px 16px rgba(232, 168, 76, 0.35);
+		box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
 	}
 
 	.btn-new:focus-visible {
@@ -649,12 +721,108 @@
 	}
 
 	.template-option:hover {
-		background: rgba(232, 168, 76, 0.1);
+		background: rgba(167, 139, 250, 0.1);
 		color: var(--accent-primary);
 	}
 
 	.template-option:not(:last-child) {
 		border-bottom: 1px solid var(--border-subtle);
+	}
+
+	/* Song section */
+	.section-bar {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--space-md) 0 var(--space-sm);
+	}
+
+	.section-left {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+	}
+
+	.section-title {
+		font-family: var(--font-display);
+		font-size: 1.1rem;
+		font-weight: 700;
+		color: var(--text-primary);
+		margin: 0;
+	}
+
+	.btn-new--song {
+		font-size: 0.78rem;
+		padding: 6px 14px;
+	}
+
+	.song-cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+		gap: var(--space-md);
+		margin-bottom: var(--space-xl);
+	}
+
+	.song-card {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+		padding: var(--space-md);
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
+		text-decoration: none;
+		color: inherit;
+		transition: all 0.15s;
+	}
+
+	.song-card:hover {
+		border-color: var(--accent-primary);
+		background: var(--bg-elevated);
+		transform: translateY(-2px);
+		box-shadow: var(--shadow-card);
+	}
+
+	.song-card-header {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+	}
+
+	.song-card-title {
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: var(--text-primary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.song-card-meta {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		font-size: 0.72rem;
+		color: var(--text-muted);
+	}
+
+	.song-meta-sep {
+		opacity: 0.4;
+	}
+
+	.song-card-time {
+		font-size: 0.68rem;
+		color: var(--text-muted);
+		opacity: 0.6;
+	}
+
+	.empty-hint {
+		font-size: 0.8rem;
+		color: var(--text-muted);
+		text-align: center;
+		padding: var(--space-lg) 0;
+		opacity: 0.6;
+		margin-bottom: var(--space-lg);
 	}
 
 	@media (max-width: 600px) {
