@@ -12,11 +12,11 @@
   const TICKS_PER_QUARTER = 480;
   const DEFAULT_DURATION = TICKS_PER_QUARTER; // quarter note
   const NOTE_NAMES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
-  const GRID_COLOR = 'rgba(255,255,255,0.06)';
+  const GRID_COLOR = 'rgba(232,168,76,0.08)';
   const NOTE_COLOR = '#f59e0b';       // amber-500
   const NOTE_HOVER = '#fbbf24';       // amber-400
   const NOTE_SELECTED = '#d97706';    // amber-600
-  const BG_COLOR = '#1a1a2e';
+  const BG_COLOR = '#1a1408'; // matches --bg-surface (Warm Amber)
   const PITCH_LABEL_WIDTH = 32;
   const RESIZE_HANDLE_WIDTH = 6;
   const MIN_DURATION = 120; // 16th note
@@ -111,7 +111,7 @@
     }
 
     // Pitch labels
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillStyle = 'rgba(236,228,212,0.4)'; // --text-primary warm tint
     ctx.font = '9px monospace';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
@@ -144,7 +144,7 @@
 
         // Resize handle indicator
         if (i === _hovered || i === _selected) {
-          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.fillStyle = 'rgba(236,228,212,0.3)';
           ctx.fillRect(x + noteW - RESIZE_HANDLE_WIDTH, y, RESIZE_HANDLE_WIDTH - 1, noteH);
         }
       }
@@ -406,7 +406,7 @@
 
   .mini-piano-roll:focus-within {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+    box-shadow: 0 0 0 2px rgba(232, 168, 76, 0.15);
   }
 
   canvas {

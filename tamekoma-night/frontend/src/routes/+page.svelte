@@ -316,8 +316,8 @@
 	.btn-google {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 12px 32px;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-xl);
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-md);
 		background: #fff;
@@ -349,15 +349,15 @@
 		font-size: 0.7rem;
 		color: var(--accent-primary);
 		background: rgba(232, 168, 76, 0.12);
-		padding: 2px 8px;
-		border-radius: 10px;
+		padding: 2px var(--space-sm);
+		border-radius: var(--radius-full);
 	}
 
 	.btn-new {
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		padding: 8px 18px;
+		gap: var(--space-xs);
+		padding: var(--space-sm) var(--space-md);
 		border: none;
 		border-radius: var(--radius-md);
 		background: var(--accent-primary);
@@ -479,7 +479,7 @@
 
 	.btn-new--song {
 		font-size: 0.78rem;
-		padding: 6px 14px;
+		padding: var(--space-xs) var(--space-sm);
 	}
 
 	.song-cards {

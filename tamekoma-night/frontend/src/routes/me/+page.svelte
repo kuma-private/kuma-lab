@@ -228,8 +228,8 @@
 		font-size: 0.7rem;
 		color: var(--accent-primary);
 		background: rgba(232, 168, 76, 0.12);
-		padding: 2px 8px;
-		border-radius: 10px;
+		padding: 2px var(--space-sm);
+		border-radius: var(--radius-full);
 	}
 
 	/* Song cards */

@@ -562,7 +562,7 @@
 
   .flow-grid {
     display: grid;
-    grid-template-columns: 72px 1fr;
+    grid-template-columns: 100px 1fr;
     gap: 0;
     min-width: max-content;
   }
@@ -581,8 +581,14 @@
   }
 
   .track-label {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
     color: var(--text-secondary);
     font-weight: 600;
+    min-height: 56px;
+    padding: var(--space-xs) var(--space-sm);
   }
 
   .track-instrument-select {
@@ -593,16 +599,20 @@
     border-radius: 4px;
     color: var(--text-secondary);
     font-family: var(--font-sans);
-    font-size: 0.68rem;
+    font-size: 0.7rem;
     font-weight: 600;
     padding: 2px 4px;
     cursor: pointer;
     outline: none;
     width: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23888'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    padding-right: 14px;
   }
   .track-instrument-select:hover {
     border-color: var(--border-default);
-    background: var(--bg-elevated);
+    background-color: var(--bg-elevated);
   }
   .track-instrument-select:focus {
     border-color: var(--accent-primary);
@@ -614,12 +624,12 @@
   }
 
   .track-ms-btn {
-    padding: 1px 4px;
+    padding: 2px 6px;
     border: 1px solid var(--border-subtle);
     border-radius: 3px;
     background: transparent;
     color: var(--text-muted);
-    font-size: 0.55rem;
+    font-size: 0.6rem;
     font-weight: 700;
     cursor: pointer;
     line-height: 1;
@@ -635,7 +645,7 @@
 
   .track-volume {
     width: 100%;
-    height: 3px;
+    height: 4px;
     -webkit-appearance: none;
     appearance: none;
     background: var(--bg-elevated);

@@ -26,15 +26,15 @@
 	const TRACK_NAME_WIDTH = 50;
 
 	const TRACK_COLORS: Record<string, string> = {
-		piano: '#b8a0f0',
+		piano: '#e8a84c',
 		bass: '#7cb882',
-		drums: '#e8a84c',
+		drums: '#d09440',
 		strings: '#6ea8d0',
 		guitar: '#f0c060',
 		organ: '#e06050',
 	};
 
-	const DEFAULT_COLOR = '#9090b0';
+	const DEFAULT_COLOR = '#8a7e68';
 
 	// ── State ────────────────────────────────────────────
 	let containerEl: HTMLDivElement | undefined = $state();
@@ -99,7 +99,7 @@
 		ctx.scale(dpr, dpr);
 
 		// Background
-		ctx.fillStyle = '#06060f';
+		ctx.fillStyle = '#080604';
 		ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
 		ctx.save();
@@ -118,7 +118,7 @@
 		const contentHeight = canvasHeight;
 
 		// Beat lines
-		ctx.strokeStyle = 'rgba(58, 58, 122, 0.4)';
+		ctx.strokeStyle = 'rgba(58, 46, 26, 0.5)';
 		ctx.lineWidth = 0.5;
 		for (let tick = 0; tick <= totalTicks; tick += ticksPerBeat) {
 			if (tick % ticksPerBar === 0) continue;
@@ -131,7 +131,7 @@
 		}
 
 		// Bar lines
-		ctx.strokeStyle = 'rgba(90, 90, 170, 0.7)';
+		ctx.strokeStyle = 'rgba(106, 90, 58, 0.7)';
 		ctx.lineWidth = 1;
 		for (let tick = 0; tick <= totalTicks; tick += ticksPerBar) {
 			const x = tickToX(tick);
@@ -151,7 +151,7 @@
 			const color = getTrackColor(track.instrument);
 
 			// Track row separator
-			ctx.strokeStyle = 'rgba(42, 42, 90, 0.4)';
+			ctx.strokeStyle = 'rgba(58, 46, 26, 0.4)';
 			ctx.lineWidth = 0.5;
 			ctx.beginPath();
 			ctx.moveTo(0, yBase + TRACK_HEIGHT);
@@ -214,7 +214,7 @@
 		const x = tickToX(cursorTick);
 
 		// Glow
-		ctx.strokeStyle = 'rgba(239, 68, 68, 0.2)';
+		ctx.strokeStyle = 'rgba(232, 168, 76, 0.2)';
 		ctx.lineWidth = 6;
 		ctx.beginPath();
 		ctx.moveTo(x, 0);
@@ -222,7 +222,7 @@
 		ctx.stroke();
 
 		// Main line
-		ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)';
+		ctx.strokeStyle = 'rgba(232, 168, 76, 0.85)';
 		ctx.lineWidth = 2;
 		ctx.beginPath();
 		ctx.moveTo(x, 0);
@@ -357,7 +357,7 @@
 		display: flex;
 		align-items: center;
 		padding: 0 6px;
-		border-bottom: 1px solid rgba(42, 42, 90, 0.3);
+		border-bottom: 1px solid var(--border-subtle);
 	}
 
 	.track-name.empty {

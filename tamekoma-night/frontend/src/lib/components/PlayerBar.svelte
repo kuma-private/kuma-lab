@@ -270,8 +270,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 28px;
-		height: 28px;
+		width: 36px;
+		height: 36px;
 		border: none;
 		border-radius: var(--radius-full);
 		background: var(--bg-elevated);
@@ -290,14 +290,14 @@
 	}
 
 	.player-btn--play {
-		width: 32px;
-		height: 32px;
+		width: 40px;
+		height: 40px;
 		background: var(--accent-primary);
 		color: #fff;
 	}
 
 	.player-btn--play:hover {
-		background: #d09440;
+		background: var(--accent-warm);
 	}
 
 	.player-btn--loading {
@@ -312,7 +312,7 @@
 
 	.player-btn--active {
 		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.2);
+		background: rgba(232, 168, 76, 0.2);
 	}
 
 	/* Current chord */
@@ -454,16 +454,6 @@
 			transform: none;
 			width: auto;
 			border-radius: var(--radius-md);
-		}
-
-		.player-btn {
-			width: 36px;
-			height: 36px;
-		}
-
-		.player-btn--play {
-			width: 40px;
-			height: 40px;
 		}
 
 		.player-spacer {

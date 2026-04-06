@@ -84,7 +84,7 @@
   .chord-timeline {
     display: grid;
     gap: 0;
-    padding: 0;
+    padding: 0 2px;
   }
 
   .chord-cell {

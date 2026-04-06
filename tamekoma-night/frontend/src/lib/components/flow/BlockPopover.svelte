@@ -73,7 +73,8 @@
 
   // --- Derived ---
   let headerLabel = $derived.by(() => {
-    const bars = (block.startBar !== undefined && block.endBar !== undefined) ? ` (bars ${block.startBar + 1}–${block.endBar})` : '';
+    const hasBars = block.startBar !== undefined && block.endBar !== undefined && block.endBar > block.startBar;
+    const bars = hasBars ? ` (bars ${block.startBar + 1}–${block.endBar})` : '';
     return `${trackName}${sectionName ? ` — ${sectionName}` : ''}${bars}`;
   });
 
@@ -525,11 +526,11 @@
 
   /* Body */
   .popover-body {
-    padding: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: var(--space-md);
+    gap: var(--space-sm);
   }
 
   /* Field */
@@ -692,13 +693,13 @@
 
   /* Snap labels under slider */
   .snap-labels {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
     padding: 0 34px;
   }
 
   .snap-labels--6 {
-    padding: 0 34px;
+    grid-template-columns: repeat(6, 1fr);
   }
 
   .snap-label {
@@ -763,14 +764,16 @@
 
   /* Preview box */
   .preview-box {
-    background: var(--bg-surface);
+    background: var(--bg-base);
     border: 1px solid var(--border-default);
-    border-radius: 6px;
-    min-height: 64px;
+    border-radius: var(--radius-sm);
+    min-height: 56px;
+    max-height: 120px;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: var(--space-sm);
+    overflow: hidden;
   }
 
   .preview-placeholder {

@@ -147,7 +147,7 @@
 	</main>
 
 	<!-- PlayerBar -->
-	<div class="player-dock">
+	<div class="player-anchor">
 		<PlayerBar
 			playerState={playerState}
 			currentTime={currentTime}
@@ -336,13 +336,10 @@
 		to { transform: rotate(360deg); }
 	}
 
-	/* PlayerBar dock */
-	.player-dock {
-		position: fixed;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		z-index: var(--z-player);
+	/* PlayerBar anchor — PlayerBar itself is position:fixed,
+	   this wrapper just provides a DOM location for it. */
+	.player-anchor {
+		display: contents;
 	}
 
 	/* Mobile */
