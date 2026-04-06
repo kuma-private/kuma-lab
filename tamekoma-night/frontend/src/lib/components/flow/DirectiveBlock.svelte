@@ -2,15 +2,15 @@
   import type { DirectiveBlock } from '$lib/types/song';
 
   const TRACK_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-    piano:   { bg: 'rgba(184,160,240,0.12)', border: 'rgba(184,160,240,0.25)', text: '#b8a0f0' },
-    bass:    { bg: 'rgba(124,184,130,0.1)',  border: 'rgba(124,184,130,0.25)', text: '#7cb882' },
-    drums:   { bg: 'rgba(232,168,76,0.08)',  border: 'rgba(232,168,76,0.25)',  text: '#e8a84c' },
-    strings: { bg: 'rgba(110,168,208,0.1)',  border: 'rgba(110,168,208,0.25)', text: '#6ea8d0' },
-    guitar:  { bg: 'rgba(240,192,96,0.1)',   border: 'rgba(240,192,96,0.25)',  text: '#f0c060' },
-    organ:   { bg: 'rgba(224,96,80,0.08)',   border: 'rgba(224,96,80,0.25)',   text: '#e06050' },
+    piano:   { bg: 'rgba(184,160,240,0.10)', border: 'rgba(184,160,240,0.15)', text: '#a898c8' },
+    bass:    { bg: 'rgba(124,184,130,0.08)', border: 'rgba(124,184,130,0.12)', text: '#88b090' },
+    drums:   { bg: 'rgba(232,168,76,0.10)',  border: 'rgba(232,168,76,0.15)',  text: '#c8a060' },
+    strings: { bg: 'rgba(110,168,208,0.08)', border: 'rgba(110,168,208,0.12)', text: '#80a0b8' },
+    guitar:  { bg: 'rgba(240,192,96,0.08)',  border: 'rgba(240,192,96,0.12)',  text: '#c0a860' },
+    organ:   { bg: 'rgba(224,96,80,0.08)',   border: 'rgba(224,96,80,0.12)',   text: '#c08878' },
   };
 
-  const DEFAULT_COLOR = { bg: 'rgba(160,160,180,0.08)', border: 'rgba(160,160,180,0.25)', text: '#a0a0b4' };
+  const DEFAULT_COLOR = { bg: 'rgba(160,160,180,0.06)', border: 'rgba(160,160,180,0.12)', text: '#908888' };
 
   let {
     block,
@@ -26,11 +26,13 @@
   let summary = $derived(summarize(block.directives));
 
   function summarize(directives: string): string {
-    if (!directives.trim()) return '(empty)';
+    if (!directives.trim()) return '';
     const lines = directives.trim().split('\n').map(l => l.trim()).filter(Boolean);
     if (lines.length <= 2) return lines.join(' / ');
     return lines.slice(0, 2).join(' / ') + '...';
   }
+
+  let isEmpty = $derived(!block.directives.trim());
 
   function handleMouseDown(e: MouseEvent) {
     // Right-edge resize detection is handled by parent (FlowTrackRow)
@@ -44,6 +46,7 @@
 
 <div
   class="directive-block"
+  class:directive-block--empty={isEmpty}
   role="button"
   tabindex="0"
   style:background={colors.bg}
@@ -53,7 +56,11 @@
   onmousedown={handleMouseDown}
   onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
 >
-  <span class="block-summary">{summary}</span>
+  {#if isEmpty}
+    <span class="block-summary block-summary--empty">empty</span>
+  {:else}
+    <span class="block-summary">{summary}</span>
+  {/if}
   <div class="resize-handle" style:background={colors.border}></div>
 </div>
 
@@ -63,13 +70,18 @@
     display: flex;
     align-items: center;
     border: 1px solid;
-    border-radius: var(--radius-sm);
-    padding: 2px 6px;
+    border-radius: 6px;
+    padding: 2px 8px;
     min-height: 28px;
     cursor: pointer;
     overflow: hidden;
     transition: filter 0.15s;
     user-select: none;
+  }
+
+  .directive-block--empty {
+    border-style: dashed;
+    opacity: 0.7;
   }
 
   .directive-block:hover {
@@ -83,6 +95,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
+  }
+
+  .block-summary--empty {
+    font-style: italic;
+    color: var(--text-muted);
+    opacity: 0.6;
   }
 
   .resize-handle {

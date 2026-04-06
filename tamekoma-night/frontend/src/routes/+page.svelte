@@ -271,7 +271,7 @@
 		align-items: center;
 		gap: var(--space-md);
 		padding: var(--space-2xl) var(--space-xl);
-		background: rgba(20, 20, 50, 0.6);
+		background: rgba(26, 20, 8, 0.8);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 		backdrop-filter: blur(12px);
@@ -348,7 +348,7 @@
 		font-family: var(--font-mono);
 		font-size: 0.7rem;
 		color: var(--accent-primary);
-		background: rgba(167, 139, 250, 0.12);
+		background: rgba(232, 168, 76, 0.12);
 		padding: 2px 8px;
 		border-radius: 10px;
 	}

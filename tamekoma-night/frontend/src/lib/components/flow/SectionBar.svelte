@@ -2,15 +2,15 @@
   import type { Section } from '$lib/types/song';
 
   const SECTION_COLORS: Record<string, string> = {
-    A: '#a78bfa',
-    B: '#60a5fa',
-    C: '#34d399',
-    D: '#fbbf24',
-    Chorus: '#f87171',
-    Verse: '#818cf8',
-    Bridge: '#2dd4bf',
-    Intro: '#9ca3af',
-    Outro: '#9ca3af',
+    A: '#c8a070',
+    B: '#90a8b8',
+    C: '#90b890',
+    D: '#c8b060',
+    Chorus: '#c88878',
+    Verse: '#a098b0',
+    Bridge: '#80b0a0',
+    Intro: '#908880',
+    Outro: '#908880',
   };
 
   let {
@@ -96,22 +96,23 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: color-mix(in srgb, var(--section-color) 12%, transparent);
-    border: 1px solid color-mix(in srgb, var(--section-color) 30%, transparent);
-    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--section-color) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--section-color) 18%, transparent);
+    border-radius: 6px;
     padding: 2px 8px;
     min-height: 24px;
   }
 
   .section-label {
     font-family: var(--font-display);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--section-color);
     white-space: nowrap;
     outline: none;
     cursor: default;
     user-select: none;
+    letter-spacing: 0.02em;
   }
 
   .section-tag :global(.section-label[contenteditable="true"]) {

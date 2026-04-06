@@ -164,7 +164,7 @@
   }
 
   .grid-cell {
-    border-right: 1px solid var(--border-subtle);
+    border-right: 1px solid rgba(58, 46, 26, 0.3);
     min-height: 32px;
     grid-row: 1;
   }
@@ -174,7 +174,7 @@
   }
 
   .grid-cell--odd {
-    background: rgba(255, 255, 255, 0.01);
+    background: rgba(255, 255, 255, 0.008);
   }
 
   .block-wrapper {

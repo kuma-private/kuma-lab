@@ -450,17 +450,17 @@
     font-size: 0.72rem;
     font-weight: 600;
     font-family: var(--font-sans);
-    border: 1px solid var(--accent-primary);
-    border-radius: var(--radius-sm);
-    background: transparent;
+    border: 1px solid rgba(232, 168, 76, 0.3);
+    border-radius: 6px;
+    background: rgba(232, 168, 76, 0.08);
     color: var(--accent-primary);
     cursor: pointer;
     transition: all 0.15s;
   }
 
   .btn-arrange:hover {
-    background: var(--accent-primary);
-    color: #fff;
+    background: rgba(232, 168, 76, 0.18);
+    border-color: rgba(232, 168, 76, 0.5);
   }
 
   /* ---- Arrange bar ---- */
@@ -485,7 +485,7 @@
 
   .arrange-input:focus {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+    box-shadow: 0 0 0 2px rgba(232, 168, 76, 0.15);
     outline: none;
   }
 
@@ -594,6 +594,7 @@
   .row-separator {
     height: 1px;
     background: var(--border-subtle);
+    opacity: 0.5;
   }
 
   .add-track-btn {
@@ -609,8 +610,8 @@
   }
 
   .add-track-btn:hover {
-    color: var(--accent-primary);
-    border-color: var(--accent-primary);
+    color: var(--accent-warm);
+    border-color: rgba(232, 168, 76, 0.4);
   }
 
   /* ---- Visualizer container ---- */

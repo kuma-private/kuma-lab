@@ -23,15 +23,15 @@
 	}: Props = $props();
 
 	const TRACK_COLORS: Record<string, string> = {
-		piano: '#b8a0f0',
-		bass: '#7cb882',
-		drums: '#e8a84c',
-		strings: '#6ea8d0',
-		guitar: '#f0c060',
-		organ: '#e06050',
+		piano: '#a898c8',
+		bass: '#88b090',
+		drums: '#c8a060',
+		strings: '#80a0b8',
+		guitar: '#c0a860',
+		organ: '#c08878',
 	};
 
-	const DEFAULT_COLOR = '#9090b0';
+	const DEFAULT_COLOR = '#908888';
 
 	function getColor(instrument: string): string {
 		return TRACK_COLORS[instrument.toLowerCase()] ?? DEFAULT_COLOR;
@@ -128,7 +128,7 @@
 		align-items: center;
 		width: 80px;
 		padding: var(--space-sm);
-		background: var(--bg-card);
+		background: var(--bg-elevated);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-md);
 		gap: var(--space-xs);
@@ -174,30 +174,30 @@
 	.fader::-webkit-slider-thumb {
 		-webkit-appearance: none;
 		appearance: none;
-		width: 18px;
+		width: 20px;
 		height: 10px;
 		border-radius: 3px;
-		background: var(--text-secondary);
-		border: 1px solid var(--border-default);
+		background: var(--text-muted);
+		border: 1px solid var(--border-subtle);
 		cursor: pointer;
 		transition: background 0.15s;
 	}
 
 	.fader::-moz-range-thumb {
-		width: 18px;
+		width: 20px;
 		height: 10px;
 		border-radius: 3px;
-		background: var(--text-secondary);
-		border: 1px solid var(--border-default);
+		background: var(--text-muted);
+		border: 1px solid var(--border-subtle);
 		cursor: pointer;
 	}
 
 	.fader:hover::-webkit-slider-thumb {
-		background: var(--accent-primary);
+		background: var(--accent-warm);
 	}
 
 	.fader:hover::-moz-range-thumb {
-		background: var(--accent-primary);
+		background: var(--accent-warm);
 	}
 
 	.btn-row {

@@ -566,7 +566,7 @@
 
   .ai-input:focus {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+    box-shadow: 0 0 0 2px rgba(232, 168, 76, 0.15);
     outline: none;
   }
 
@@ -640,7 +640,7 @@
   }
 
   .chip--active:hover {
-    background: #9374e8;
+    background: #d09440;
     color: #fff;
   }
 
@@ -740,7 +740,7 @@
     background: var(--accent-primary);
     cursor: pointer;
     border: 2px solid var(--bg-surface);
-    box-shadow: 0 0 4px rgba(167, 139, 250, 0.4);
+    box-shadow: 0 0 4px rgba(232, 168, 76, 0.35);
   }
 
   .slider::-moz-range-thumb {
@@ -750,7 +750,7 @@
     background: var(--accent-primary);
     cursor: pointer;
     border: 2px solid var(--bg-surface);
-    box-shadow: 0 0 4px rgba(167, 139, 250, 0.4);
+    box-shadow: 0 0 4px rgba(232, 168, 76, 0.35);
   }
 
   .slider-value {
@@ -820,7 +820,7 @@
 
   .raw-textarea:focus {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+    box-shadow: 0 0 0 2px rgba(232, 168, 76, 0.15);
     outline: none;
   }
 

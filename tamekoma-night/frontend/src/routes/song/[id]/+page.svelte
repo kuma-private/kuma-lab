@@ -262,6 +262,7 @@
 		padding: 2px 6px;
 		max-width: 300px;
 		outline: none;
+		box-shadow: 0 0 0 2px rgba(232, 168, 76, 0.15);
 	}
 
 	.meta-pill {

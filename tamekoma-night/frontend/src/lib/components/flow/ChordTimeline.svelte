@@ -25,7 +25,7 @@
       case 'chord': return entry.chord.raw;
       case 'repeat': return '%';
       case 'rest': return '_';
-      case 'sustain': return '=';
+      case 'sustain': return '\u2500';
     }
   }
 </script>
@@ -65,7 +65,7 @@
     align-items: center;
     justify-content: center;
     min-height: 36px;
-    border-right: 1px solid var(--border-subtle);
+    border-right: 1px solid rgba(58, 46, 26, 0.4);
     padding: 2px 3px;
   }
 
@@ -77,8 +77,9 @@
     position: absolute;
     top: 1px;
     left: 3px;
-    font-size: 0.6rem;
+    font-size: 0.55rem;
     color: var(--text-muted);
+    opacity: 0.5;
     font-family: var(--font-sans);
   }
 
@@ -95,9 +96,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 1px 5px;
-    border-radius: 3px;
-    border: 1px solid;
+    padding: 2px 6px;
+    border-radius: 6px;
+    border: none;
     font-family: var(--font-mono);
     font-weight: 500;
     font-size: 0.68rem;
@@ -109,5 +110,6 @@
     font-family: var(--font-mono);
     font-size: 0.68rem;
     color: var(--text-muted);
+    opacity: 0.5;
   }
 </style>
