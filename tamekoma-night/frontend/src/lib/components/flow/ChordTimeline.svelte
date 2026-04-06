@@ -30,7 +30,7 @@
   }
 </script>
 
-<div class="chord-timeline" style:grid-template-columns="repeat({totalBars}, 1fr)">
+<div class="chord-timeline" style:grid-template-columns="repeat({totalBars}, minmax(0, 1fr))">
   {#each Array.from({ length: totalBars }, (_, i) => i + 1) as barNum}
     {@const bar = getBar(barNum)}
     <div class="chord-cell">
@@ -62,15 +62,15 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     min-height: 36px;
-    border-right: 1px solid rgba(58, 46, 26, 0.4);
+    border-left: 1px solid rgba(138, 126, 104, 0.4);
     padding: 2px 3px;
   }
 
-  .chord-cell:last-child {
-    border-right: none;
+  .chord-cell:first-child {
+    border-left: none;
   }
 
   .bar-number {
@@ -88,7 +88,7 @@
     align-items: center;
     gap: 3px;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: flex-start;
   }
 
   /* Compact chord chip for timeline (smaller than the standalone ChordChip) */

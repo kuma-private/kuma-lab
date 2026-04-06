@@ -74,7 +74,7 @@
   // --- Derived ---
   let headerLabel = $derived.by(() => {
     const bars = (block.startBar !== undefined && block.endBar !== undefined) ? ` (bars ${block.startBar + 1}–${block.endBar})` : '';
-    return `${trackName} — ${sectionName}${bars}`;
+    return `${trackName}${sectionName ? ` — ${sectionName}` : ''}${bars}`;
   });
 
   let snappedVoicing = $derived.by(() => snapToNearest(voicingSlider, VOICING_SNAPS));
@@ -482,7 +482,7 @@
     box-shadow: var(--shadow-modal);
     width: 400px;
     max-width: 95vw;
-    max-height: 85vh;
+    max-height: 80vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -540,11 +540,11 @@
   }
 
   .field-label {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 500;
     color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    text-transform: none;
+    letter-spacing: 0;
   }
 
   /* AI input row */
@@ -655,15 +655,15 @@
     content: '';
     flex: 1;
     height: 1px;
-    background: var(--border-subtle);
+    background: rgba(138, 126, 104, 0.15);
   }
 
   .section-label {
-    font-size: 0.7rem;
-    font-weight: 600;
+    font-size: 0.65rem;
+    font-weight: 500;
     color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    text-transform: none;
+    letter-spacing: 0.02em;
     white-space: nowrap;
   }
 
@@ -734,23 +734,23 @@
   .slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: var(--accent-primary);
     cursor: pointer;
     border: 2px solid var(--bg-surface);
-    box-shadow: 0 0 4px rgba(232, 168, 76, 0.35);
+    box-shadow: 0 0 3px rgba(232, 168, 76, 0.3);
   }
 
   .slider::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: var(--accent-primary);
     cursor: pointer;
     border: 2px solid var(--bg-surface);
-    box-shadow: 0 0 4px rgba(232, 168, 76, 0.35);
+    box-shadow: 0 0 3px rgba(232, 168, 76, 0.3);
   }
 
   .slider-value {
@@ -846,6 +846,9 @@
     border-top: 1px solid var(--border-subtle);
     background: var(--bg-elevated);
     gap: var(--space-sm);
+    position: sticky;
+    bottom: 0;
+    flex-shrink: 0;
   }
 
   .footer-left,

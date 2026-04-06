@@ -111,7 +111,7 @@
   class="track-grid"
   role="gridcell"
   tabindex="0"
-  style:grid-template-columns="repeat({totalBars}, 1fr)"
+  style:grid-template-columns="repeat({totalBars}, minmax(0, 1fr))"
   ondblclick={handleGridDblClick}
   oncontextmenu={handleContextMenu}
 >
@@ -164,13 +164,13 @@
   }
 
   .grid-cell {
-    border-right: 1px solid rgba(58, 46, 26, 0.3);
+    border-left: 1px solid rgba(138, 126, 104, 0.4);
     min-height: 32px;
     grid-row: 1;
   }
 
-  .grid-cell:last-child {
-    border-right: none;
+  .grid-cell:first-child {
+    border-left: none;
   }
 
   .grid-cell--odd {

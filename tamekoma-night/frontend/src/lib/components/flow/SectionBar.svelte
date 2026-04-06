@@ -63,7 +63,7 @@
   }
 </script>
 
-<div class="section-bar" style:grid-template-columns="repeat({totalBars}, 1fr)">
+<div class="section-bar" style:grid-template-columns="repeat({totalBars}, minmax(0, 1fr))">
   {#each sections as section (section.id)}
     {@const color = getColor(section.name)}
     <div
