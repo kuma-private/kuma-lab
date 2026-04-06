@@ -9,11 +9,6 @@
 		bpm?: number;
 		scrollX?: number;
 		onScrollXChange?: (x: number) => void;
-		isOpen?: boolean;
-		onTrackMute?: (trackId: string, mute: boolean) => void;
-		onTrackSolo?: (trackId: string, solo: boolean) => void;
-		onTrackVolume?: (trackId: string, db: number) => void;
-		onClose?: () => void;
 	}
 
 	let {
@@ -23,21 +18,12 @@
 		bpm = 120,
 		scrollX = 0,
 		onScrollXChange,
-		isOpen = true,
-		onTrackMute,
-		onTrackSolo,
-		onTrackVolume,
-		onClose,
 	}: Props = $props();
 
 	// ── Constants ────────────────────────────────────────
 	const TICKS_PER_QUARTER = 480;
 	const TRACK_HEIGHT = 44;
 	const TRACK_NAME_WIDTH = 50;
-	const MIXER_WIDTH = 100;
-	const HEADER_HEIGHT = 32;
-	const MIN_HEIGHT = 150;
-	const MAX_HEIGHT = 500;
 
 	const TRACK_COLORS: Record<string, string> = {
 		piano: '#b8a0f0',
@@ -54,20 +40,9 @@
 	let containerEl: HTMLDivElement | undefined = $state();
 	let canvasEl: HTMLCanvasElement | undefined = $state();
 	let canvasWidth = $state(600);
-	let canvasHeight = $state(200);
-	let panelHeight = $state(200);
+	let canvasHeight = $state(400);
 	let localScrollX = $state(0);
 	let pixelsPerTick = $state(200 / 1920);
-
-	// Per-track mixer state
-	let mutedTracks = $state<Set<string>>(new Set());
-	let soloTracks = $state<Set<string>>(new Set());
-	let trackVolumes = $state<Map<string, number>>(new Map());
-
-	// Resize state
-	let isResizing = $state(false);
-	let resizeStartY = 0;
-	let resizeStartHeight = 0;
 
 	// ── Derived ──────────────────────────────────────────
 	let trackEntries = $derived([...trackNotes.entries()]);
@@ -101,8 +76,6 @@
 		void canvasWidth;
 		void canvasHeight;
 		void currentTime;
-		void mutedTracks;
-		void soloTracks;
 		drawCanvas();
 	});
 
@@ -201,7 +174,7 @@
 			const padding = 4; // px padding top and bottom within track
 
 			// Draw notes
-			const alpha = (mutedTracks.has(trackId) && !soloTracks.has(trackId)) ? 0.15 : 0.85;
+			const alpha = 0.85;
 
 			for (const note of track.notes) {
 				const x = tickToX(note.startTick);
@@ -314,67 +287,14 @@
 		}
 	});
 
-	// ── Mixer handlers ──────────────────────────────────
-	function toggleMute(trackId: string) {
-		const newSet = new Set(mutedTracks);
-		const isMuted = newSet.has(trackId);
-		if (isMuted) {
-			newSet.delete(trackId);
-		} else {
-			newSet.add(trackId);
-		}
-		mutedTracks = newSet;
-		onTrackMute?.(trackId, !isMuted);
-	}
-
-	function toggleSolo(trackId: string) {
-		const newSet = new Set(soloTracks);
-		const isSolo = newSet.has(trackId);
-		if (isSolo) {
-			newSet.delete(trackId);
-		} else {
-			newSet.add(trackId);
-		}
-		soloTracks = newSet;
-		onTrackSolo?.(trackId, !isSolo);
-	}
-
-	function handleVolumeChange(trackId: string, e: Event) {
-		const input = e.target as HTMLInputElement;
-		const db = parseFloat(input.value);
-		const newMap = new Map(trackVolumes);
-		newMap.set(trackId, db);
-		trackVolumes = newMap;
-		onTrackVolume?.(trackId, db);
-	}
-
-	// ── Resize ──────────────────────────────────────────
-	function handleResizeStart(e: PointerEvent) {
-		isResizing = true;
-		resizeStartY = e.clientY;
-		resizeStartHeight = panelHeight;
-		(e.target as HTMLElement).setPointerCapture(e.pointerId);
-	}
-
-	function handleResizeMove(e: PointerEvent) {
-		if (!isResizing) return;
-		const delta = resizeStartY - e.clientY;
-		panelHeight = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, resizeStartHeight + delta));
-		canvasHeight = Math.max(0, panelHeight - HEADER_HEIGHT);
-	}
-
-	function handleResizeEnd() {
-		isResizing = false;
-	}
-
 	// ── ResizeObserver for canvas width ─────────────────
 	onMount(() => {
 		if (!containerEl) return;
 		const observer = new ResizeObserver((entries) => {
 			for (const entry of entries) {
-				const w = entry.contentRect.width - TRACK_NAME_WIDTH - MIXER_WIDTH;
+				const w = entry.contentRect.width - TRACK_NAME_WIDTH;
 				canvasWidth = Math.max(100, w);
-				canvasHeight = Math.max(0, panelHeight - HEADER_HEIGHT);
+				canvasHeight = Math.max(0, entry.contentRect.height);
 			}
 		});
 		observer.observe(containerEl);
@@ -382,23 +302,7 @@
 	});
 </script>
 
-{#if isOpen}
-<div class="visualizer" style="height: {panelHeight}px;" bind:this={containerEl}>
-	<!-- Resize handle (top edge) -->
-	<div
-		class="resize-handle"
-		onpointerdown={handleResizeStart}
-		onpointermove={handleResizeMove}
-		onpointerup={handleResizeEnd}
-		onpointercancel={handleResizeEnd}
-	></div>
-
-	<!-- Header -->
-	<div class="viz-header">
-		<span class="viz-label">VISUALIZER</span>
-		<button class="viz-close" aria-label="ビジュアライザーを閉じる" onclick={() => onClose?.()}>&#x2715;</button>
-	</div>
-
+<div class="visualizer" bind:this={containerEl}>
 	<!-- Body -->
 	<div class="viz-body">
 		<!-- Track names (left column) -->
@@ -424,104 +328,16 @@
 				style="width: {canvasWidth}px; height: {canvasHeight}px;"
 			></canvas>
 		</div>
-
-		<!-- Mixer controls (right column) -->
-		<div class="mixer">
-			{#each trackEntries as [trackId, track], i}
-				<div class="mixer-row" style="height: {TRACK_HEIGHT}px;">
-					<button
-						class="mixer-btn"
-						class:active={mutedTracks.has(trackId)}
-						onclick={() => toggleMute(trackId)}
-						title="Mute"
-						aria-label="ミュート"
-						aria-pressed={mutedTracks.has(trackId)}
-					>M</button>
-					<button
-						class="mixer-btn solo"
-						class:active={soloTracks.has(trackId)}
-						onclick={() => toggleSolo(trackId)}
-						title="Solo"
-						aria-label="ソロ"
-						aria-pressed={soloTracks.has(trackId)}
-					>S</button>
-					<input
-						type="range"
-						class="volume-slider"
-						min="-60"
-						max="6"
-						step="0.5"
-						value={trackVolumes.get(trackId) ?? 0}
-						oninput={(e) => handleVolumeChange(trackId, e)}
-						title="Volume"
-						aria-label="音量"
-					/>
-				</div>
-			{/each}
-		</div>
 	</div>
 </div>
-{/if}
 
 <style>
 	.visualizer {
 		display: flex;
 		flex-direction: column;
 		background: var(--bg-surface);
-		border: 1px solid var(--border-default);
-		border-radius: 8px;
 		overflow: hidden;
-		position: relative;
-		min-height: 150px;
-	}
-
-	.resize-handle {
-		position: absolute;
-		top: -3px;
-		left: 0;
-		right: 0;
-		height: 6px;
-		cursor: ns-resize;
-		z-index: 10;
-	}
-
-	.resize-handle:hover {
-		background: rgba(167, 139, 250, 0.15);
-	}
-
-	.viz-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		height: 32px;
-		padding: 0 12px;
-		background: var(--bg-elevated);
-		border-bottom: 1px solid var(--border-subtle);
-		flex-shrink: 0;
-	}
-
-	.viz-label {
-		font-family: var(--font-mono);
-		font-size: 11px;
-		font-weight: 600;
-		letter-spacing: 1.5px;
-		color: var(--text-secondary);
-	}
-
-	.viz-close {
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font-size: 14px;
-		cursor: pointer;
-		padding: 2px 6px;
-		border-radius: 4px;
-		transition: color 0.15s, background 0.15s;
-	}
-
-	.viz-close:hover {
-		color: var(--text-primary);
-		background: rgba(255, 255, 255, 0.08);
+		flex: 1;
 	}
 
 	.viz-body {
@@ -568,92 +384,4 @@
 		touch-action: none;
 	}
 
-	.mixer {
-		width: 100px;
-		flex-shrink: 0;
-		border-left: 1px solid var(--border-subtle);
-		overflow: hidden;
-	}
-
-	.mixer-row {
-		display: flex;
-		align-items: center;
-		gap: 3px;
-		padding: 0 4px;
-		border-bottom: 1px solid rgba(42, 42, 90, 0.3);
-	}
-
-	.mixer-btn {
-		width: 20px;
-		height: 20px;
-		border: 1px solid var(--border-subtle);
-		border-radius: 3px;
-		background: var(--bg-base);
-		color: var(--text-muted);
-		font-family: var(--font-mono);
-		font-size: 9px;
-		font-weight: 600;
-		cursor: pointer;
-		padding: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: background 0.15s, color 0.15s, border-color 0.15s;
-	}
-
-	.mixer-btn:hover {
-		border-color: var(--border-default);
-		color: var(--text-primary);
-	}
-
-	.mixer-btn.active {
-		background: var(--error);
-		color: #fff;
-		border-color: var(--error);
-	}
-
-	.mixer-btn.solo.active {
-		background: var(--accent-warm);
-		color: #000;
-		border-color: var(--accent-warm);
-	}
-
-	.volume-slider {
-		flex: 1;
-		height: 4px;
-		-webkit-appearance: none;
-		appearance: none;
-		background: var(--border-subtle);
-		border-radius: 2px;
-		outline: none;
-		cursor: pointer;
-	}
-
-	.volume-slider::-webkit-slider-thumb {
-		-webkit-appearance: none;
-		appearance: none;
-		width: 10px;
-		height: 10px;
-		border-radius: 50%;
-		background: var(--text-secondary);
-		border: none;
-		cursor: pointer;
-	}
-
-	.volume-slider::-moz-range-thumb {
-		width: 10px;
-		height: 10px;
-		border-radius: 50%;
-		background: var(--text-secondary);
-		border: none;
-		cursor: pointer;
-	}
-
-	.volume-slider:hover::-webkit-slider-thumb {
-		background: var(--accent-primary);
-	}
-
-	.volume-slider:hover::-moz-range-thumb {
-		background: var(--accent-primary);
-	}
 </style>

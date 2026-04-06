@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Song, DirectiveBlock, Track } from '$lib/types/song';
+  import type { Song, DirectiveBlock, Track, MidiNote } from '$lib/types/song';
   import { suggestArrangement, type ArrangeRequest, type ArrangeResponse } from '$lib/api';
   import { showToast } from '$lib/stores/toast.svelte';
   import SectionBar from './SectionBar.svelte';
@@ -7,18 +7,26 @@
   import FlowTrackRow from './FlowTrackRow.svelte';
   import TextView from './TextView.svelte';
   import BlockPopover from './BlockPopover.svelte';
+  import Visualizer from '$lib/components/visualizer/Visualizer.svelte';
+  import MixerView from './MixerView.svelte';
 
   let {
     song,
     songId,
     onSongChange,
+    trackNotes = new Map(),
+    currentTime = 0,
+    totalDuration = 0,
   }: {
     song: Song;
     songId?: string;
     onSongChange: (song: Song) => void;
+    trackNotes?: Map<string, { name: string; instrument: string; notes: MidiNote[] }>;
+    currentTime?: number;
+    totalDuration?: number;
   } = $props();
 
-  let activeTab = $state<'flow' | 'text'>('flow');
+  let activeTab = $state<'flow' | 'visualizer' | 'mixer' | 'text'>('flow');
 
   // --- BlockPopover state ---
   let popoverBlock = $state<DirectiveBlock | null>(null);
@@ -191,6 +199,31 @@
     emit();
   }
 
+  // --- Mixer handlers ---
+  function handleTrackVolume(trackId: string, db: number) {
+    const track = song.tracks.find(t => t.id === trackId);
+    if (track) {
+      track.volume = db;
+      emit();
+    }
+  }
+
+  function handleTrackMute(trackId: string, mute: boolean) {
+    const track = song.tracks.find(t => t.id === trackId);
+    if (track) {
+      track.mute = mute;
+      emit();
+    }
+  }
+
+  function handleTrackSolo(trackId: string, solo: boolean) {
+    const track = song.tracks.find(t => t.id === trackId);
+    if (track) {
+      track.solo = solo;
+      emit();
+    }
+  }
+
   function handleAddTrack() {
     const instruments = ['piano', 'bass', 'drums', 'strings', 'guitar', 'organ'];
     const usedInstruments = new Set(song.tracks.map(t => t.instrument));
@@ -220,6 +253,20 @@
         class:tab--active={activeTab === 'flow'}
         onclick={() => activeTab = 'flow'}
       >Flow</button>
+      <button
+        class="tab"
+        role="tab"
+        aria-selected={activeTab === 'visualizer'}
+        class:tab--active={activeTab === 'visualizer'}
+        onclick={() => activeTab = 'visualizer'}
+      >Visualizer</button>
+      <button
+        class="tab"
+        role="tab"
+        aria-selected={activeTab === 'mixer'}
+        class:tab--active={activeTab === 'mixer'}
+        onclick={() => activeTab = 'mixer'}
+      >Mixer</button>
       <button
         class="tab"
         role="tab"
@@ -304,6 +351,24 @@
         </div>
         <div class="row-content"></div>
       </div>
+    </div>
+  {:else if activeTab === 'visualizer'}
+    <div class="visualizer-container">
+      <Visualizer
+        {trackNotes}
+        {currentTime}
+        {totalDuration}
+        bpm={song.bpm}
+      />
+    </div>
+  {:else if activeTab === 'mixer'}
+    <div class="mixer-container">
+      <MixerView
+        tracks={song.tracks.map(t => ({ id: t.id, name: t.name, instrument: t.instrument, volume: t.volume, mute: t.mute, solo: t.solo }))}
+        onTrackVolume={handleTrackVolume}
+        onTrackMute={handleTrackMute}
+        onTrackSolo={handleTrackSolo}
+      />
     </div>
   {:else}
     <div class="text-view-container">
@@ -546,6 +611,20 @@
   .add-track-btn:hover {
     color: var(--accent-primary);
     border-color: var(--accent-primary);
+  }
+
+  /* ---- Visualizer container ---- */
+  .visualizer-container {
+    display: flex;
+    flex: 1;
+    min-height: 300px;
+  }
+
+  /* ---- Mixer container ---- */
+  .mixer-container {
+    display: flex;
+    flex: 1;
+    min-height: 300px;
   }
 
   /* ---- Text view container ---- */
