@@ -8,7 +8,7 @@
   import TextView from './TextView.svelte';
   import BlockPopover from './BlockPopover.svelte';
   import Visualizer from '$lib/components/visualizer/Visualizer.svelte';
-  import MixerView from './MixerView.svelte';
+  // MixerView removed — M/S/Vol integrated into track labels
 
   let {
     song,
@@ -26,7 +26,7 @@
     totalDuration?: number;
   } = $props();
 
-  let activeTab = $state<'flow' | 'visualizer' | 'mixer' | 'text'>('flow');
+  let activeTab = $state<'flow' | 'visualizer' | 'text'>('flow');
 
   // --- BlockPopover state ---
   let popoverBlock = $state<DirectiveBlock | null>(null);
@@ -263,13 +263,6 @@
       <button
         class="tab"
         role="tab"
-        aria-selected={activeTab === 'mixer'}
-        class:tab--active={activeTab === 'mixer'}
-        onclick={() => activeTab = 'mixer'}
-      >Mixer</button>
-      <button
-        class="tab"
-        role="tab"
         aria-selected={activeTab === 'text'}
         class:tab--active={activeTab === 'text'}
         onclick={() => activeTab = 'text'}
@@ -344,6 +337,11 @@
               <option value="guitar">Guitar</option>
               <option value="organ">Organ</option>
             </select>
+            <div class="track-controls">
+              <button class="track-ms-btn" class:track-ms-active={track.mute} onclick={() => handleTrackMute(track.id, !track.mute)} aria-label="ミュート" aria-pressed={track.mute}>M</button>
+              <button class="track-ms-btn" class:track-ms-active={track.solo} onclick={() => handleTrackSolo(track.id, !track.solo)} aria-label="ソロ" aria-pressed={track.solo}>S</button>
+            </div>
+            <input type="range" class="track-volume" min="-30" max="6" value={track.volume} oninput={(e) => handleTrackVolume(track.id, Number((e.target as HTMLInputElement).value))} aria-label="音量" />
           </div>
           <div class="row-content">
             <FlowTrackRow
@@ -373,15 +371,6 @@
         {currentTime}
         {totalDuration}
         bpm={song.bpm}
-      />
-    </div>
-  {:else if activeTab === 'mixer'}
-    <div class="mixer-container">
-      <MixerView
-        tracks={song.tracks.map(t => ({ id: t.id, name: t.name, instrument: t.instrument, volume: t.volume, mute: t.mute, solo: t.solo }))}
-        onTrackVolume={handleTrackVolume}
-        onTrackMute={handleTrackMute}
-        onTrackSolo={handleTrackSolo}
       />
     </div>
   {:else}
@@ -619,6 +608,50 @@
     border-color: var(--accent-primary);
   }
 
+  .track-controls {
+    display: flex;
+    gap: 2px;
+  }
+
+  .track-ms-btn {
+    padding: 1px 4px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.55rem;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .track-ms-btn:hover {
+    background: var(--bg-elevated);
+  }
+  .track-ms-active {
+    background: rgba(232, 168, 76, 0.2);
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+  }
+
+  .track-volume {
+    width: 100%;
+    height: 3px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--bg-elevated);
+    border-radius: 2px;
+    outline: none;
+    accent-color: var(--accent-primary);
+  }
+  .track-volume::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    cursor: pointer;
+  }
+
   .row-content {
     min-height: 36px;
     padding: var(--space-xs) 0;
@@ -658,12 +691,6 @@
     min-height: 300px;
   }
 
-  /* ---- Mixer container ---- */
-  .mixer-container {
-    display: flex;
-    flex: 1;
-    min-height: 300px;
-  }
 
   /* ---- Text view container ---- */
   .text-view-container {

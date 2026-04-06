@@ -36,24 +36,28 @@
     return chordToDegree(entry.chord.raw, musicalKey);
   }
 
-  /** Resolve sustain/repeat entries to show the previous chord instead */
-  function resolveDisplay(entries: BarEntry[]): { text: string; root: string | null; degree: string | null; isSustain: boolean }[] {
-    let lastChord: { text: string; root: string; degree: string | null } | null = null;
-    return entries.map(entry => {
+  /** Merge sustain entries into previous chord, tracking flex weight */
+  interface DisplayChord { text: string; root: string; degree: string | null; weight: number }
+
+  function resolveDisplay(entries: BarEntry[]): DisplayChord[] {
+    const result: DisplayChord[] = [];
+    for (const entry of entries) {
       if (entry.type === 'chord') {
         const root = entry.chord.root;
         const degree = chordToDegree(entry.chord.raw, musicalKey);
-        lastChord = { text: entry.chord.raw, root, degree };
-        return { text: entry.chord.raw, root, degree, isSustain: false };
+        result.push({ text: entry.chord.raw, root, degree, weight: 1 });
+      } else if (entry.type === 'sustain' && result.length > 0) {
+        // Merge into previous chord — increase its weight
+        result[result.length - 1].weight += 1;
+      } else if (entry.type === 'repeat' && result.length > 0) {
+        // Show as separate chord with same content
+        const prev = result[result.length - 1];
+        result.push({ text: prev.text, root: prev.root, degree: prev.degree, weight: 1 });
+      } else if (entry.type === 'rest') {
+        // Skip rests in display
       }
-      if (entry.type === 'sustain' && lastChord) {
-        return { text: lastChord.text, root: lastChord.root, degree: lastChord.degree, isSustain: true };
-      }
-      if (entry.type === 'repeat' && lastChord) {
-        return { text: lastChord.text, root: lastChord.root, degree: lastChord.degree, isSustain: false };
-      }
-      return { text: '', root: null, degree: null, isSustain: false };
-    });
+    }
+    return result;
   }
 </script>
 
@@ -65,16 +69,10 @@
       <div class="chord-entries">
         {#if bar}
           {#each resolveDisplay(bar.entries) as item}
-            {#if item.root}
-              <div class="chord-entry">
-                {#if item.degree}
-                  <span class="chord-degree">{item.degree}</span>
-                {/if}
-                <span class="chord-chip" data-root={item.root}>{item.text}</span>
-              </div>
-            {:else if item.text}
-              <span class="chord-special">{item.text}</span>
-            {/if}
+            <div class="chord-entry" style:flex={item.weight}>
+              <span class="chord-degree">{item.degree ?? ''}</span>
+              <span class="chord-chip" data-root={item.root}>{item.text}</span>
+            </div>
           {/each}
         {/if}
       </div>
