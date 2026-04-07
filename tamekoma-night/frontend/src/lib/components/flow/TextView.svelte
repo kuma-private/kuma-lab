@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Song, Section, Track } from '$lib/types/song';
+  import type { Song } from '$lib/types/song';
   import { serializeSong, deserializeSong, mergeParsedSong } from '$lib/song-serializer';
   import { parseProgression, resolveRepeats, type ParsedBar } from '$lib/chord-parser';
   import { chordToDegree } from '$lib/chord-degree';
@@ -50,33 +50,70 @@
     }
   });
 
-  // Derived: group bars by section
-  let sectionedBars = $derived.by(() => {
+  // Derived: bars grouped by original text line
+  // Parse each non-empty line separately to preserve line breaks
+  let lineGroupedBars = $derived.by(() => {
+    const prog = previewSong.chordProgression ?? '';
+    if (!prog.trim()) return [] as ParsedBar[][];
+    try {
+      const lines = prog.split('\n');
+      const result: ParsedBar[][] = [];
+      let barOffset = 0;
+      for (const line of lines) {
+        if (!line.trim() || line.trim().startsWith('#')) {
+          // Empty line or comment — push empty group to preserve spacing
+          if (result.length > 0 && line.trim() === '') {
+            // Only add line break if we already have content
+            result.push([]);
+          }
+          continue;
+        }
+        try {
+          const { bars } = parseProgression(line);
+          const resolved = resolveRepeats(bars);
+          // Re-number bars with offset to keep barNumbers sequential
+          const renumbered = resolved.map((b, i) => ({
+            ...b,
+            barNumber: barOffset + i + 1,
+          }));
+          result.push(renumbered);
+          barOffset += resolved.length;
+        } catch {
+          // Skip unparseable lines
+        }
+      }
+      return result;
+    } catch {
+      return [] as ParsedBar[][];
+    }
+  });
+
+  // Derived: for each text line, find the section label (if any) for the first bar
+  let lineSectionLabels = $derived.by(() => {
     const sections = (previewSong.sections ?? []).slice().sort((a, b) => a.startBar - b.startBar);
-    const bars = parsedBars;
+    const allLines = lineGroupedBars;
 
-    if (sections.length === 0 && bars.length > 0) {
-      return [{ section: null as Section | null, bars }];
+    // Map line index -> section name to show above that line
+    // Show a section label when the first bar of a line starts a new section
+    const labels: (string | null)[] = [];
+    let lastSectionName: string | null = null;
+
+    for (const line of allLines) {
+      if (line.length === 0) {
+        labels.push(null);
+        continue;
+      }
+      const firstBarNum = line[0].barNumber;
+      const sec = sections.find((s) => firstBarNum > s.startBar && firstBarNum <= s.endBar);
+      const secName = sec?.name ?? null;
+      if (secName && secName !== lastSectionName) {
+        labels.push(secName);
+        lastSectionName = secName;
+      } else {
+        labels.push(null);
+      }
     }
-
-    const groups: { section: Section | null; bars: ParsedBar[] }[] = [];
-
-    for (const sec of sections) {
-      // bars are 1-based barNumber; section.startBar is 0-based, endBar is exclusive
-      const sectionBars = bars.filter(
-        (b) => b.barNumber > sec.startBar && b.barNumber <= sec.endBar
-      );
-      groups.push({ section: sec, bars: sectionBars });
-    }
-
-    // Any bars not covered by sections
-    const coveredBarNums = new Set(groups.flatMap((g) => g.bars.map((b) => b.barNumber)));
-    const uncovered = bars.filter((b) => !coveredBarNums.has(b.barNumber));
-    if (uncovered.length > 0) {
-      groups.push({ section: null, bars: uncovered });
-    }
-
-    return groups;
+    return labels;
   });
 
   // Sync: when song prop changes from outside, re-serialize
@@ -184,35 +221,33 @@
       </div>
     </div>
 
-    <!-- Chord progression by section -->
+    <!-- Chord progression grouped by text line -->
     {#if parsedBars.length > 0}
       <div class="preview-chords">
-        {#each sectionedBars as group}
-          {#if group.bars.length > 0}
-            <div class="preview-section">
-              {#if group.section}
-                <div class="section-label">{group.section.name}</div>
-              {/if}
-              <div class="section-bars">
+        {#each lineGroupedBars as line, i}
+          {#if lineSectionLabels[i]}
+            <div class="section-label">{lineSectionLabels[i]}</div>
+          {/if}
+          {#if line.length > 0}
+            <div class="chord-line">
+              <span class="bar-line">|</span>
+              {#each line as bar}
+                <span class="preview-bar">
+                  {#each bar.entries as entry}
+                    {#if entry.type === 'chord'}
+                      <span class="chord-chip" data-root={entry.chord.root}>
+                        <span class="chip-name">{entry.chord.raw}</span>
+                        <span class="chip-degree">{degreeFor(entry.chord.raw)}</span>
+                      </span>
+                    {:else if entry.type === 'rest'}
+                      <span class="entry-rest">_</span>
+                    {:else if entry.type === 'sustain'}
+                      <span class="entry-sustain">=</span>
+                    {/if}
+                  {/each}
+                </span>
                 <span class="bar-line">|</span>
-                {#each group.bars as bar}
-                  <span class="preview-bar">
-                    {#each bar.entries as entry}
-                      {#if entry.type === 'chord'}
-                        <span class="chord-chip" data-root={entry.chord.root}>
-                          <span class="chip-name">{entry.chord.raw}</span>
-                          <span class="chip-degree">{degreeFor(entry.chord.raw)}</span>
-                        </span>
-                      {:else if entry.type === 'rest'}
-                        <span class="entry-rest">_</span>
-                      {:else if entry.type === 'sustain'}
-                        <span class="entry-sustain">=</span>
-                      {/if}
-                    {/each}
-                  </span>
-                  <span class="bar-line">|</span>
-                {/each}
-              </div>
+              {/each}
             </div>
           {/if}
         {/each}
@@ -228,6 +263,7 @@
             <span class="track-instrument">{track.instrument}</span>
           </div>
         {/each}
+        <div class="tracks-info">トラックの追加・削除は Flow タブで行ってください</div>
       </div>
     {/if}
 
@@ -352,12 +388,6 @@
     gap: var(--space-sm);
   }
 
-  .preview-section {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
   .section-label {
     font-size: 0.75rem;
     font-weight: 600;
@@ -366,7 +396,7 @@
     letter-spacing: 0.05em;
   }
 
-  .section-bars {
+  .chord-line {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -435,6 +465,13 @@
     font-size: 0.72rem;
     color: var(--text-muted);
     font-family: var(--font-mono);
+  }
+
+  .tracks-info {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 0 var(--space-md);
   }
 
   /* ── Empty state ── */
