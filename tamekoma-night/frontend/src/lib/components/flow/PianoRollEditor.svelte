@@ -13,9 +13,11 @@
     onNotesChange?: (notes: MidiNote[]) => void;
     onClose: () => void;
     onSeekToBar?: (barIndex: number) => void;
+    currentTime?: number;
+    totalDuration?: number;
   }
 
-  let { notes, totalBars, bpm, timeSignature, chordProgression, musicalKey, onNotesChange, onClose, onSeekToBar }: Props = $props();
+  let { notes, totalBars, bpm, timeSignature, chordProgression, musicalKey, onNotesChange, onClose, onSeekToBar, currentTime, totalDuration }: Props = $props();
 
   // --- Constants ---
   const TICKS_PER_QUARTER = 480;
@@ -49,6 +51,7 @@
 
   // --- State ---
   let canvasEl = $state<HTMLCanvasElement | null>(null);
+  let minimapCanvas = $state<HTMLCanvasElement | null>(null);
   let containerEl = $state<HTMLDivElement | null>(null);
   let hoveredIndex = $state(-1);
   let selectedIndex = $state(-1);
@@ -125,6 +128,8 @@
     const _totalTicks = totalTicks;
     const _ticksPerBar = ticksPerBar;
     const _ticksPerBeat = ticksPerBeat;
+    const _currentTime = currentTime;
+    const _totalDuration = totalDuration;
     const canvas = canvasEl;
     if (!canvas) return;
 
@@ -273,6 +278,19 @@
       ctx.globalAlpha = 1.0;
     }
 
+    // --- Playhead cursor ---
+    if (currentTime != null && totalDuration && totalDuration > 0) {
+      const progress = currentTime / totalDuration;
+      const playheadTick = progress * _totalTicks;
+      const playheadX = tickToX(playheadTick);
+      ctx.strokeStyle = 'rgba(232, 168, 76, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(playheadX, 0);
+      ctx.lineTo(playheadX, h);
+      ctx.stroke();
+    }
+
     // --- Pitch label gutter border ---
     ctx.strokeStyle = 'rgba(138, 126, 104, 0.3)';
     ctx.lineWidth = 1;
@@ -280,7 +298,88 @@
     ctx.moveTo(PITCH_LABEL_WIDTH, 0);
     ctx.lineTo(PITCH_LABEL_WIDTH, h);
     ctx.stroke();
+
+    // Also draw minimap whenever main canvas redraws
+    drawMinimap(_notes, _totalTicks, _scrollX, _ppt, dw);
   });
+
+  // --- Minimap ---
+  function drawMinimap(
+    _notes: MidiNote[],
+    _totalTicks: number,
+    _scrollX: number,
+    _ppt: number,
+    mainDrawWidth: number
+  ) {
+    const mc = minimapCanvas;
+    if (!mc) return;
+    const rect = mc.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    if (w === 0 || h === 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    mc.width = w * dpr;
+    mc.height = h * dpr;
+    const ctx = mc.getContext('2d');
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    if (_totalTicks === 0) return;
+
+    // Draw all notes as tiny rectangles
+    if (_notes.length > 0) {
+      let minMidi = 127;
+      let maxMidi = 0;
+      for (const n of _notes) {
+        if (n.midi < minMidi) minMidi = n.midi;
+        if (n.midi > maxMidi) maxMidi = n.midi;
+      }
+      const range = Math.max(maxMidi - minMidi + 1, 12);
+      const padding = 2; // vertical padding
+
+      ctx.fillStyle = 'rgba(232, 168, 76, 0.6)';
+      for (const n of _notes) {
+        const x = (n.startTick / _totalTicks) * w;
+        const nw = Math.max(1, (n.durationTicks / _totalTicks) * w);
+        const y = padding + (h - 2 * padding) * (1 - (n.midi - minMidi + 1) / range);
+        const nh = Math.max(1, (h - 2 * padding) / range);
+        ctx.fillRect(x, y, nw, nh);
+      }
+    }
+
+    // Draw viewport indicator
+    const viewStartFraction = _scrollX / _totalTicks;
+    const visibleTicks = mainDrawWidth / _ppt;
+    const viewWidthFraction = visibleTicks / _totalTicks;
+
+    const vx = Math.max(0, viewStartFraction * w);
+    const vw = Math.min(w - vx, viewWidthFraction * w);
+
+    ctx.fillStyle = 'rgba(236, 228, 212, 0.08)';
+    ctx.fillRect(vx, 0, vw, h);
+
+    ctx.strokeStyle = 'rgba(236, 228, 212, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(vx + 0.5, 0.5, Math.max(vw - 1, 2), h - 1);
+  }
+
+  function handleMinimapClick(e: MouseEvent) {
+    const mc = minimapCanvas;
+    if (!mc) return;
+    const rect = mc.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const progress = x / rect.width;
+    const targetTick = progress * totalTicks;
+
+    // Center the viewport on the clicked position
+    const canvasRect = getCanvasRect();
+    if (!canvasRect) return;
+    const dw = drawWidth(canvasRect);
+    const visibleTicks = dw / pixelsPerTick;
+    scrollX = Math.max(0, Math.min(totalTicks - visibleTicks, targetTick - visibleTicks / 2));
+  }
 
   // --- Hit testing ---
   function hitTest(clientX: number, clientY: number): { index: number; isResize: boolean } | null {
@@ -438,21 +537,30 @@
     const hit = hitTest(e.clientX, e.clientY);
     if (hit) {
       deleteNote(hit.index);
-    } else if (chordProgression) {
-      // Right-click on empty space: play chord at this bar
+    } else {
+      // Right-click on empty space: play chord at this bar + seek
       const rect = getCanvasRect();
       if (!rect) return;
       const x = e.clientX - rect.left;
-      const tick = xToTick(x);
+      const tick = Math.max(0, xToTick(x));
       const barIndex = Math.floor(tick / ticksPerBar);
 
-      const parsed = parseProgression(chordProgression);
-      const resolved = resolveRepeats(parsed.bars);
-      if (barIndex >= 0 && barIndex < resolved.length) {
-        for (const entry of resolved[barIndex].entries) {
-          if (entry.type === 'chord') {
-            playChordPreview(entry.chord.raw);
-            break;
+      // Seek to the clicked position (fractional bar)
+      if (onSeekToBar) {
+        const barPosition = tick / ticksPerBar;
+        onSeekToBar(barPosition);
+      }
+
+      // Play chord preview if chord progression is available
+      if (chordProgression) {
+        const parsed = parseProgression(chordProgression);
+        const resolved = resolveRepeats(parsed.bars);
+        if (barIndex >= 0 && barIndex < resolved.length) {
+          for (const entry of resolved[barIndex].entries) {
+            if (entry.type === 'chord') {
+              playChordPreview(entry.chord.raw);
+              break;
+            }
           }
         }
       }
@@ -517,6 +625,11 @@
         <span class="hint">Scroll: pitch | Shift+Scroll: time | Cmd+Scroll: zoom</span>
         <button class="close-btn" onclick={onClose}>&#215;</button>
       </div>
+    </div>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="piano-roll-minimap" onclick={handleMinimapClick}>
+      <canvas class="minimap-canvas" bind:this={minimapCanvas}></canvas>
     </div>
     <div class="piano-roll-body" bind:this={containerEl}>
       <canvas
@@ -606,6 +719,20 @@
 
   .close-btn:hover {
     background: rgba(232, 168, 76, 0.15);
+  }
+
+  .piano-roll-minimap {
+    height: 24px;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid var(--border-subtle, rgba(138, 126, 104, 0.15));
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .minimap-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
   }
 
   .piano-roll-body {

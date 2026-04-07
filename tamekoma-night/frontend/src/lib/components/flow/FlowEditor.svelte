@@ -836,6 +836,8 @@ import FlowMinimap from './FlowMinimap.svelte';
       }}
       onClose={() => pianoRollTrackId = null}
       onSeekToBar={onSeekToBar}
+      {currentTime}
+      {totalDuration}
     />
   {/if}
 </div>
