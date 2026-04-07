@@ -241,9 +241,18 @@
         barRange,
       });
 
+      // Map API response fields to MidiNote type
+      const mappedNotes: MidiNote[] = (result.notes as any[]).map((n: any) => ({
+        midi: n.midi,
+        startTick: n.startTick ?? n.tick ?? 0,
+        durationTicks: n.durationTicks ?? n.duration ?? 480,
+        velocity: n.velocity,
+        channel: n.channel ?? 0,
+      }));
+
       // Store as GeneratedMidiData
       generatedMidiData = {
-        notes: result.notes,
+        notes: mappedNotes,
         style: result.style,
         expression: result.expression,
         feel: result.feel,
@@ -251,7 +260,7 @@
       };
 
       // Show AI-generated notes in preview
-      previewNotes = result.notes;
+      previewNotes = mappedNotes;
 
       // Explicitly draw after DOM updates to ensure canvas is mounted
       await tick();
