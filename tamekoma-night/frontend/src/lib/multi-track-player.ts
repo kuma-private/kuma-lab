@@ -475,7 +475,29 @@ export class MultiTrackPlayer {
         trackNotes.push(...clampedNotes);
       }
 
-      // Store generated notes for Visualizer API
+      // Generate default block chords for bars not covered by any block
+      const coveredBars = new Set<number>();
+      for (const block of blocksToProcess) {
+        for (let b = block.startBar; b < block.endBar; b++) coveredBars.add(b);
+      }
+      for (let barIdx = 0; barIdx < resolvedBars.length; barIdx++) {
+        if (coveredBars.has(barIdx)) continue;
+        const barChords = chordsPerBar[barIdx] ?? [];
+        if (barChords.length === 0) continue;
+        if (trackDef.instrument === 'drums') {
+          const drumNotes = generateDrumRhythm(
+            { pattern: '8beat' as DrumPatternName, velocity: 80, humanize: 0, swing: 0 },
+            bpm, timeSig, barIdx, 1, 9,
+          );
+          trackNotes.push(...drumNotes);
+        } else {
+          const voiced = voiceChords(barChords, { type: 'close' });
+          const barNotes = generateRhythm(voiced, { mode: 'block' }, bpm, timeSig, barIdx, channel);
+          trackNotes.push(...barNotes);
+        }
+      }
+
+      // Store generated notes
       trackInstance.generatedNotes = trackNotes;
 
       // 4. Schedule notes on Transport
