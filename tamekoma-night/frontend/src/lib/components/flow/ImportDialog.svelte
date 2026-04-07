@@ -60,36 +60,6 @@
     input.value = '';
   }
 
-  function insertSectionHeaders(chords: string, sectionLabels: string[]): string {
-    // Split into groups by blank lines
-    const lines = chords.split('\n');
-    const groups: string[][] = [];
-    let currentGroup: string[] = [];
-
-    for (const line of lines) {
-      if (line.trim() === '') {
-        if (currentGroup.length > 0) {
-          groups.push(currentGroup);
-          currentGroup = [];
-        }
-      } else {
-        currentGroup.push(line);
-      }
-    }
-    if (currentGroup.length > 0) groups.push(currentGroup);
-
-    // Insert section headers before each group
-    const result: string[] = [];
-    for (let i = 0; i < groups.length; i++) {
-      const label = sectionLabels[i] || `Section ${i + 1}`;
-      result.push(`### ${label}`);
-      result.push(...groups[i]);
-      result.push(''); // blank line after section
-    }
-
-    return result.join('\n').trim();
-  }
-
   async function handleSubmit() {
     loading = true;
     error = '';
@@ -112,12 +82,7 @@
         key: musicalKey,
       });
 
-      const sectionLabels = images.map(img => img.section).filter(Boolean);
-      const hasExistingSections = result.chords.includes('###') || result.chords.includes('//');
-      const finalChords = hasExistingSections
-        ? result.chords
-        : insertSectionHeaders(result.chords, sectionLabels);
-      onImport(finalChords);
+      onImport(result.chords);
     } catch (err) {
       error = err instanceof Error ? err.message : 'インポートに失敗しました';
     } finally {
