@@ -324,9 +324,15 @@ import FlowMinimap from './FlowMinimap.svelte';
   });
 
   // --- Computed totalBars ---
-  // Derive totalBars from sections and track blocks (max endBar across all, minimum 8)
+  // Derive totalBars from chord progression, sections, and track blocks
   let totalBars = $derived.by(() => {
     let max = 8;
+    // Count bars from chord progression
+    try {
+      const parsed = parseProgression(song.chordProgression);
+      const resolved = resolveRepeats(parsed.bars);
+      if (resolved.length > max) max = resolved.length;
+    } catch { /* ignore parse errors */ }
     for (const sec of song.sections) {
       if (sec.endBar > max) max = sec.endBar;
     }
@@ -523,9 +529,11 @@ import FlowMinimap from './FlowMinimap.svelte';
   function handleTimelineClick(e: MouseEvent) {
     // Only handle clicks on empty grid background, not on interactive elements
     const target = e.target as HTMLElement;
-    if (target.closest('.directive-block') || target.closest('.track-label') ||
-        target.closest('.track-controls') || target.closest('.chord-chip') ||
+    if (target.closest('.directive-block') || target.closest('.block-wrapper') ||
+        target.closest('.track-label') || target.closest('.track-controls') ||
+        target.closest('.chord-chip') || target.closest('.chord-cell') ||
         target.closest('.section-tag') || target.closest('.piano-roll-clickable') ||
+        target.closest('.popover-overlay') || target.closest('.piano-roll-overlay') ||
         target.closest('button') || target.closest('select') || target.closest('input')) return;
 
     const flowContent = e.currentTarget as HTMLElement;
