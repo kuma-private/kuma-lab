@@ -2,12 +2,14 @@
 // Multi-track MIDI export using @tonejs/midi.
 
 import { Midi } from '@tonejs/midi';
-import type { MidiNote } from './types/song';
+import type { MidiNote, MidiControlChange } from './types/song';
 
 interface ExportTrack {
   name: string;
   instrument: string;
+  program?: number;                      // GM program number (0-127)
   notes: MidiNote[];
+  controlChanges?: MidiControlChange[];  // CC events (pedal etc)
 }
 
 export function songToMidi(
@@ -29,6 +31,11 @@ export function songToMidi(
     const track = midi.addTrack();
     track.name = t.name;
     track.channel = ch;
+
+    if (t.program !== undefined) {
+      track.instrument.number = t.program;
+    }
+
     for (const note of t.notes) {
       track.addNote({
         midi: note.midi,
@@ -36,6 +43,16 @@ export function songToMidi(
         durationTicks: note.durationTicks,
         velocity: note.velocity / 127,
       });
+    }
+
+    if (t.controlChanges) {
+      for (const cc of t.controlChanges) {
+        track.addCC({
+          number: cc.cc,
+          value: cc.value,
+          ticks: cc.tick,
+        });
+      }
     }
   }
   return midi;

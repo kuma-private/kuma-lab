@@ -12,6 +12,96 @@
   import Visualizer from '$lib/components/visualizer/Visualizer.svelte';
   // MixerView removed — M/S/Vol integrated into track labels
 
+  const GM_CATEGORIES = [
+    { name: 'Piano', programs: [
+      { num: 0, name: 'Acoustic Grand' },
+      { num: 1, name: 'Bright Piano' },
+      { num: 2, name: 'Electric Grand' },
+      { num: 4, name: 'Rhodes' },
+      { num: 5, name: 'Chorus Piano' },
+      { num: 7, name: 'Clavinet' },
+    ]},
+    { name: 'Guitar', programs: [
+      { num: 24, name: 'Nylon Guitar' },
+      { num: 25, name: 'Steel Guitar' },
+      { num: 26, name: 'Jazz Guitar' },
+      { num: 27, name: 'Clean Electric' },
+      { num: 29, name: 'Overdrive' },
+      { num: 30, name: 'Distortion' },
+    ]},
+    { name: 'Bass', programs: [
+      { num: 32, name: 'Acoustic Bass' },
+      { num: 33, name: 'Finger Bass' },
+      { num: 34, name: 'Pick Bass' },
+      { num: 35, name: 'Fretless' },
+      { num: 38, name: 'Synth Bass 1' },
+    ]},
+    { name: 'Strings', programs: [
+      { num: 40, name: 'Violin' },
+      { num: 42, name: 'Cello' },
+      { num: 48, name: 'String Ensemble' },
+      { num: 50, name: 'Synth Strings' },
+    ]},
+    { name: 'Brass', programs: [
+      { num: 56, name: 'Trumpet' },
+      { num: 57, name: 'Trombone' },
+      { num: 60, name: 'French Horn' },
+      { num: 61, name: 'Brass Section' },
+    ]},
+    { name: 'Reed', programs: [
+      { num: 65, name: 'Alto Sax' },
+      { num: 66, name: 'Tenor Sax' },
+      { num: 71, name: 'Clarinet' },
+    ]},
+    { name: 'Pipe', programs: [
+      { num: 73, name: 'Flute' },
+      { num: 75, name: 'Pan Flute' },
+    ]},
+    { name: 'Synth', programs: [
+      { num: 80, name: 'Square Lead' },
+      { num: 81, name: 'Saw Lead' },
+      { num: 88, name: 'New Age Pad' },
+      { num: 89, name: 'Warm Pad' },
+    ]},
+    { name: 'Organ', programs: [
+      { num: 16, name: 'Drawbar Organ' },
+      { num: 19, name: 'Church Organ' },
+    ]},
+    { name: 'Drums', programs: [
+      { num: -1, name: 'Standard Kit' },
+    ]},
+  ];
+
+  function getDefaultProgram(instrument: string): number {
+    const map: Record<string, number> = {
+      piano: 0, bass: 33, guitar: 25, drums: -1,
+      strings: 48, organ: 16,
+    };
+    return map[instrument] ?? 0;
+  }
+
+  function findCategoryByProgram(program: number): { instrument: string } | null {
+    if (program < 0) return { instrument: 'drums' };
+    if (program < 8) return { instrument: 'piano' };
+    if (program < 16) return { instrument: 'piano' };
+    if (program < 24) return { instrument: 'organ' };
+    if (program < 32) return { instrument: 'guitar' };
+    if (program < 40) return { instrument: 'bass' };
+    if (program < 56) return { instrument: 'strings' };
+    if (program < 64) return { instrument: 'strings' };
+    if (program < 80) return { instrument: 'strings' };
+    return { instrument: 'piano' };
+  }
+
+  function findProgramName(program: number): string | null {
+    for (const cat of GM_CATEGORIES) {
+      for (const prog of cat.programs) {
+        if (prog.num === program) return prog.name;
+      }
+    }
+    return null;
+  }
+
   let {
     song,
     songId,
@@ -334,14 +424,16 @@
   }
 
   function handleAddTrack() {
-    const instruments = ['piano', 'bass', 'drums', 'strings', 'guitar', 'organ'];
-    const usedInstruments = new Set(song.tracks.map(t => t.instrument));
-    const next = instruments.find(i => !usedInstruments.has(i)) ?? 'piano';
-    const name = next.charAt(0).toUpperCase() + next.slice(1);
+    const defaultPrograms = [0, 33, -1, 48, 25, 16];
+    const usedPrograms = new Set(song.tracks.map(t => t.program ?? getDefaultProgram(t.instrument)));
+    const nextProgram = defaultPrograms.find(p => !usedPrograms.has(p)) ?? 0;
+    const name = findProgramName(nextProgram) ?? 'Piano';
+    const instrument = findCategoryByProgram(nextProgram)?.instrument ?? 'piano';
     song.tracks.push({
       id: crypto.randomUUID(),
       name,
-      instrument: next,
+      instrument,
+      program: nextProgram >= 0 ? nextProgram : undefined,
       blocks: [],
       volume: 0,
       mute: false,
@@ -433,18 +525,23 @@
         <!-- Track rows -->
         {#each song.tracks as track (track.id)}
           <div class="row-label track-label">
-            <select class="track-instrument-select" value={track.instrument} onchange={(e) => {
-              const inst = (e.target as HTMLSelectElement).value;
-              track.instrument = inst;
-              track.name = inst.charAt(0).toUpperCase() + inst.slice(1);
-              emit();
-            }}>
-              <option value="piano">Piano</option>
-              <option value="bass">Bass</option>
-              <option value="drums">Drums</option>
-              <option value="strings">Strings</option>
-              <option value="guitar">Guitar</option>
-              <option value="organ">Organ</option>
+            <select class="track-instrument-select"
+              value={track.program ?? getDefaultProgram(track.instrument)}
+              onchange={(e) => {
+                const program = Number((e.target as HTMLSelectElement).value);
+                const category = findCategoryByProgram(program);
+                track.program = program >= 0 ? program : undefined;
+                track.instrument = category?.instrument ?? 'piano';
+                track.name = findProgramName(program) ?? track.instrument;
+                emit();
+              }}>
+              {#each GM_CATEGORIES as cat}
+                <optgroup label={cat.name}>
+                  {#each cat.programs as prog}
+                    <option value={prog.num}>{prog.name}</option>
+                  {/each}
+                </optgroup>
+              {/each}
             </select>
             <div class="track-controls">
               <button class="track-ms-btn" class:track-ms-active={track.mute} onclick={() => handleTrackMute(track.id, !track.mute)} aria-label="ミュート" aria-pressed={track.mute}>M</button>
@@ -685,7 +782,7 @@
 
   .flow-grid {
     display: grid;
-    grid-template-columns: 100px 1fr;
+    grid-template-columns: 120px 1fr;
     gap: 0;
     min-width: max-content;
   }
@@ -739,6 +836,14 @@
   }
   .track-instrument-select:focus {
     border-color: var(--accent-primary);
+  }
+  .track-instrument-select optgroup {
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .track-instrument-select option {
+    font-weight: 400;
+    color: var(--text-primary);
   }
 
   .track-controls {
