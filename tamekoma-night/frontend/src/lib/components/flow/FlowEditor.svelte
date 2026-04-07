@@ -643,6 +643,26 @@ import FlowMinimap from './FlowMinimap.svelte';
       key={song.key}
       onImport={(chords) => {
         song.chordProgression = chords;
+        // Auto-create a default piano track if no tracks exist
+        if (song.tracks.length === 0) {
+          const parsed = parseProgression(chords);
+          const totalBars = parsed.bars.length;
+          song.tracks = [{
+            id: crypto.randomUUID(),
+            name: 'Acoustic Grand',
+            instrument: 'piano',
+            program: 0,
+            blocks: [{
+              id: crypto.randomUUID(),
+              startBar: 0,
+              endBar: totalBars,
+              directives: '',
+            }],
+            volume: 0,
+            mute: false,
+            solo: false,
+          }];
+        }
         onSongChange(JSON.parse(JSON.stringify(song)));
         showToast('コード進行をインポートしました', 'success');
         importDialogOpen = false;

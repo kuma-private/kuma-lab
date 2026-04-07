@@ -303,8 +303,23 @@ export class MultiTrackPlayer {
     transport.timeSignature = timeSig.beats;
 
     // 2. Process each track
-    for (let trackIdx = 0; trackIdx < song.tracks.length; trackIdx++) {
-      const trackDef = song.tracks[trackIdx];
+    // If no tracks exist but there are chords, create a synthetic piano track
+    // so users hear block chords immediately after import
+    let tracksToProcess: Track[] = song.tracks;
+    if (tracksToProcess.length === 0 && resolvedBars.length > 0) {
+      tracksToProcess = [{
+        id: '__default__',
+        name: 'Piano',
+        instrument: 'piano',
+        blocks: [],
+        volume: 0,
+        mute: false,
+        solo: false,
+      }];
+    }
+
+    for (let trackIdx = 0; trackIdx < tracksToProcess.length; trackIdx++) {
+      const trackDef = tracksToProcess[trackIdx];
 
       // Create instrument and audio routing: instrument → Volume → masterVolume → Destination
       const { instrument, ownsInstrument } = createInstrument(trackDef.instrument);
