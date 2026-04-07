@@ -159,6 +159,8 @@ import FlowMinimap from './FlowMinimap.svelte';
     trackNotes = new Map(),
     currentTime = 0,
     totalDuration = 0,
+    activeTab = 'text',
+    onTabChange,
   }: {
     song: Song;
     songId?: string;
@@ -167,9 +169,9 @@ import FlowMinimap from './FlowMinimap.svelte';
     trackNotes?: Map<string, { name: string; instrument: string; notes: MidiNote[] }>;
     currentTime?: number;
     totalDuration?: number;
+    activeTab?: 'flow' | 'text';
+    onTabChange?: (tab: 'flow' | 'text') => void;
   } = $props();
-
-  let activeTab = $state<'flow' | 'text'>('text');
 
   // --- BlockPopover state ---
   let popoverBlock = $state<DirectiveBlock | null>(null);
@@ -520,14 +522,14 @@ import FlowMinimap from './FlowMinimap.svelte';
         role="tab"
         aria-selected={activeTab === 'text'}
         class:tab--active={activeTab === 'text'}
-        onclick={() => activeTab = 'text'}
+        onclick={() => onTabChange?.('text')}
       >Text</button>
       <button
         class="tab"
         role="tab"
         aria-selected={activeTab === 'flow'}
         class:tab--active={activeTab === 'flow'}
-        onclick={() => activeTab = 'flow'}
+        onclick={() => onTabChange?.('flow')}
       >Flow</button>
     </div>
     <!-- Right side: AI Arrange button -->

@@ -26,6 +26,9 @@
 	// MultiTrackPlayer instance
 	let player: MultiTrackPlayer | null = null;
 
+	// FlowEditor active tab (lifted so it survives song saves)
+	let activeTab = $state<'flow' | 'text'>('text');
+
 	// Inline title editing
 	let editingTitle = $state(false);
 	let titleInput = $state('');
@@ -364,6 +367,8 @@
 			</div>
 		{:else if store.currentSong}
 			<FlowEditor song={store.currentSong} {songId} onSongChange={handleSongChange} {trackNotes} {currentTime} {totalDuration}
+				{activeTab}
+				onTabChange={(tab) => activeTab = tab}
 				onSeekToBar={async (barIndex) => {
 					if (!player) return;
 					const beatsPerBar = parseTimeSignature(store.currentSong?.timeSignature ?? '4/4').beats;
