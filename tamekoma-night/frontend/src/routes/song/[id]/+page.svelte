@@ -299,13 +299,13 @@
 			</div>
 		{:else if store.currentSong}
 			<FlowEditor song={store.currentSong} {songId} onSongChange={handleSongChange} {trackNotes} {currentTime} {totalDuration}
-				onSeekToBar={(barIndex) => {
+				onSeekToBar={async (barIndex) => {
 					if (!player) return;
 					const beatsPerBar = parseTimeSignature(store.currentSong?.timeSignature ?? '4/4').beats;
 					const secondsPerBeat = 60 / (store.currentSong?.bpm ?? 120);
 					const targetSeconds = barIndex * beatsPerBar * secondsPerBeat;
+					if (playerState !== 'playing') await player.play();
 					player.seekTo(targetSeconds);
-					if (playerState !== 'playing') void player.play();
 				}}
 			/>
 		{:else}
