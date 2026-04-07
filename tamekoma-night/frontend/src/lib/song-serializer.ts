@@ -41,7 +41,7 @@ export function serializeSong(song: Song): string {
 			while (sectionIndex < sectionsSorted.length) {
 				const sec = sectionsSorted[sectionIndex];
 				if (sec.startBar <= currentBar) {
-					lines.push(`// ${sec.name} [bars ${sec.startBar + 1}-${sec.endBar}]`);
+					lines.push(`// ${sec.name}`);
 					sectionIndex++;
 				} else {
 					break;
@@ -55,14 +55,14 @@ export function serializeSong(song: Song): string {
 		// Flush remaining sections that weren't placed
 		while (sectionIndex < sectionsSorted.length) {
 			const sec = sectionsSorted[sectionIndex];
-			lines.push(`// ${sec.name} [bars ${sec.startBar + 1}-${sec.endBar}]`);
+			lines.push(`// ${sec.name}`);
 			sectionIndex++;
 		}
 	} else if (song.sections.length > 0) {
 		// No chord text but sections exist — output section comments only
 		const sectionsSorted = [...song.sections].sort((a, b) => a.startBar - b.startBar);
 		for (const sec of sectionsSorted) {
-			lines.push(`// ${sec.name} [bars ${sec.startBar + 1}-${sec.endBar}]`);
+			lines.push(`// ${sec.name}`);
 		}
 	}
 
@@ -220,22 +220,35 @@ export function deserializeSong(text: string): DeserializeResult {
 
 		// Inside chords section
 		if (state === 'chords') {
-			// Section comment: // SectionName [bars X-Y]
-			const commentMatch = trimmed.match(/^\/\/\s*(.+?)\s*\[bars\s+(\d+)\s*-\s*(\d+)\]$/);
-			if (commentMatch) {
+			// Section comment: // SectionName [bars X-Y] (legacy format with bar range)
+			const commentMatchBars = trimmed.match(/^\/\/\s*(.+?)\s*\[bars\s+(\d+)\s*-\s*(\d+)\]$/);
+			if (commentMatchBars) {
 				sections.push({
 					id: crypto.randomUUID(),
-					name: commentMatch[1].trim(),
-					startBar: parseInt(commentMatch[2]) - 1, // 0-based
-					endBar: parseInt(commentMatch[3]) // exclusive
+					name: commentMatchBars[1].trim(),
+					startBar: parseInt(commentMatchBars[2]) - 1, // 0-based
+					endBar: parseInt(commentMatchBars[3]) // exclusive
 				});
 				continue;
 			}
 
-			// Plain comment (no bars info)
-			if (trimmed.startsWith('//')) {
-				// Keep as chord line for round-trip fidelity
-				chordLines.push(trimmed);
+			// Section comment: // SectionName (new format without bar range)
+			const commentMatchName = trimmed.match(/^\/\/\s*(.+)$/);
+			if (commentMatchName) {
+				// Count bars accumulated so far to determine startBar
+				let barsAccum = 0;
+				for (const cl of chordLines) {
+					const t = cl.trim();
+					if (t && !t.startsWith('//')) {
+						barsAccum += countBarsInLine(t);
+					}
+				}
+				sections.push({
+					id: crypto.randomUUID(),
+					name: commentMatchName[1].trim(),
+					startBar: barsAccum,
+					endBar: -1 // sentinel: resolved after parsing
+				});
 				continue;
 			}
 
@@ -282,6 +295,25 @@ export function deserializeSong(text: string): DeserializeResult {
 	// Clean up chord lines (trim trailing blanks)
 	while (chordLines.length > 0 && chordLines[chordLines.length - 1].trim() === '') {
 		chordLines.pop();
+	}
+
+	// Resolve sections with endBar === -1 (new format without bar range)
+	// endBar = next section's startBar, or total bar count for the last section
+	if (sections.some((s) => s.endBar === -1)) {
+		let totalBars = 0;
+		for (const cl of chordLines) {
+			const t = cl.trim();
+			if (t && !t.startsWith('//')) {
+				totalBars += countBarsInLine(t);
+			}
+		}
+		const sorted = sections.slice().sort((a, b) => a.startBar - b.startBar);
+		for (let si = 0; si < sorted.length; si++) {
+			if (sorted[si].endBar === -1) {
+				const nextStart = si + 1 < sorted.length ? sorted[si + 1].startBar : totalBars;
+				sorted[si].endBar = nextStart;
+			}
+		}
 	}
 
 	const song: Partial<Song> = {

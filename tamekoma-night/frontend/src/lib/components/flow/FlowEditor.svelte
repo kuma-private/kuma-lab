@@ -111,6 +111,7 @@ import FlowMinimap from './FlowMinimap.svelte';
     song,
     songId,
     onSongChange,
+    onSeekToBar,
     trackNotes = new Map(),
     currentTime = 0,
     totalDuration = 0,
@@ -118,6 +119,7 @@ import FlowMinimap from './FlowMinimap.svelte';
     song: Song;
     songId?: string;
     onSongChange: (song: Song) => void;
+    onSeekToBar?: (barIndex: number) => void;
     trackNotes?: Map<string, { name: string; instrument: string; notes: MidiNote[] }>;
     currentTime?: number;
     totalDuration?: number;
@@ -638,7 +640,7 @@ import FlowMinimap from './FlowMinimap.svelte';
 
   {:else}
     <div class="text-view-container">
-      <TextView {song} {onSongChange} />
+      <TextView {song} {onSongChange} {onSeekToBar} />
     </div>
   {/if}
 

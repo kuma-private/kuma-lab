@@ -9,9 +9,11 @@
   let {
     song,
     onSongChange,
+    onSeekToBar,
   }: {
     song: Song;
     onSongChange: (song: Song) => void;
+    onSeekToBar?: (barIndex: number) => void;
   } = $props();
 
   // Serialize song to text on mount / when song changes externally
@@ -93,9 +95,9 @@
     const sections = (previewSong.sections ?? []).slice().sort((a, b) => a.startBar - b.startBar);
     const allLines = lineGroupedBars;
 
-    // Map line index -> section name to show above that line
+    // Map line index -> { name, startBar } to show above that line
     // Show a section label when the first bar of a line starts a new section
-    const labels: (string | null)[] = [];
+    const labels: ({ name: string; startBar: number } | null)[] = [];
     let lastSectionName: string | null = null;
 
     for (const line of allLines) {
@@ -107,7 +109,7 @@
       const sec = sections.find((s) => firstBarNum > s.startBar && firstBarNum <= s.endBar);
       const secName = sec?.name ?? null;
       if (secName && secName !== lastSectionName) {
-        labels.push(secName);
+        labels.push({ name: secName, startBar: sec!.startBar });
         lastSectionName = secName;
       } else {
         labels.push(null);
@@ -226,13 +228,21 @@
       <div class="preview-chords">
         {#each lineGroupedBars as line, i}
           {#if lineSectionLabels[i]}
-            <div class="section-label">{lineSectionLabels[i]}</div>
+            <button
+              class="section-label"
+              class:section-label--clickable={!!onSeekToBar}
+              onclick={() => onSeekToBar?.(lineSectionLabels[i]!.startBar)}
+            >{lineSectionLabels[i]!.name}</button>
           {/if}
           {#if line.length > 0}
             <div class="chord-line">
               <span class="bar-line">|</span>
               {#each line as bar}
-                <span class="preview-bar">
+                <button
+                  class="preview-bar"
+                  class:preview-bar--clickable={!!onSeekToBar}
+                  onclick={() => onSeekToBar?.(bar.barNumber - 1)}
+                >
                   {#each bar.entries as entry}
                     {#if entry.type === 'chord'}
                       <span class="chord-chip" data-root={entry.chord.root}>
@@ -245,7 +255,7 @@
                       <span class="entry-sustain">=</span>
                     {/if}
                   {/each}
-                </span>
+                </button>
                 <span class="bar-line">|</span>
               {/each}
             </div>
@@ -389,11 +399,28 @@
   }
 
   .section-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    margin-bottom: var(--space-xs);
+    padding-left: var(--space-sm);
+    border-left: 3px solid var(--accent, #6366f1);
+    background: none;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+    text-align: left;
+    transition: color 0.15s;
+  }
+
+  .section-label--clickable {
+    cursor: pointer;
+  }
+
+  .section-label--clickable:hover {
+    color: var(--text-primary);
   }
 
   .chord-line {
@@ -416,6 +443,22 @@
     align-items: center;
     gap: 4px;
     padding: 2px 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+  }
+
+  .preview-bar--clickable {
+    cursor: pointer;
+  }
+
+  .preview-bar--clickable:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .preview-bar--clickable:hover .chord-chip {
+    filter: brightness(1.2);
   }
 
   /* chord-chip styles are imported from chord-colors.css */
