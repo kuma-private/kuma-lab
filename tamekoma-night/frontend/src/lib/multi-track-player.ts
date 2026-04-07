@@ -4,7 +4,7 @@
 // Does NOT modify song-player.ts (kept as v1 fallback).
 
 import * as Tone from 'tone';
-import type { Song, Track, MidiNote, MidiControlChange } from './types/song';
+import type { Song, Track, DirectiveBlock, MidiNote, MidiControlChange } from './types/song';
 import type { ParsedDirectives, NoteRange as DirectiveNoteRange, VelocityValue } from './directive-parser';
 import type { VoicingConfig, NoteRange as VoicingNoteRange } from './voicing-engine';
 import type { RhythmConfig } from './rhythm-engine';
@@ -335,7 +335,13 @@ export class MultiTrackPlayer {
       const trackNotes: MidiNote[] = [];
       const channel = trackIdx;
 
-      for (const block of trackDef.blocks) {
+      // If track has no blocks, create a default block covering the entire progression
+      // so that users hear block chords even without explicitly creating blocks
+      const blocks: DirectiveBlock[] = trackDef.blocks.length > 0
+        ? trackDef.blocks
+        : [{ id: '__default__', startBar: 0, endBar: resolvedBars.length, directives: '' }];
+
+      for (const block of blocks) {
         // AI-generated MIDI: skip voicing/rhythm pipeline entirely
         if (block.generatedMidi && block.generatedMidi.notes.length > 0) {
           let blockNotes = block.generatedMidi.notes;
