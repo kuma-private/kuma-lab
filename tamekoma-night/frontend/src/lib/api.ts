@@ -105,3 +105,32 @@ export const suggestArrangement = async (songId: string, data: ArrangeRequest): 
 	});
 	return res.json();
 };
+
+// AI MIDI Generation
+import type { MidiNote } from '$lib/types/song';
+
+export interface GenerateMidiRequest {
+	chordProgression: string;
+	style: string;
+	instrument: string;
+	bpm: number;
+	expression: number;
+	feel: number;
+	barRange: string;
+}
+
+export interface GenerateMidiResponse {
+	notes: MidiNote[];
+	style: string;
+	expression: number;
+	feel: number;
+}
+
+export const generateMidi = async (songId: string, data: GenerateMidiRequest): Promise<GenerateMidiResponse> => {
+	const res = await apiFetch(`/api/songs/${songId}/generate-midi`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};

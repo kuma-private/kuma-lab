@@ -288,6 +288,12 @@ export class MultiTrackPlayer {
       const channel = trackIdx;
 
       for (const block of trackDef.blocks) {
+        // AI-generated MIDI: skip voicing/rhythm pipeline entirely
+        if (block.generatedMidi && block.generatedMidi.notes.length > 0) {
+          trackNotes.push(...block.generatedMidi.notes);
+          continue;
+        }
+
         const { directives } = parseDirectives(block.directives);
 
         // Slice chord names for this block's bar range

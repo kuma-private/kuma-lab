@@ -5,6 +5,7 @@
   let {
     track,
     totalBars,
+    selectedRange = null,
     onBlockClick,
     onBlockCreate,
     onBlockMove,
@@ -14,6 +15,7 @@
   }: {
     track: Track;
     totalBars: number;
+    selectedRange?: { startBar: number; endBar: number } | null;
     onBlockClick: (block: DirectiveBlock) => void;
     onBlockCreate: (startBar: number, endBar: number) => void;
     onBlockMove: (blockId: string, newStartBar: number) => void;
@@ -21,6 +23,11 @@
     onBlockDelete: (blockId: string) => void;
     onBlockCopy: (blockId: string, targetStartBar: number) => void;
   } = $props();
+
+  function isBarSelected(barNum: number): boolean {
+    if (!selectedRange) return false;
+    return barNum >= selectedRange.startBar && barNum <= selectedRange.endBar;
+  }
 
   import { tick } from 'svelte';
   let contextMenu = $state<{ x: number; y: number; blockId: string } | null>(null);
@@ -116,7 +123,7 @@
   oncontextmenu={handleContextMenu}
 >
   {#each Array.from({ length: totalBars }, (_, i) => i + 1) as barNum}
-    <div class="grid-cell" class:grid-cell--odd={barNum % 2 === 1}></div>
+    <div class="grid-cell" class:grid-cell--odd={barNum % 2 === 1} class:grid-cell--selected={isBarSelected(barNum)}></div>
   {/each}
   {#each track.blocks as block (block.id)}
     <div
@@ -175,6 +182,10 @@
 
   .grid-cell--odd {
     background: rgba(255, 255, 255, 0.008);
+  }
+
+  .grid-cell--selected {
+    background: rgba(232, 168, 76, 0.08);
   }
 
   .block-wrapper {

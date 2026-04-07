@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { parseDirectives, type ParsedDirectives, type VelocityLevel } from '$lib/directive-parser';
-  import type { DirectiveBlock, MidiNote } from '$lib/types/song';
+  import type { DirectiveBlock, MidiNote, GeneratedMidiData } from '$lib/types/song';
   import { parseProgression, resolveRepeats } from '$lib/chord-parser';
   import { voiceChords, type VoicingConfig } from '$lib/voicing-engine';
   import { generateRhythm, type RhythmConfig } from '$lib/rhythm-engine';
-  import { suggestDirectives } from '$lib/api';
+  import { suggestDirectives, generateMidi } from '$lib/api';
+  import { midiToNoteName } from '$lib/chord-player';
   import { showToast } from '$lib/stores/toast.svelte';
   import MiniPianoRoll from './MiniPianoRoll.svelte';
 
@@ -17,10 +19,19 @@
     chordProgression?: string;
     bpm?: number;
     timeSignature?: string;
-    onSave: (directives: string) => void;
+    onSave: (directives: string, generatedMidi?: GeneratedMidiData) => void;
     onClose: () => void;
     onPreview?: () => void;
   }
+
+  const GENERATING_TIPS = [
+    'AIがパターンを生成しています...',
+    'コード進行を分析中...',
+    'ボイシングを最適化中...',
+    'リズムパターンを構築中...',
+    'ダイナミクスを調整中...',
+    '仕上げ処理中...',
+  ];
 
   const MODE_CHIPS = ['block', 'arpUp', 'arpDown', 'bossa', 'jazz', '8beat'] as const;
 
@@ -69,6 +80,14 @@
   let aiPrompt = $state('');
   let aiLoading = $state(false);
   let aiError = $state<string | null>(null);
+  let generatingTip = $state(GENERATING_TIPS[0]);
+  let tipInterval: ReturnType<typeof setInterval> | null = null;
+
+  // --- AI MIDI generation state ---
+  let expressionSlider = $state(block.generatedMidi?.expression ?? 50);
+  let feelSlider = $state(block.generatedMidi?.feel ?? 50);
+  let generatedMidiData = $state<GeneratedMidiData | undefined>(block.generatedMidi);
+  let detailOpen = $state(false);
 
   // --- Free mode / melody ---
   let isFreeMode = $derived(directives.mode === 'free');
@@ -186,7 +205,7 @@
     melodyText = extractMelodyText(rawText);
   }
 
-  // --- AI generate ---
+  // --- AI generate (MIDI generation) ---
   async function handleGenerate() {
     if (!songId) {
       showToast('Song ID が不明です', 'error');
@@ -200,46 +219,129 @@
     aiLoading = true;
     aiError = null;
 
+    // Start tip rotation
+    let tipIndex = 0;
+    generatingTip = GENERATING_TIPS[0];
+    tipInterval = setInterval(() => {
+      tipIndex = (tipIndex + 1) % GENERATING_TIPS.length;
+      generatingTip = GENERATING_TIPS[tipIndex];
+    }, 2500);
+
     try {
       const barRange = (block.startBar !== undefined && block.endBar !== undefined)
         ? `${block.startBar + 1}-${block.endBar}`
         : '';
 
-      const result = await suggestDirectives(songId, {
+      const result = await generateMidi(songId, {
         chordProgression: chordProgression ?? '',
-        genre: aiPrompt.trim(),
-        trackName,
+        style: aiPrompt.trim(),
         instrument,
+        bpm,
+        expression: expressionSlider,
+        feel: feelSlider,
         barRange,
       });
 
-      // Apply the returned directives
-      const parsed2 = parseDirectives(result.directives);
-      directives = parsed2.directives;
-      rawText = directivesToText(directives);
-      parseErrors = parsed2.errors.map(e => e.line ? `Line ${e.line}: ${e.message}` : e.message);
-      // Sync sliders
-      voicingSlider = voicingNameToValue(directives.voicing);
-      velocitySlider = velocityNameToValue(typeof directives.velocity === 'string' ? directives.velocity : 'mf');
+      // Map API response fields to MidiNote type
+      const mappedNotes: MidiNote[] = (result.notes as any[]).map((n: any) => ({
+        midi: n.midi,
+        startTick: n.startTick ?? n.tick ?? 0,
+        durationTicks: n.durationTicks ?? n.duration ?? 480,
+        velocity: n.velocity,
+        channel: n.channel ?? 0,
+      }));
 
-      showToast('ディレクティブを生成しました', 'success');
+      // Store as GeneratedMidiData
+      generatedMidiData = {
+        notes: mappedNotes,
+        style: result.style,
+        expression: result.expression,
+        feel: result.feel,
+        generatedAt: new Date().toISOString(),
+      };
+
+      // Show AI-generated notes in preview
+      previewNotes = mappedNotes;
+
+      // Explicitly draw after DOM updates to ensure canvas is mounted
+      await tick();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          drawPreview(previewNotes);
+        });
+      });
+
+      showToast('MIDIを生成しました', 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : '生成に失敗しました';
       aiError = message;
       showToast(message, 'error');
     } finally {
       aiLoading = false;
+      if (tipInterval) {
+        clearInterval(tipInterval);
+        tipInterval = null;
+      }
     }
   }
 
   // --- Actions ---
   function handleOk() {
-    onSave(rawText);
+    onSave(rawText, generatedMidiData);
     onClose();
   }
 
-  function handlePreview() {
-    onPreview?.();
+  let previewPlaying = $state(false);
+  let previewTimeouts: ReturnType<typeof setTimeout>[] = [];
+
+  async function handlePreview() {
+    if (previewPlaying) {
+      // Stop
+      previewTimeouts.forEach(clearTimeout);
+      previewTimeouts = [];
+      previewPlaying = false;
+      return;
+    }
+
+    const notes = previewNotes;
+    if (notes.length === 0) return;
+
+    const Tone = await import('tone');
+    await Tone.start();
+
+    const { getPianoSampler, isPianoLoaded } = await import('$lib/chord-player');
+    const sampler = getPianoSampler();
+
+    // Wait for piano to load
+    if (!isPianoLoaded()) {
+      await new Promise<void>(resolve => {
+        const check = () => isPianoLoaded() ? resolve() : setTimeout(check, 100);
+        check();
+      });
+    }
+
+    previewPlaying = true;
+    const secondsPerTick = 60 / bpm / 480;
+
+    for (const n of notes) {
+      const timeSec = n.startTick * secondsPerTick;
+      const durSec = Math.max(0.05, n.durationTicks * secondsPerTick);
+      const noteName = midiToNoteName(n.midi);
+      const vel = n.velocity / 127;
+
+      const t = setTimeout(() => {
+        try { sampler.triggerAttackRelease(noteName, durSec, Tone.now(), vel); } catch {}
+      }, timeSec * 1000);
+      previewTimeouts.push(t);
+    }
+
+    // Auto stop after all notes
+    const maxTime = Math.max(...notes.map(n => (n.startTick + n.durationTicks) * secondsPerTick));
+    const stopT = setTimeout(() => {
+      previewPlaying = false;
+      previewTimeouts = [];
+    }, (maxTime + 0.5) * 1000);
+    previewTimeouts.push(stopT);
   }
 
   function handleOverlayClick(e: MouseEvent) {
@@ -342,11 +444,12 @@
   /** Draw MidiNote[] on the preview canvas */
   function drawPreview(notes: MidiNote[]) {
     if (!previewCanvas) return;
+    const rect = previewCanvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return; // Canvas not visible yet
     const ctx = previewCanvas.getContext('2d');
     if (!ctx) return;
 
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
-    const rect = previewCanvas.getBoundingClientRect();
     const w = rect.width;
     const h = rect.height;
 
@@ -418,10 +521,16 @@
     void chordProgression;
     void bpm;
     void timeSignature;
+    void generatedMidiData;
 
     if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
     previewDebounceTimer = setTimeout(() => {
-      previewNotes = generatePreviewNotes();
+      // If AI-generated MIDI exists, use those notes for preview
+      if (generatedMidiData && generatedMidiData.notes.length > 0) {
+        previewNotes = generatedMidiData.notes;
+      } else {
+        previewNotes = generatePreviewNotes();
+      }
     }, 200);
 
     return () => {
@@ -432,7 +541,10 @@
   $effect(() => {
     void previewNotes;
     void previewCanvas;
-    drawPreview(previewNotes);
+    // Wait a tick for canvas to mount when showPreviewCanvas transitions to true
+    requestAnimationFrame(() => {
+      drawPreview(previewNotes);
+    });
   });
 
   let hasDirectives = $derived(
@@ -440,12 +552,23 @@
     directives.voicing !== undefined ||
     directives.velocity !== undefined
   );
+
+  let showPreviewCanvas = $derived(
+    (generatedMidiData && generatedMidiData.notes.length > 0) ||
+    (hasDirectives && !isFreeMode)
+  );
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="popover-overlay" role="presentation" onclick={handleOverlayClick}>
   <div class="popover" role="dialog" aria-modal="true" aria-label="Block Popover">
+    {#if aiLoading}
+      <div class="generating-overlay">
+        <div class="generating-spinner"></div>
+        <p class="generating-text">{generatingTip}</p>
+      </div>
+    {/if}
     <!-- Header -->
     <div class="popover-header">
       <span class="popover-title">{headerLabel}</span>
@@ -463,7 +586,7 @@
             placeholder="スタイルを入力... (例: ジャズバラード風)"
             bind:value={aiPrompt}
             disabled={aiLoading}
-            onkeydown={(e) => { if (e.key === 'Enter' && !aiLoading) handleGenerate(); }}
+            onkeydown={(e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); e.stopPropagation(); if (!aiLoading) handleGenerate(); } }}
           />
           <button class="btn btn-primary btn-sm btn-generate" onclick={handleGenerate} disabled={aiLoading}>
             {#if aiLoading}
@@ -476,104 +599,39 @@
         {#if aiError}
           <div class="ai-error">{aiError}</div>
         {/if}
-        <!-- Mode preset chips -->
-        <div class="chip-group">
-          {#each MODE_CHIPS as opt}
-            <button
-              class="chip"
-              class:chip--active={directives.mode === opt}
-              onclick={() => setMode(opt)}
-            >{opt}</button>
-          {/each}
-        </div>
       </div>
 
-      <!-- Section divider: パラメータ -->
-      <div class="section-divider">
-        <span class="section-label">パラメータ</span>
-      </div>
-
-      <!-- Voicing slider -->
+      <!-- Expression slider -->
       <div class="field">
-        <label class="field-label">Voicing</label>
+        <label class="field-label">Expression</label>
         <div class="bar-row">
-          <span class="bar-label-left">close</span>
+          <span class="bar-label-left">Subtle</span>
           <input
             type="range"
             class="slider"
             min={0}
             max={100}
             step={1}
-            value={voicingSlider}
-            oninput={(e) => setVoicingFromSlider(Number((e.target as HTMLInputElement).value))}
+            bind:value={expressionSlider}
           />
-          <span class="bar-label-right">spread</span>
-        </div>
-        <div class="snap-labels">
-          {#each VOICING_SNAPS as snap}
-            <span
-              class="snap-label"
-              class:snap-label--active={snappedVoicing.name === snap.name}
-            >{snap.name}</span>
-          {/each}
+          <span class="bar-label-right">Dramatic</span>
         </div>
       </div>
 
-      <!-- Velocity slider -->
+      <!-- Feel slider -->
       <div class="field">
-        <label class="field-label">Velocity</label>
+        <label class="field-label">Feel</label>
         <div class="bar-row">
-          <span class="bar-label-left">pp</span>
+          <span class="bar-label-left">Tight</span>
           <input
             type="range"
             class="slider"
             min={0}
             max={100}
             step={1}
-            value={velocitySlider}
-            oninput={(e) => setVelocityFromSlider(Number((e.target as HTMLInputElement).value))}
+            bind:value={feelSlider}
           />
-          <span class="bar-label-right">ff</span>
-        </div>
-        <div class="snap-labels snap-labels--6">
-          {#each VELOCITY_SNAPS as snap}
-            <span
-              class="snap-label"
-              class:snap-label--active={snappedVelocity.name === snap.name}
-            >{snap.name}</span>
-          {/each}
-        </div>
-      </div>
-
-      <!-- Humanize slider -->
-      <div class="field">
-        <label class="field-label">Humanize</label>
-        <div class="slider-row">
-          <input
-            type="range"
-            class="slider"
-            min={HUMANIZE_MIN}
-            max={HUMANIZE_MAX}
-            value={directives.humanize ?? 0}
-            oninput={(e) => setHumanize(Number((e.target as HTMLInputElement).value))}
-          />
-          <span class="slider-value">{directives.humanize ?? 0}%</span>
-        </div>
-      </div>
-
-      <!-- Swing slider -->
-      <div class="field">
-        <label class="field-label">Swing</label>
-        <div class="slider-row">
-          <input
-            type="range"
-            class="slider"
-            min={SWING_MIN}
-            max={SWING_MAX}
-            value={directives.swing ?? 0}
-            oninput={(e) => setSwing(Number((e.target as HTMLInputElement).value))}
-          />
-          <span class="slider-value">{directives.swing ?? 0}%</span>
+          <span class="bar-label-right">Loose</span>
         </div>
       </div>
 
@@ -584,16 +642,17 @@
 
       <!-- MIDI preview -->
       <div class="preview-box">
-        {#if hasDirectives && !isFreeMode}
+        {#if showPreviewCanvas}
           <canvas
             class="preview-canvas"
             bind:this={previewCanvas}
           ></canvas>
         {:else}
-          <span class="preview-placeholder">ディレクティブを設定するとプレビューが表示されます</span>
+          <span class="preview-placeholder">スタイルを入力して「生成」を押してください</span>
         {/if}
       </div>
 
+      <!-- Collapsible detail settings (conventional directive sliders) -->
       <!-- Mini piano roll (free mode) -->
       {#if isFreeMode}
         <div class="section-divider">
@@ -606,7 +665,7 @@
       <div class="raw-section">
         <button class="raw-toggle" onclick={() => (rawOpen = !rawOpen)}>
           <span class="raw-toggle-icon">{rawOpen ? '▾' : '▸'}</span>
-          Raw テキスト
+          パラメータ
         </button>
         {#if rawOpen}
           <textarea
@@ -628,7 +687,7 @@
 
     <!-- Footer -->
     <div class="popover-footer">
-      <button class="footer-btn" onclick={handlePreview}>&#9654; Preview</button>
+      <button class="footer-btn" onclick={handlePreview}>{previewPlaying ? '■ Stop' : '▶ Preview'}</button>
       <button class="footer-btn footer-btn--primary" onclick={handleOk}>OK</button>
     </div>
   </div>
@@ -649,6 +708,7 @@
 
   /* Popover card */
   .popover {
+    position: relative;
     background: var(--bg-surface);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
@@ -1065,5 +1125,40 @@
   .btn-sm {
     padding: 5px 12px;
     font-size: 0.78rem;
+  }
+
+  /* Generating overlay */
+  .generating-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(8, 6, 4, 0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    border-radius: inherit;
+    z-index: 5;
+  }
+
+  .generating-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border-subtle);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .generating-text {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-align: center;
+    animation: fade-text 0.5s ease;
+  }
+
+  @keyframes fade-text {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 </style>

@@ -5,11 +5,26 @@ open TamekomaNight.Api
 
 module Models =
 
+    type MidiNoteData =
+        { Midi: int
+          StartTick: int
+          DurationTicks: int
+          Velocity: int
+          Channel: int }
+
+    type GeneratedMidiData =
+        { Notes: MidiNoteData list
+          Style: string
+          Expression: int
+          Feel: int
+          GeneratedAt: string }
+
     type DirectiveBlock =
         { Id: string
           StartBar: int
           EndBar: int
-          Directives: string }
+          Directives: string
+          GeneratedMidi: GeneratedMidiData option }
 
     type Track =
         { Id: string
