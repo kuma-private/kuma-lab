@@ -94,7 +94,7 @@
 <style>
   .section-bar {
     display: grid;
-    gap: 2px;
+    gap: 0;
     padding: 0 2px;
   }
 

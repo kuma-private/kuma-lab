@@ -304,12 +304,13 @@
     flex-direction: column;
     min-width: 0;
     min-height: 0;
+    overflow-y: auto;
   }
 
   .text-editor {
     flex: 1;
     width: 100%;
-    min-height: 300px;
+    min-height: 0;
     padding: var(--space-md);
     background: var(--bg-surface);
     color: var(--text-primary);
