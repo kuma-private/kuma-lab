@@ -635,7 +635,7 @@
 
   let showPreviewCanvas = $derived(
     (generatedMidiData && generatedMidiData.notes.length > 0) ||
-    (hasDirectives && !isFreeMode)
+    (!isFreeMode && (hasDirectives || !!chordProgression))
   );
 </script>
 

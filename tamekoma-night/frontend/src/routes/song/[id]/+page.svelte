@@ -88,7 +88,28 @@
 	function finishTsEdit() {
 		editingTs = false;
 		if (store.currentSong && tsInput !== store.currentSong.timeSignature) {
-			handleSongChange({ ...store.currentSong, timeSignature: tsInput });
+			// Check for existing MIDI data
+			const hasGeneratedMidi = store.currentSong.tracks.some(t =>
+				t.blocks.some(b => b.generatedMidi?.notes?.length)
+			);
+			if (hasGeneratedMidi) {
+				const confirmed = window.confirm(
+					'拍子を変更すると、既存のAI生成MIDIデータの再生成が必要になります。続行しますか？'
+				);
+				if (!confirmed) return;
+				// Clear generatedMidi from all blocks
+				const updatedSong = { ...store.currentSong, timeSignature: tsInput };
+				for (const track of updatedSong.tracks) {
+					for (const block of track.blocks) {
+						if (block.generatedMidi) {
+							block.generatedMidi = undefined;
+						}
+					}
+				}
+				handleSongChange(updatedSong);
+			} else {
+				handleSongChange({ ...store.currentSong, timeSignature: tsInput });
+			}
 			showToast(`拍子を ${tsInput} に変更しました`, 'success');
 		}
 	}

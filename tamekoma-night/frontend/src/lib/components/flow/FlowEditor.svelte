@@ -518,7 +518,7 @@ import FlowMinimap from './FlowMinimap.svelte';
     <div class="tab-bar-right">
       {#if activeTab === 'text'}
         <button class="btn-import" onclick={handleImportImage} disabled={importLoading}>
-          {importLoading ? '読み込み中...' : '📷 画像からインポート'}
+          {importLoading ? '読み込み中...' : '画像からインポート'}
         </button>
       {/if}
       <button class="btn-arrange" onclick={() => arrangeOpen = !arrangeOpen}>
