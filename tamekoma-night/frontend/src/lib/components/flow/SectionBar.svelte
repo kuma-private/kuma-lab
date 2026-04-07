@@ -17,10 +17,12 @@
     sections,
     totalBars,
     onSectionNameChange,
+    onSectionClick,
   }: {
     sections: Section[];
     totalBars: number;
     onSectionNameChange: (sectionId: string, name: string) => void;
+    onSectionClick?: (startBar: number) => void;
   } = $props();
 
   function getColor(name: string): string {
@@ -68,10 +70,14 @@
     {@const color = getColor(section.name)}
     <div
       class="section-tag"
-      role="group"
+      role="button"
+      tabindex="0"
       style:grid-column="{section.startBar + 1} / {section.endBar + 1}"
       style:--section-color={color}
+      style:cursor="pointer"
+      onclick={() => onSectionClick?.(section.startBar)}
       ondblclick={(e) => handleDblClick(section, e)}
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSectionClick?.(section.startBar); } }}
     >
       <span
         class="section-label"

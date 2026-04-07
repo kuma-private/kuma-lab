@@ -578,13 +578,14 @@ import FlowMinimap from './FlowMinimap.svelte';
             sections={song.sections}
             totalBars={totalBars}
             onSectionNameChange={handleSectionNameChange}
+            onSectionClick={(startBar) => onSeekToBar?.(startBar)}
           />
         </div>
 
         <!-- Chord row -->
         <div class="row-label">Chords</div>
         <div class="row-content chord-row">
-          <ChordTimeline chords={song.chordProgression} totalBars={totalBars} musicalKey={song.key} onBarClick={handleBarClick} {selectedRange} onRangeSelect={handleRangeSelect} />
+          <ChordTimeline chords={song.chordProgression} totalBars={totalBars} musicalKey={song.key} onBarClick={handleBarClick} onBarSeek={(bar) => onSeekToBar?.(bar)} {selectedRange} onRangeSelect={handleRangeSelect} />
         </div>
 
         <!-- Separator -->

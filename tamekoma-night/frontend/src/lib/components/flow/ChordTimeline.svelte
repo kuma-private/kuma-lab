@@ -7,6 +7,7 @@
     totalBars,
     musicalKey = 'C Major',
     onBarClick,
+    onBarSeek,
     selectedRange = null,
     onRangeSelect,
   }: {
@@ -14,6 +15,7 @@
     totalBars: number;
     musicalKey?: string;
     onBarClick?: (barNumber: number) => void;
+    onBarSeek?: (barNumber: number) => void;
     selectedRange?: { startBar: number; endBar: number } | null;
     onRangeSelect?: (startBar: number, endBar: number) => void;
   } = $props();
@@ -74,8 +76,8 @@
       dragCurrentBar = null;
 
       if (lo === hi) {
-        // Single click — use existing onBarClick
-        onBarClick?.(lo);
+        // Single click — seek playback to this bar
+        onBarSeek?.(lo);
       } else {
         // Range selection
         onRangeSelect?.(lo, hi);
@@ -138,7 +140,7 @@
 <div class="chord-timeline" style:grid-template-columns="repeat({totalBars}, minmax(0, 140px))">
   {#each Array.from({ length: totalBars }, (_, i) => i + 1) as barNum}
     {@const bar = getBar(barNum)}
-    <div class="chord-cell" class:chord-cell--clickable={!!onBarClick || !!onRangeSelect} class:chord-cell--selected={isBarHighlighted(barNum)} onmousedown={(e) => handleMouseDown(barNum, e)} role={onBarClick || onRangeSelect ? 'button' : undefined} tabindex={onBarClick || onRangeSelect ? 0 : undefined} onkeydown={(e) => { if (onBarClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onBarClick(barNum); } }}>
+    <div class="chord-cell" class:chord-cell--clickable={!!onBarClick || !!onBarSeek || !!onRangeSelect} class:chord-cell--selected={isBarHighlighted(barNum)} onmousedown={(e) => handleMouseDown(barNum, e)} ondblclick={() => onBarClick?.(barNum)} role={onBarClick || onBarSeek || onRangeSelect ? 'button' : undefined} tabindex={onBarClick || onBarSeek || onRangeSelect ? 0 : undefined} onkeydown={(e) => { if (onBarClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onBarClick(barNum); } }}>
       <span class="bar-number">{barNum}</span>
       <div class="chord-entries">
         {#if bar}
