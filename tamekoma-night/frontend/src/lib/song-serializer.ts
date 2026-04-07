@@ -15,7 +15,7 @@ export function serializeSong(song: Song): string {
 	lines.push('');
 
 	// Chords section
-	lines.push('=== Chords ===');
+	lines.push('## Chords');
 	if (song.chordProgression.trim()) {
 		const chordLines = song.chordProgression.trim().split('\n');
 
@@ -41,7 +41,7 @@ export function serializeSong(song: Song): string {
 			while (sectionIndex < sectionsSorted.length) {
 				const sec = sectionsSorted[sectionIndex];
 				if (sec.startBar <= currentBar) {
-					lines.push(`// ${sec.name}`);
+					lines.push(`# ${sec.name}`);
 					sectionIndex++;
 				} else {
 					break;
@@ -69,9 +69,9 @@ export function serializeSong(song: Song): string {
 	// Tracks list
 	if (song.tracks.length > 0) {
 		lines.push('');
-		lines.push('=== Tracks ===');
+		lines.push('## Tracks');
 		for (const track of song.tracks) {
-			lines.push(track.name);
+			lines.push(`- ${track.name}`);
 		}
 	}
 
@@ -184,34 +184,36 @@ export function deserializeSong(text: string): DeserializeResult {
 			}
 		}
 
-		// Section header: === ... ===
+		// Section header: === ... === or ## ...
 		const sectionMatch = trimmed.match(/^===\s*(.+?)\s*===$/);
-		if (sectionMatch) {
+		const markdownHeaderMatch = !sectionMatch ? trimmed.match(/^##\s+(.+)$/) : null;
+		const headerContent = sectionMatch?.[1] ?? markdownHeaderMatch?.[1];
+		if (headerContent) {
 			flushTrackBlock();
 
-			const headerContent = sectionMatch[1];
-
-			// === Chords ===
+			// Chords
 			if (/^Chords$/i.test(headerContent.trim())) {
 				state = 'chords';
 				continue;
 			}
 
-			// === Tracks === (new simplified format)
+			// Tracks
 			if (/^Tracks$/i.test(headerContent.trim())) {
 				state = 'tracks-list';
 				continue;
 			}
 
 			// === TrackName [bars X-Y] === (legacy format)
-			const trackHeaderMatch = headerContent.match(/^(.+?)\s*\[bars\s+(\d+)\s*-\s*(\d+)\]$/);
-			if (trackHeaderMatch) {
-				state = 'track-block';
-				currentTrackName = trackHeaderMatch[1].trim();
-				currentBlockStart = parseInt(trackHeaderMatch[2]) - 1; // Convert 1-based to 0-based
-				currentBlockEnd = parseInt(trackHeaderMatch[3]); // endBar is exclusive, text shows inclusive
-				currentDirectiveLines = [];
-				continue;
+			if (sectionMatch) {
+				const trackHeaderMatch = headerContent.match(/^(.+?)\s*\[bars\s+(\d+)\s*-\s*(\d+)\]$/);
+				if (trackHeaderMatch) {
+					state = 'track-block';
+					currentTrackName = trackHeaderMatch[1].trim();
+					currentBlockStart = parseInt(trackHeaderMatch[2]) - 1; // Convert 1-based to 0-based
+					currentBlockEnd = parseInt(trackHeaderMatch[3]); // endBar is exclusive, text shows inclusive
+					currentDirectiveLines = [];
+					continue;
+				}
 			}
 
 			errors.push({ line: lineNum, message: `Unrecognized section header: ${trimmed}` });
@@ -232,8 +234,8 @@ export function deserializeSong(text: string): DeserializeResult {
 				continue;
 			}
 
-			// Section comment: // SectionName (new format without bar range)
-			const commentMatchName = trimmed.match(/^\/\/\s*(.+)$/);
+			// Section comment: // SectionName or # SectionName (without bar range)
+			const commentMatchName = trimmed.match(/^\/\/\s*(.+)$/) ?? trimmed.match(/^#\s+(.+)$/);
 			if (commentMatchName) {
 				// Count bars accumulated so far to determine startBar
 				let barsAccum = 0;
@@ -257,10 +259,10 @@ export function deserializeSong(text: string): DeserializeResult {
 			continue;
 		}
 
-		// Inside tracks list — each line is a track name
+		// Inside tracks list — each line is a track name (with optional leading "- ")
 		if (state === 'tracks-list') {
 			if (!trimmed.startsWith('//')) {
-				const trackName = trimmed;
+				const trackName = trimmed.startsWith('- ') ? trimmed.slice(2) : trimmed;
 				if (!trackMap.has(trackName)) {
 					trackMap.set(trackName, {
 						id: crypto.randomUUID(),

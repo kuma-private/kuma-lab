@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Song, DirectiveBlock, Track, MidiNote, GeneratedMidiData } from '$lib/types/song';
-  import { suggestArrangement, importChordChart, type ArrangeRequest, type ArrangeResponse } from '$lib/api';
+  import { suggestArrangement, type ArrangeRequest, type ArrangeResponse } from '$lib/api';
   import { showToast } from '$lib/stores/toast.svelte';
   import SectionBar from './SectionBar.svelte';
   import ChordTimeline from './ChordTimeline.svelte';
@@ -8,6 +8,7 @@
   import TextView from './TextView.svelte';
   import BlockPopover from './BlockPopover.svelte';
   import ChordEditDialog from './ChordEditDialog.svelte';
+  import ImportDialog from './ImportDialog.svelte';
   import { parseProgression, serialize } from '$lib/chord-parser';
 import FlowMinimap from './FlowMinimap.svelte';
   import TrackPianoRollRow from './TrackPianoRollRow.svelte';
@@ -356,43 +357,7 @@ import FlowMinimap from './FlowMinimap.svelte';
   }
 
   // --- Chord chart image import ---
-  let importLoading = $state(false);
-
-  async function handleImportImage() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.multiple = true;
-    input.onchange = async () => {
-      if (!input.files?.length || !songId) return;
-      importLoading = true;
-      try {
-        const images: string[] = [];
-        for (const file of input.files) {
-          const dataUri = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.readAsDataURL(file);
-          });
-          images.push(dataUri);
-        }
-        const result = await importChordChart(songId, {
-          images,
-          bpm: song.bpm,
-          timeSignature: song.timeSignature,
-          key: song.key,
-        });
-        song.chordProgression = result.chords;
-        onSongChange(JSON.parse(JSON.stringify(song)));
-        showToast('コード進行をインポートしました', 'success');
-      } catch (err) {
-        showToast(err instanceof Error ? err.message : 'インポートに失敗しました', 'error');
-      } finally {
-        importLoading = false;
-      }
-    };
-    input.click();
-  }
+  let importDialogOpen = $state(false);
 
   function handleBlockCreate(trackId: string, startBar: number, endBar: number) {
     const track = song.tracks.find(t => t.id === trackId);
@@ -517,8 +482,8 @@ import FlowMinimap from './FlowMinimap.svelte';
     <!-- Right side: AI Arrange button -->
     <div class="tab-bar-right">
       {#if activeTab === 'text'}
-        <button class="btn-import" onclick={handleImportImage} disabled={importLoading}>
-          {importLoading ? '読み込み中...' : '画像からインポート'}
+        <button class="btn-import" onclick={() => importDialogOpen = true}>
+          画像からインポート
         </button>
       {/if}
       <button class="btn-arrange" onclick={() => arrangeOpen = !arrangeOpen}>
@@ -667,6 +632,22 @@ import FlowMinimap from './FlowMinimap.svelte';
       timeSignature={song.timeSignature}
       onSave={handlePopoverSave}
       onClose={handlePopoverClose}
+    />
+  {/if}
+
+  {#if importDialogOpen && songId}
+    <ImportDialog
+      songId={songId}
+      bpm={song.bpm}
+      timeSignature={song.timeSignature}
+      key={song.key}
+      onImport={(chords) => {
+        song.chordProgression = chords;
+        onSongChange(JSON.parse(JSON.stringify(song)));
+        showToast('コード進行をインポートしました', 'success');
+        importDialogOpen = false;
+      }}
+      onClose={() => importDialogOpen = false}
     />
   {/if}
 </div>
