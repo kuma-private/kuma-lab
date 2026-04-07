@@ -22,8 +22,8 @@
 
 	// ── Constants ────────────────────────────────────────
 	const TICKS_PER_QUARTER = 480;
-	const TRACK_HEIGHT = 44;
-	const TRACK_NAME_WIDTH = 50;
+	const TRACK_HEIGHT = 60;
+	const TRACK_NAME_WIDTH = 90;
 
 	const TRACK_COLORS: Record<string, string> = {
 		piano: '#e8a84c',
@@ -189,7 +189,7 @@
 				// Normalize Y within the track row
 				const normalizedY = 1 - (note.midi - minMidi) / range;
 				const y = yBase + padding + normalizedY * (TRACK_HEIGHT - padding * 2 - 4);
-				const h = Math.max(3, (TRACK_HEIGHT - padding * 2) / Math.max(range, 12));
+				const h = Math.max(3, (TRACK_HEIGHT - padding * 2) / Math.max(range, 1));
 
 				ctx.fillStyle = color;
 				ctx.globalAlpha = alpha * (note.velocity / 127);
@@ -346,7 +346,7 @@
 					class:empty={track.notes.length === 0}
 					style="height: {TRACK_HEIGHT}px;"
 				>
-					<span class="track-name-text" style="color: {getTrackColor(track.instrument)};">
+					<span class="track-name-text" title={track.name} style="color: {getTrackColor(track.instrument)};">
 						{track.name}
 					</span>
 				</div>
@@ -380,7 +380,7 @@
 	}
 
 	.track-names {
-		width: 50px;
+		width: 90px;
 		flex-shrink: 0;
 		border-right: 1px solid var(--border-subtle);
 		overflow: hidden;

@@ -209,13 +209,13 @@
     display: grid;
     gap: 0;
     position: relative;
-    min-height: 32px;
+    min-height: 56px;
     padding: 0 2px;
   }
 
   .grid-cell {
     border-left: 1px solid rgba(138, 126, 104, 0.4);
-    min-height: 32px;
+    min-height: 56px;
     grid-row: 1;
   }
 

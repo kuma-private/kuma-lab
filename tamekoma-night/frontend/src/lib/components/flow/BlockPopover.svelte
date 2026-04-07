@@ -428,42 +428,56 @@
     return { beats: Number(parts[0]) || 4, beatValue: Number(parts[1]) || 4 };
   }
 
-  /** Extract chord names for this block's bar range from the chord progression */
-  function extractBlockChords(): string[] {
+  /** Extract per-bar chord names for this block's bar range.
+   *  Matches MultiTrackPlayer's extractChordsPerBar logic (handles sustain/repeat). */
+  function extractChordsPerBar(): string[][] {
     if (!chordProgression) return [];
     const parsed = parseProgression(chordProgression);
     const resolved = resolveRepeats(parsed.bars);
 
     const startBar = block.startBar ?? 0;
     const endBar = block.endBar ?? startBar + 1;
-    const chordNames: string[] = [];
+    const result: string[][] = [];
+    let lastChordName: string | null = null;
 
-    for (let bar = startBar; bar < endBar; bar++) {
+    // Walk all resolved bars to track lastChordName correctly
+    for (let bar = 0; bar < resolved.length; bar++) {
       const barData = resolved[bar];
       if (!barData) continue;
+      const chords: string[] = [];
       for (const entry of barData.entries) {
         if (entry.type === 'chord') {
-          chordNames.push(entry.chord.raw);
+          lastChordName = entry.chord.raw;
+          if (bar >= startBar && bar < endBar) chords.push(entry.chord.raw);
+        } else if (entry.type === 'sustain' || entry.type === 'repeat') {
+          if (lastChordName && bar >= startBar && bar < endBar) chords.push(lastChordName);
         }
       }
+      if (bar >= startBar && bar < endBar) {
+        if (chords.length === 0 && lastChordName) chords.push(lastChordName);
+        result.push(chords);
+      }
     }
-    return chordNames.length > 0 ? chordNames : ['C']; // fallback
+    return result;
   }
 
-  /** Generate MidiNote[] from current directives */
+  /** Generate MidiNote[] from current directives — bar-by-bar to match MultiTrackPlayer. */
   function generatePreviewNotes(): MidiNote[] {
     try {
       const mode = directives.mode || 'block';
       if (mode === 'free') return []; // free mode uses MiniPianoRoll instead
 
-      const chordNames = extractBlockChords();
+      const chordsPerBar = extractChordsPerBar();
+      const allChordNames = chordsPerBar.flat();
+      if (allChordNames.length === 0) return [];
+
       const voicingType = (directives.voicing ?? 'close') as VoicingConfig['type'];
       const voicingConfig: VoicingConfig = {
         type: voicingType,
         lead: directives.lead === 'smooth' ? 'smooth' : undefined,
       };
 
-      const voiced = voiceChords(chordNames, voicingConfig);
+      const voicedChords = voiceChords(allChordNames, voicingConfig);
 
       const rhythmConfig: RhythmConfig = {
         mode,
@@ -474,10 +488,24 @@
       };
 
       const ts = parseTimeSignature(timeSignature);
-      const startBar = 0; // normalize to 0 for preview
       const channel = 0;
+      const notes: MidiNote[] = [];
 
-      return generateRhythm(voiced, rhythmConfig, bpm, ts, startBar, channel);
+      // Process bar-by-bar, matching MultiTrackPlayer pipeline
+      let chordIdx = 0;
+      for (let i = 0; i < chordsPerBar.length; i++) {
+        const barChordCount = chordsPerBar[i].length;
+        if (barChordCount === 0) continue;
+
+        const barChords = voicedChords.slice(chordIdx, chordIdx + barChordCount);
+        chordIdx += barChordCount;
+
+        // Use i as barIdx (normalized to 0 for preview)
+        const barNotes = generateRhythm(barChords, rhythmConfig, bpm, ts, i, channel);
+        notes.push(...barNotes);
+      }
+
+      return notes;
     } catch {
       return [];
     }
@@ -569,7 +597,17 @@
     previewDebounceTimer = setTimeout(() => {
       // If AI-generated MIDI exists, use those notes for preview
       if (generatedMidiData && generatedMidiData.notes.length > 0) {
-        previewNotes = generatedMidiData.notes;
+        // Filter AI-generated notes to this block's bar range
+        const ts = parseTimeSignature(timeSignature);
+        const ticksPerBar = 480 * ts.beats * (4 / ts.beatValue);
+        const startTick = (block.startBar ?? 0) * ticksPerBar;
+        const endTick = (block.endBar ?? (block.startBar ?? 0) + 1) * ticksPerBar;
+        previewNotes = generatedMidiData.notes
+          .filter(n => n.startTick >= startTick && n.startTick < endTick)
+          .map(n => {
+            const maxDur = endTick - n.startTick;
+            return n.durationTicks > maxDur ? { ...n, durationTicks: maxDur } : n;
+          });
       } else {
         previewNotes = generatePreviewNotes();
       }

@@ -9,8 +9,13 @@
   import BlockPopover from './BlockPopover.svelte';
   import ChordEditDialog from './ChordEditDialog.svelte';
   import { parseProgression, serialize } from '$lib/chord-parser';
-  import Visualizer from '$lib/components/visualizer/Visualizer.svelte';
-  // MixerView removed — M/S/Vol integrated into track labels
+import FlowMinimap from './FlowMinimap.svelte';
+  import TrackPianoRollRow from './TrackPianoRollRow.svelte';
+  // Track note colors for inline piano roll
+  const TRACK_NOTE_COLORS: Record<string, string> = {
+    piano: '#b8a0f0', bass: '#7cb882', drums: '#e8a84c',
+    strings: '#6ea8d0', guitar: '#f0c060', organ: '#e06050',
+  };
 
   const GM_CATEGORIES = [
     { name: 'Piano', programs: [
@@ -118,7 +123,7 @@
     totalDuration?: number;
   } = $props();
 
-  let activeTab = $state<'flow' | 'visualizer' | 'text'>('flow');
+  let activeTab = $state<'flow' | 'text'>('text');
 
   // --- BlockPopover state ---
   let popoverBlock = $state<DirectiveBlock | null>(null);
@@ -450,24 +455,17 @@
       <button
         class="tab"
         role="tab"
-        aria-selected={activeTab === 'flow'}
-        class:tab--active={activeTab === 'flow'}
-        onclick={() => activeTab = 'flow'}
-      >Flow</button>
-      <button
-        class="tab"
-        role="tab"
-        aria-selected={activeTab === 'visualizer'}
-        class:tab--active={activeTab === 'visualizer'}
-        onclick={() => activeTab = 'visualizer'}
-      >Visualizer</button>
-      <button
-        class="tab"
-        role="tab"
         aria-selected={activeTab === 'text'}
         class:tab--active={activeTab === 'text'}
         onclick={() => activeTab = 'text'}
       >Text</button>
+      <button
+        class="tab"
+        role="tab"
+        aria-selected={activeTab === 'flow'}
+        class:tab--active={activeTab === 'flow'}
+        onclick={() => activeTab = 'flow'}
+      >Flow</button>
     </div>
     <!-- Right side: AI Arrange button -->
     <div class="tab-bar-right">
@@ -499,6 +497,7 @@
   {/if}
 
   {#if activeTab === 'flow'}
+    <FlowMinimap {song} {totalBars} />
     <div class="flow-content">
       <!-- Grid layout: label column + timeline columns -->
       <div class="flow-grid">
@@ -547,7 +546,13 @@
               <button class="track-ms-btn" class:track-ms-active={track.mute} onclick={() => handleTrackMute(track.id, !track.mute)} aria-label="ミュート" aria-pressed={track.mute}>M</button>
               <button class="track-ms-btn" class:track-ms-active={track.solo} onclick={() => handleTrackSolo(track.id, !track.solo)} aria-label="ソロ" aria-pressed={track.solo}>S</button>
             </div>
-            <input type="range" class="track-volume" min="-30" max="6" value={track.volume} oninput={(e) => handleTrackVolume(track.id, Number((e.target as HTMLInputElement).value))} aria-label="音量" />
+            <div class="track-volume-row">
+              <svg class="volume-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+              <input type="range" class="track-volume" min="-30" max="6" value={track.volume} oninput={(e) => handleTrackVolume(track.id, Number((e.target as HTMLInputElement).value))} aria-label="音量" />
+            </div>
           </div>
           <div class="row-content">
             <FlowTrackRow
@@ -561,6 +566,15 @@
               onBlockDelete={(bid) => handleBlockDelete(track.id, bid)}
               onBlockCopy={(bid, s) => handleBlockCopy(track.id, bid, s)}
             />
+            {#if trackNotes.get(track.id)?.notes?.length}
+              <TrackPianoRollRow
+                notes={trackNotes.get(track.id)!.notes}
+                {totalBars}
+                bpm={song.bpm}
+                timeSignature={song.timeSignature}
+                color={TRACK_NOTE_COLORS[track.instrument] ?? '#e8a84c'}
+              />
+            {/if}
           </div>
         {/each}
 
@@ -571,15 +585,7 @@
         <div class="row-content"></div>
       </div>
     </div>
-  {:else if activeTab === 'visualizer'}
-    <div class="visualizer-container">
-      <Visualizer
-        {trackNotes}
-        {currentTime}
-        {totalDuration}
-        bpm={song.bpm}
-      />
-    </div>
+
   {:else}
     <div class="text-view-container">
       <TextView {song} {onSongChange} />
@@ -785,6 +791,7 @@
     grid-template-columns: 120px 1fr;
     gap: 0;
     min-width: max-content;
+    padding-right: 50vw; /* Allow scrolling content to left edge */
   }
 
   .row-label {
@@ -871,6 +878,16 @@
     border-color: var(--accent-primary);
   }
 
+  .track-volume-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .volume-icon {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
   .track-volume {
     width: 100%;
     height: 2px;
@@ -909,7 +926,6 @@
 
   .row-content {
     min-height: 36px;
-    padding: var(--space-xs) 0;
   }
 
   .chord-row {
@@ -938,14 +954,6 @@
     color: var(--accent-warm);
     border-color: rgba(232, 168, 76, 0.4);
   }
-
-  /* ---- Visualizer container ---- */
-  .visualizer-container {
-    display: flex;
-    flex: 1;
-    min-height: 300px;
-  }
-
 
   /* ---- Text view container ---- */
   .text-view-container {

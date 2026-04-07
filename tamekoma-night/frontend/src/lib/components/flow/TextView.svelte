@@ -3,6 +3,7 @@
   import { serializeSong, deserializeSong, mergeParsedSong } from '$lib/song-serializer';
   import { parseProgression, resolveRepeats, type ParsedBar } from '$lib/chord-parser';
   import { chordToDegree } from '$lib/chord-degree';
+  import { playChordPreview } from '$lib/chord-player';
   import '$lib/styles/chord-colors.css';
 
   let {
@@ -17,6 +18,10 @@
   let text = $state(serializeSong(song));
   let parseErrors = $state<{ line: number; message: string }[]>([]);
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // Playback state
+  let isPlaying = $state(false);
+  let playingBarIndex = $state(-1);
 
   // Track whether the last change came from the textarea (internal)
   // to avoid re-serializing when we just deserialized
@@ -68,7 +73,7 @@
     const coveredBarNums = new Set(groups.flatMap((g) => g.bars.map((b) => b.barNumber)));
     const uncovered = bars.filter((b) => !coveredBarNums.has(b.barNumber));
     if (uncovered.length > 0) {
-      groups.unshift({ section: null, bars: uncovered });
+      groups.push({ section: null, bars: uncovered });
     }
 
     return groups;
@@ -138,13 +143,6 @@
     }
   }
 
-  function directiveSummary(directives: string): string[] {
-    if (!directives.trim()) return [];
-    return directives
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
-  }
 </script>
 
 <div class="text-view-2pane">
@@ -221,29 +219,13 @@
       </div>
     {/if}
 
-    <!-- Track blocks -->
+    <!-- Tracks -->
     {#if (previewSong.tracks ?? []).length > 0}
       <div class="preview-tracks">
         {#each previewSong.tracks ?? [] as track}
           <div class="track-card">
-            <div class="track-header">
-              <span class="track-name">{track.name}</span>
-              <span class="track-instrument">{track.instrument}</span>
-            </div>
-            {#if track.blocks.length > 0}
-              <div class="track-blocks">
-                {#each track.blocks.slice().sort((a, b) => a.startBar - b.startBar) as block}
-                  <div class="block-item">
-                    <span class="block-range">bars {block.startBar + 1}-{block.endBar}</span>
-                    {#each directiveSummary(block.directives) as line}
-                      <span class="block-directive">{line}</span>
-                    {/each}
-                  </div>
-                {/each}
-              </div>
-            {:else}
-              <div class="track-empty">No blocks</div>
-            {/if}
+            <span class="track-name">{track.name}</span>
+            <span class="track-instrument">{track.instrument}</span>
           </div>
         {/each}
       </div>
@@ -434,17 +416,13 @@
   }
 
   .track-card {
-    padding: var(--space-sm) var(--space-md);
-    background: var(--bg-surface);
-    border-radius: 8px;
-    border: 1px solid var(--border-subtle);
-  }
-
-  .track-header {
     display: flex;
     align-items: baseline;
     gap: var(--space-sm);
-    margin-bottom: 4px;
+    padding: var(--space-xs) var(--space-md);
+    background: var(--bg-surface);
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
   }
 
   .track-name {
@@ -457,38 +435,6 @@
     font-size: 0.72rem;
     color: var(--text-muted);
     font-family: var(--font-mono);
-  }
-
-  .track-blocks {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .block-item {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--space-xs);
-    font-size: 0.78rem;
-    font-family: var(--font-mono);
-    color: var(--text-secondary);
-  }
-
-  .block-range {
-    color: var(--text-muted);
-    font-weight: 500;
-  }
-
-  .block-directive {
-    color: var(--text-secondary);
-    opacity: 0.8;
-  }
-
-  .track-empty {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    font-style: italic;
   }
 
   /* ── Empty state ── */

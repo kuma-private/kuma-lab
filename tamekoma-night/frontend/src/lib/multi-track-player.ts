@@ -343,7 +343,16 @@ export class MultiTrackPlayer {
           if (block.generatedMidi.controlChanges?.length) {
             blockNotes = applyPedalToNotes(blockNotes, block.generatedMidi.controlChanges);
           }
-          trackNotes.push(...blockNotes);
+          // Filter AI-generated notes to block's tick range and clamp duration
+          const aiBlockStartTick = block.startBar * ticksPerBar;
+          const aiBlockEndTick = block.endBar * ticksPerBar;
+          const clampedAiNotes = blockNotes
+            .filter(n => n.startTick >= aiBlockStartTick && n.startTick < aiBlockEndTick)
+            .map(n => {
+              const maxDuration = aiBlockEndTick - n.startTick;
+              return n.durationTicks > maxDuration ? { ...n, durationTicks: maxDuration } : n;
+            });
+          trackNotes.push(...clampedAiNotes);
           continue;
         }
 
@@ -414,10 +423,30 @@ export class MultiTrackPlayer {
             notes.push(...barNotes);
           }
 
+          // Apply @octave directive: shift all notes to the target octave.
+          // Default voicing puts bass at octave 2 and upper voices at octave 4.
+          // @octave: N shifts every note so that its pitch class is placed in octave N.
+          if (directives.octave != null) {
+            const targetOctave = directives.octave;
+            notes = notes.map(n => ({
+              ...n,
+              midi: (n.midi % 12) + (targetOctave + 1) * 12,
+            }));
+          }
+
           this.blockCache.set(cacheKey, { hash, notes });
         }
 
-        trackNotes.push(...notes);
+        // Filter notes to block's tick range [startBar, endBar) and clamp duration
+        const blockStartTick = block.startBar * ticksPerBar;
+        const blockEndTick = block.endBar * ticksPerBar;
+        const clampedNotes = notes
+          .filter(n => n.startTick >= blockStartTick && n.startTick < blockEndTick)
+          .map(n => {
+            const maxDuration = blockEndTick - n.startTick;
+            return n.durationTicks > maxDuration ? { ...n, durationTicks: maxDuration } : n;
+          });
+        trackNotes.push(...clampedNotes);
       }
 
       // Store generated notes for Visualizer API

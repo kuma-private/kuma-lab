@@ -30,6 +30,69 @@
 	let editingTitle = $state(false);
 	let titleInput = $state('');
 
+	// Inline BPM editing
+	let editingBpm = $state(false);
+	let bpmInput = $state(120);
+
+	function startBpmEdit() {
+		if (!store.currentSong) return;
+		bpmInput = store.currentSong.bpm;
+		editingBpm = true;
+	}
+
+	function finishBpmEdit() {
+		editingBpm = false;
+		if (store.currentSong && bpmInput >= 40 && bpmInput <= 240 && bpmInput !== store.currentSong.bpm) {
+			handleSongChange({ ...store.currentSong, bpm: bpmInput });
+			showToast(`BPM を ${bpmInput} に変更しました`, 'success');
+		}
+	}
+
+	// Inline Key editing
+	let editingKey = $state(false);
+	let keyInput = $state('C Major');
+
+	const KEY_OPTIONS = [
+		'C Major', 'C# Major', 'D Major', 'Eb Major', 'E Major', 'F Major',
+		'F# Major', 'G Major', 'Ab Major', 'A Major', 'Bb Major', 'B Major',
+		'C Minor', 'C# Minor', 'D Minor', 'Eb Minor', 'E Minor', 'F Minor',
+		'F# Minor', 'G Minor', 'Ab Minor', 'A Minor', 'Bb Minor', 'B Minor',
+	];
+
+	function startKeyEdit() {
+		if (!store.currentSong) return;
+		keyInput = store.currentSong.key || 'C Major';
+		editingKey = true;
+	}
+
+	function finishKeyEdit() {
+		editingKey = false;
+		if (store.currentSong && keyInput !== store.currentSong.key) {
+			handleSongChange({ ...store.currentSong, key: keyInput });
+			showToast(`キーを ${keyInput} に変更しました`, 'success');
+		}
+	}
+
+	// Inline Time Signature editing
+	let editingTs = $state(false);
+	let tsInput = $state('4/4');
+
+	const TS_OPTIONS = ['4/4', '3/4', '6/8', '2/4', '5/4', '7/8'];
+
+	function startTsEdit() {
+		if (!store.currentSong) return;
+		tsInput = store.currentSong.timeSignature || '4/4';
+		editingTs = true;
+	}
+
+	function finishTsEdit() {
+		editingTs = false;
+		if (store.currentSong && tsInput !== store.currentSong.timeSignature) {
+			handleSongChange({ ...store.currentSong, timeSignature: tsInput });
+			showToast(`拍子を ${tsInput} に変更しました`, 'success');
+		}
+	}
+
 	function updateTrackNotes() {
 		if (!player || !store.currentSong) return;
 		const notes = player.getAllTrackNotes();
@@ -184,9 +247,29 @@
 		</div>
 		<div class="header-center">
 			{#if store.currentSong}
-				<span class="meta-pill">{store.currentSong.key || 'C'}</span>
-				<span class="meta-pill">{store.currentSong.bpm || 120} BPM</span>
-				<span class="meta-pill">{store.currentSong.timeSignature || '4/4'}</span>
+				{#if editingKey}
+					<select class="meta-pill-input" bind:value={keyInput} onblur={finishKeyEdit} onchange={finishKeyEdit}>
+						{#each KEY_OPTIONS as opt}
+							<option value={opt}>{opt}</option>
+						{/each}
+					</select>
+				{:else}
+					<button class="meta-pill" onclick={startKeyEdit}>{store.currentSong.key || 'C'}</button>
+				{/if}
+				{#if editingBpm}
+					<input type="number" class="meta-pill-input" bind:value={bpmInput} min="40" max="240" onblur={finishBpmEdit} onkeydown={(e) => { if (e.key === 'Enter') finishBpmEdit(); }} />
+				{:else}
+					<button class="meta-pill" onclick={startBpmEdit}>{store.currentSong.bpm || 120} BPM</button>
+				{/if}
+				{#if editingTs}
+					<select class="meta-pill-input" bind:value={tsInput} onblur={finishTsEdit} onchange={finishTsEdit}>
+						{#each TS_OPTIONS as opt}
+							<option value={opt}>{opt}</option>
+						{/each}
+					</select>
+				{:else}
+					<button class="meta-pill" onclick={startTsEdit}>{store.currentSong.timeSignature || '4/4'}</button>
+				{/if}
 			{/if}
 		</div>
 		<div class="header-right">
@@ -349,6 +432,28 @@
 		border: 1px solid var(--border-subtle);
 		padding: 2px 10px;
 		border-radius: var(--radius-full);
+		cursor: pointer;
+		transition: border-color 0.15s;
+	}
+	.meta-pill:hover {
+		border-color: var(--border-default);
+		color: var(--text-secondary);
+	}
+
+	.meta-pill-input {
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: var(--text-primary);
+		background: var(--bg-elevated);
+		border: 1px solid var(--accent-primary);
+		border-radius: var(--radius-full);
+		padding: 2px 8px;
+		outline: none;
+		box-shadow: 0 0 0 2px rgba(232, 168, 76, 0.15);
+		max-width: 90px;
+	}
+	select.meta-pill-input {
+		max-width: 120px;
 	}
 
 	.btn-export {

@@ -66,15 +66,12 @@ export function serializeSong(song: Song): string {
 		}
 	}
 
-	// Track blocks
-	for (const track of song.tracks) {
-		const blocksSorted = [...track.blocks].sort((a, b) => a.startBar - b.startBar);
-		for (const block of blocksSorted) {
-			lines.push('');
-			lines.push(`=== ${track.name} [bars ${block.startBar + 1}-${block.endBar}] ===`);
-			if (block.directives.trim()) {
-				lines.push(block.directives.trim());
-			}
+	// Tracks list
+	if (song.tracks.length > 0) {
+		lines.push('');
+		lines.push('=== Tracks ===');
+		for (const track of song.tracks) {
+			lines.push(track.name);
 		}
 	}
 
@@ -112,7 +109,7 @@ export function deserializeSong(text: string): DeserializeResult {
 	const trackMap = new Map<string, Track>();
 	let chordLines: string[] = [];
 
-	type ParseState = 'meta' | 'chords' | 'track-block';
+	type ParseState = 'meta' | 'chords' | 'track-block' | 'tracks-list';
 
 	let state: ParseState = 'meta';
 	let currentTrackName = '';
@@ -200,7 +197,13 @@ export function deserializeSong(text: string): DeserializeResult {
 				continue;
 			}
 
-			// === TrackName [bars X-Y] ===
+			// === Tracks === (new simplified format)
+			if (/^Tracks$/i.test(headerContent.trim())) {
+				state = 'tracks-list';
+				continue;
+			}
+
+			// === TrackName [bars X-Y] === (legacy format)
 			const trackHeaderMatch = headerContent.match(/^(.+?)\s*\[bars\s+(\d+)\s*-\s*(\d+)\]$/);
 			if (trackHeaderMatch) {
 				state = 'track-block';
@@ -241,7 +244,26 @@ export function deserializeSong(text: string): DeserializeResult {
 			continue;
 		}
 
-		// Inside track block — collect directive lines
+		// Inside tracks list — each line is a track name
+		if (state === 'tracks-list') {
+			if (!trimmed.startsWith('//')) {
+				const trackName = trimmed;
+				if (!trackMap.has(trackName)) {
+					trackMap.set(trackName, {
+						id: crypto.randomUUID(),
+						name: trackName,
+						instrument: guessInstrument(trackName),
+						blocks: [],
+						volume: 0,
+						mute: false,
+						solo: false
+					});
+				}
+			}
+			continue;
+		}
+
+		// Inside track block — collect directive lines (legacy format)
 		if (state === 'track-block') {
 			currentDirectiveLines.push(trimmed);
 			continue;
@@ -277,17 +299,13 @@ export function deserializeSong(text: string): DeserializeResult {
 
 function guessInstrument(name: string): string {
 	const lower = name.toLowerCase();
-	const instrumentMap: Record<string, string> = {
-		piano: 'piano',
-		bass: 'bass',
-		drums: 'drums',
-		drum: 'drums',
-		strings: 'strings',
-		string: 'strings',
-		guitar: 'guitar',
-		organ: 'organ'
-	};
-	return instrumentMap[lower] ?? 'piano';
+	if (lower.includes('drum')) return 'drums';
+	if (lower.includes('bass')) return 'bass';
+	if (lower.includes('string')) return 'strings';
+	if (lower.includes('guitar')) return 'guitar';
+	if (lower.includes('organ')) return 'organ';
+	if (lower.includes('piano') || lower.includes('grand') || lower.includes('rhodes') || lower.includes('clav')) return 'piano';
+	return 'piano';
 }
 
 // ── Merge helper ───────────────────────────────────────

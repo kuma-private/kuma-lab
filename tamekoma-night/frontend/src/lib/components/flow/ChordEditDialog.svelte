@@ -1,6 +1,7 @@
 <script lang="ts">
   import { parseProgression, parseChord, serialize, type ParsedBar, type BarEntry } from '$lib/chord-parser';
   import { chordToDegree } from '$lib/chord-degree';
+  import { playChordPreview } from '$lib/chord-player';
 
   let {
     barNumber,
@@ -114,13 +115,20 @@
     flashedNote = note;
     setTimeout(() => { flashedNote = null; }, 200);
 
-    // If minor from inner circle, auto-append 'm' chord immediately
     if (isMinor) {
-      // Wait a tick so selectedRoot is set, then append
+      // Minor from inner circle: auto-append 'm' chord immediately
       const chord = root + 'm';
       input = input.trim() ? input.trim() + ' ' + chord : chord;
       selectedRoot = null;
       sharpFlat = '';
+      playChordPreview(chord);
+    } else {
+      // Major from outer circle: auto-append chord immediately
+      const chord = root;
+      input = input.trim() ? input.trim() + ' ' + chord : chord;
+      selectedRoot = null;
+      sharpFlat = '';
+      playChordPreview(chord);
     }
   }
 
@@ -130,6 +138,7 @@
     input = input.trim() ? input.trim() + ' ' + chord : chord;
     selectedRoot = null;
     sharpFlat = '';
+    playChordPreview(chord);
   }
 
   function selectRoot(root: string) {
@@ -198,12 +207,12 @@
 
         <!-- Circle of Fifths -->
         <div class="cof-container">
-          <svg viewBox="0 0 200 200" class="circle-of-fifths">
+          <svg viewBox="0 0 280 280" class="circle-of-fifths">
             <!-- Outer circle: major keys -->
             {#each cofMajor as note, i}
               {@const angle = (i * 30 - 90) * Math.PI / 180}
-              {@const x = 100 + 82 * Math.cos(angle)}
-              {@const y = 100 + 82 * Math.sin(angle)}
+              {@const x = 140 + 115 * Math.cos(angle)}
+              {@const y = 140 + 115 * Math.sin(angle)}
               <g
                 class="cof-note-group"
                 onclick={() => cofSelectRoot(note)}
@@ -212,7 +221,7 @@
                 onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') cofSelectRoot(note); }}
               >
                 <circle
-                  cx={x} cy={y} r="13"
+                  cx={x} cy={y} r="18"
                   class="cof-bg"
                   class:cof-bg--diatonic={isDiatonic(note)}
                   class:cof-bg--selected={selectedRoot === note && sharpFlat === ''}
@@ -228,8 +237,8 @@
             <!-- Inner circle: minor keys -->
             {#each cofMinor as note, i}
               {@const angle = (i * 30 - 90) * Math.PI / 180}
-              {@const x = 100 + 52 * Math.cos(angle)}
-              {@const y = 100 + 52 * Math.sin(angle)}
+              {@const x = 140 + 72 * Math.cos(angle)}
+              {@const y = 140 + 72 * Math.sin(angle)}
               <g
                 class="cof-note-group"
                 onclick={() => cofSelectRoot(note)}
@@ -238,7 +247,7 @@
                 onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') cofSelectRoot(note); }}
               >
                 <circle
-                  cx={x} cy={y} r="13"
+                  cx={x} cy={y} r="15"
                   class="cof-bg"
                   class:cof-bg--diatonic={isDiatonic(note)}
                   class:cof-bg--flash={flashedNote === note}
@@ -491,8 +500,8 @@
   }
 
   .circle-of-fifths {
-    width: 200px;
-    height: 200px;
+    width: 280px;
+    height: 280px;
     flex-shrink: 0;
   }
 
@@ -501,11 +510,14 @@
   }
 
   .cof-bg {
-    fill: transparent;
+    fill: rgba(138, 126, 104, 0.12);
+    stroke: rgba(138, 126, 104, 0.25);
+    stroke-width: 1;
     transition: fill 0.12s;
   }
   .cof-bg--diatonic {
-    fill: rgba(232, 168, 76, 0.08);
+    fill: rgba(232, 168, 76, 0.15);
+    stroke: rgba(232, 168, 76, 0.3);
   }
   .cof-note-group:hover .cof-bg {
     fill: rgba(232, 168, 76, 0.18);
@@ -520,7 +532,7 @@
 
   .cof-note {
     font-family: var(--font-mono);
-    font-size: 0.55rem;
+    font-size: 0.65rem;
     fill: var(--text-secondary);
     text-anchor: middle;
     dominant-baseline: central;
@@ -531,7 +543,7 @@
     font-weight: 600;
   }
   .cof-note--minor {
-    font-size: 0.45rem;
+    font-size: 0.55rem;
   }
 
   @media (max-width: 400px) {
