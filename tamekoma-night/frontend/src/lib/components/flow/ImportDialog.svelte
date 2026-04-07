@@ -17,7 +17,7 @@
     onClose: () => void;
   } = $props();
 
-  let images = $state<{ dataUri: string; name: string }[]>([]);
+  let images = $state<{ dataUri: string; name: string; section: string }[]>([]);
   let songName = $state('');
   let artist = $state('');
   let sourceUrl = $state('');
@@ -43,7 +43,8 @@
       reader.onload = () => resolve(reader.result as string);
       reader.readAsDataURL(file);
     });
-    images = [...images, { dataUri, name: file.name }];
+    const section = images.length === 0 ? 'Intro' : String.fromCharCode(65 + images.length - 1);
+    images = [...images, { dataUri, name: file.name, section }];
   }
 
   function removeImage(index: number) {
@@ -63,9 +64,17 @@
     loading = true;
     error = '';
     try {
+      const sectionHint = images
+        .map((img, i) => `画像${i + 1}: ${img.section || `セクション${i + 1}`}`)
+        .join('\n');
+      const songNameWithSections = [
+        songName,
+        sectionHint ? `\nセクション構成:\n${sectionHint}` : '',
+      ].filter(Boolean).join('');
+
       const result = await importChordChart(songId, {
         images: images.map(i => i.dataUri),
-        songName: songName || undefined,
+        songName: songNameWithSections || undefined,
         artist: artist || undefined,
         sourceUrl: sourceUrl || undefined,
         bpm,
@@ -119,9 +128,16 @@
         {#if images.length > 0}
           <div class="image-thumbnails">
             {#each images as img, i}
-              <div class="image-thumb-wrapper">
-                <img src={img.dataUri} alt={img.name} class="image-thumb" />
-                <button class="image-remove" onclick={() => removeImage(i)} aria-label="削除">&times;</button>
+              <div class="import-image-item">
+                <div class="image-thumb-wrapper">
+                  <img src={img.dataUri} alt={img.name} class="image-thumb" />
+                  <button class="image-remove" onclick={() => removeImage(i)} aria-label="削除">&times;</button>
+                </div>
+                <input
+                  class="section-label-input"
+                  bind:value={img.section}
+                  placeholder="セクション名"
+                />
               </div>
             {/each}
           </div>
@@ -276,6 +292,13 @@
     flex-wrap: wrap;
   }
 
+  .import-image-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
   .image-thumb-wrapper {
     position: relative;
     width: 80px;
@@ -311,6 +334,27 @@
   }
   .image-remove:hover {
     background: rgba(200, 50, 50, 0.8);
+  }
+
+  .section-label-input {
+    width: 80px;
+    padding: 2px 4px;
+    font-size: 0.7rem;
+    font-family: var(--font-sans);
+    text-align: center;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+  }
+  .section-label-input:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+  }
+  .section-label-input::placeholder {
+    color: var(--text-muted);
+    font-size: 0.65rem;
   }
 
   .image-actions {
