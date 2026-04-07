@@ -520,6 +520,30 @@ import FlowMinimap from './FlowMinimap.svelte';
     }
   }
 
+  function handleTimelineClick(e: MouseEvent) {
+    // Only handle clicks on empty grid background, not on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('.directive-block') || target.closest('.track-label') ||
+        target.closest('.track-controls') || target.closest('.chord-chip') ||
+        target.closest('.section-tag') || target.closest('.piano-roll-clickable') ||
+        target.closest('button') || target.closest('select') || target.closest('input')) return;
+
+    const flowContent = e.currentTarget as HTMLElement;
+    const rect = flowContent.getBoundingClientRect();
+    const scrollLeft = flowContent.scrollLeft;
+    const x = e.clientX - rect.left + scrollLeft - measuredLabelWidth;
+
+    if (x < 0) return; // clicked on label area
+
+    const contentWidth = measuredContentWidth > 0 ? measuredContentWidth : totalBars * 140;
+    const barWidth = contentWidth / totalBars;
+    const barIndex = Math.floor(x / barWidth);
+
+    if (barIndex >= 0 && barIndex < totalBars) {
+      onSeekToBar?.(barIndex);
+    }
+  }
+
   function handleAddTrack() {
     const defaultPrograms = [0, 33, -1, 48, 25, 16];
     const usedPrograms = new Set(song.tracks.map(t => t.program ?? getDefaultProgram(t.instrument)));
@@ -595,7 +619,9 @@ import FlowMinimap from './FlowMinimap.svelte';
 
   {#if activeTab === 'flow'}
     <FlowMinimap {song} {totalBars} />
-    <div class="flow-content">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="flow-content" onclick={handleTimelineClick}>
       <!-- Grid layout: label column + timeline columns -->
       <div class="flow-grid" bind:this={flowGridEl}>
         <!-- Section row -->
