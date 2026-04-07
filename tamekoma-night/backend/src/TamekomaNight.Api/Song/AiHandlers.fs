@@ -375,6 +375,38 @@ module SongAiHandlers =
                         })
         }
 
+    let importChordChart (config: AppConfig) (songId: string) (ctx: HttpContext) : Task =
+        task {
+            if String.IsNullOrEmpty(config.AnthropicApiKey) then
+                do! respond400 ctx "AI import is not configured"
+            else
+
+            do! withParsedRequest<Models.ImportChordChartRequest> ctx
+                    (fun req -> Shared.isNotNull req.images && not req.images.IsEmpty)
+                    (fun req ->
+                        task {
+                            let httpClient = getHttpClient ctx
+
+                            let images = req.images |> List.map Thread.Models.parseDataUri
+
+                            let songName = req.songName |> Shared.defaultIfNull ""
+                            let artist = req.artist |> Shared.defaultIfNull ""
+                            let sourceUrl = req.sourceUrl |> Shared.defaultIfNull ""
+                            let timeSignature = req.timeSignature |> Shared.defaultIfNull "4/4"
+                            let key = req.key |> Shared.defaultIfNull ""
+
+                            let! result =
+                                AnthropicClient.importChordChart httpClient config.AnthropicApiKey images songName artist sourceUrl req.bpm timeSignature key
+                                |> Async.StartAsTask
+
+                            match result with
+                            | Ok chords ->
+                                do! ctx.Response.WriteAsJsonAsync({| chords = chords |})
+                            | Error e ->
+                                do! respond500 ctx $"AI import failed: {e}"
+                        })
+        }
+
     let suggestArrangement (config: AppConfig) (songId: string) (ctx: HttpContext) : Task =
         task {
             if String.IsNullOrEmpty(config.AnthropicApiKey) then

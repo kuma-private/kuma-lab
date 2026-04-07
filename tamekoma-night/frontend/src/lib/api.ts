@@ -106,6 +106,28 @@ export const suggestArrangement = async (songId: string, data: ArrangeRequest): 
 	return res.json();
 };
 
+// Chord Chart Image Import
+
+export const importChordChart = async (
+	songId: string,
+	data: {
+		images: string[];
+		songName?: string;
+		artist?: string;
+		sourceUrl?: string;
+		bpm?: number;
+		timeSignature?: string;
+		key?: string;
+	}
+): Promise<{ chords: string }> => {
+	const res = await apiFetch(`/api/songs/${songId}/import`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+	return res.json();
+};
+
 // AI MIDI Generation
 
 export interface GenerateMidiRequest {

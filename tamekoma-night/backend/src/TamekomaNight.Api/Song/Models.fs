@@ -77,6 +77,15 @@ module Models =
           sections: Section list
           tracks: Track list }
 
+    type ImportChordChartRequest =
+        { images: string list
+          songName: string
+          artist: string
+          sourceUrl: string
+          bpm: int
+          timeSignature: string
+          key: string }
+
     // Re-export shared helpers for backward compatibility within Song namespace
     type UserInfo = Shared.UserInfo
 

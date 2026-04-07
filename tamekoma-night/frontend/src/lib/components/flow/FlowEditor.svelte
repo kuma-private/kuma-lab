@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Song, DirectiveBlock, Track, MidiNote, GeneratedMidiData } from '$lib/types/song';
-  import { suggestArrangement, type ArrangeRequest, type ArrangeResponse } from '$lib/api';
+  import { suggestArrangement, importChordChart, type ArrangeRequest, type ArrangeResponse } from '$lib/api';
   import { showToast } from '$lib/stores/toast.svelte';
   import SectionBar from './SectionBar.svelte';
   import ChordTimeline from './ChordTimeline.svelte';
@@ -348,6 +348,45 @@ import FlowMinimap from './FlowMinimap.svelte';
     }
   }
 
+  // --- Chord chart image import ---
+  let importLoading = $state(false);
+
+  async function handleImportImage() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = async () => {
+      if (!input.files?.length || !songId) return;
+      importLoading = true;
+      try {
+        const images: string[] = [];
+        for (const file of input.files) {
+          const dataUri = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
+          images.push(dataUri);
+        }
+        const result = await importChordChart(songId, {
+          images,
+          bpm: song.bpm,
+          timeSignature: song.timeSignature,
+          key: song.key,
+        });
+        song.chordProgression = result.chords;
+        onSongChange(JSON.parse(JSON.stringify(song)));
+        showToast('コード進行をインポートしました', 'success');
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'インポートに失敗しました', 'error');
+      } finally {
+        importLoading = false;
+      }
+    };
+    input.click();
+  }
+
   function handleBlockCreate(trackId: string, startBar: number, endBar: number) {
     const track = song.tracks.find(t => t.id === trackId);
     if (!track) return;
@@ -469,6 +508,11 @@ import FlowMinimap from './FlowMinimap.svelte';
     </div>
     <!-- Right side: AI Arrange button -->
     <div class="tab-bar-right">
+      {#if activeTab === 'text'}
+        <button class="btn-import" onclick={handleImportImage} disabled={importLoading}>
+          {importLoading ? '読み込み中...' : '📷 画像からインポート'}
+        </button>
+      {/if}
       <button class="btn-arrange" onclick={() => arrangeOpen = !arrangeOpen}>
         AI Arrange
       </button>
@@ -690,6 +734,29 @@ import FlowMinimap from './FlowMinimap.svelte';
   .btn-arrange:hover {
     background: rgba(232, 168, 76, 0.18);
     border-color: rgba(232, 168, 76, 0.5);
+  }
+
+  .btn-import {
+    padding: 4px 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    border: 1px solid rgba(232, 168, 76, 0.3);
+    border-radius: 6px;
+    background: rgba(232, 168, 76, 0.08);
+    color: var(--accent-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-import:hover:not(:disabled) {
+    background: rgba(232, 168, 76, 0.18);
+    border-color: rgba(232, 168, 76, 0.5);
+  }
+
+  .btn-import:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   /* ---- Arrange bar ---- */

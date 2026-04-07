@@ -176,6 +176,7 @@ module Program =
         mapRouteWithId app "POST" "/api/songs/{id}/suggest" (withIdRL (TamekomaNight.Api.Song.SongAiHandlers.suggestDirectives config))
         mapRouteWithId app "POST" "/api/songs/{id}/arrange" (withIdRL (TamekomaNight.Api.Song.SongAiHandlers.suggestArrangement config))
         mapRouteWithId app "POST" "/api/songs/{id}/generate-midi" (withIdRL (TamekomaNight.Api.Song.SongAiHandlers.generateMidi config))
+        mapRouteWithId app "POST" "/api/songs/{id}/import" (withIdRL (TamekomaNight.Api.Song.SongAiHandlers.importChordChart config))
 
         // SPA fallback
         app.MapFallbackToFile("index.html") |> ignore
