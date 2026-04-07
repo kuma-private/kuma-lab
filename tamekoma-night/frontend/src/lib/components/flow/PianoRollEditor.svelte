@@ -66,6 +66,7 @@
   let scrollX = $state(0); // ticks offset
   let scrollY = $state(0); // pitch offset (semitones from top)
   let pixelsPerTick = $state(0.12);
+  let initialScrollDone = false;
 
   // Visible pitch range: show 88 keys (A0=21 to C8=108)
   const PITCH_MIN = 21;
@@ -140,6 +141,21 @@
     const rect = canvas.getBoundingClientRect();
     const w = rect.width;
     const h = rect.height;
+
+    // Center scroll on notes on first render
+    if (!initialScrollDone && _notes.length > 0 && h > 0) {
+      initialScrollDone = true;
+      let minMidi = 127;
+      let maxMidi = 0;
+      for (const n of _notes) {
+        if (n.midi < minMidi) minMidi = n.midi;
+        if (n.midi > maxMidi) maxMidi = n.midi;
+      }
+      const centerMidi = (minMidi + maxMidi) / 2;
+      const canvasRows = (h - HEADER_HEIGHT) / ROW_HEIGHT;
+      // scrollY is in semitones from top (PITCH_MAX)
+      scrollY = Math.max(0, Math.min(PITCH_COUNT - 20, (PITCH_MAX - centerMidi) - canvasRows / 2));
+    }
 
     canvas.width = w * dpr;
     canvas.height = h * dpr;

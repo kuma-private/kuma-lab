@@ -24,16 +24,7 @@
     Intro: '#908880', Outro: '#908880',
   };
 
-  const INSTRUMENT_COLORS: Record<string, string> = {
-    piano: 'rgba(184,160,240,0.5)',
-    bass: 'rgba(124,184,130,0.5)',
-    drums: 'rgba(232,168,76,0.5)',
-    strings: 'rgba(110,168,208,0.5)',
-    guitar: 'rgba(240,192,96,0.5)',
-    organ: 'rgba(224,96,80,0.5)',
-  };
-
-  const DEFAULT_INSTRUMENT_COLOR = 'rgba(138,126,104,0.4)';
+  const TRACK_BLOCK_COLOR = 'rgba(232,168,76,0.45)';
   const DEFAULT_SECTION_COLOR = '#a78bfa';
 
   function draw() {
@@ -68,16 +59,15 @@
       ctx.fillRect(x, 0, width, sectionRowH);
     }
 
-    // Draw track blocks
+    // Draw track blocks (single amber color for all instruments)
+    ctx.fillStyle = TRACK_BLOCK_COLOR;
     for (let i = 0; i < song.tracks.length; i++) {
       const track = song.tracks[i];
       const y = sectionRowH + i * trackRowH;
-      const color = INSTRUMENT_COLORS[track.instrument] ?? DEFAULT_INSTRUMENT_COLOR;
 
       for (const block of track.blocks) {
         const x = block.startBar * pxPerBar;
         const width = (block.endBar - block.startBar) * pxPerBar;
-        ctx.fillStyle = color;
         ctx.fillRect(x, y, width, trackRowH - 1);
       }
     }

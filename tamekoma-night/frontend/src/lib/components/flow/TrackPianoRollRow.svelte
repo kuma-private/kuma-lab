@@ -16,9 +16,14 @@
 
   const TICKS_PER_QUARTER = 480;
 
-  function getBeatsPerBar(): number {
+  function parseTimeSig(): { beats: number; beatValue: number } {
     const parts = timeSignature.split('/');
-    return parts.length === 2 ? Number(parts[0]) || 4 : 4;
+    if (parts.length === 2) {
+      const beats = Number(parts[0]);
+      const beatValue = Number(parts[1]);
+      if (beats > 0 && beatValue > 0) return { beats, beatValue };
+    }
+    return { beats: 4, beatValue: 4 };
   }
 
   function draw() {
@@ -38,8 +43,9 @@
 
     if (notes.length === 0) return;
 
-    const beatsPerBar = getBeatsPerBar();
-    const ticksPerBar = TICKS_PER_QUARTER * beatsPerBar;
+    const { beats, beatValue } = parseTimeSig();
+    const ticksPerBeat = TICKS_PER_QUARTER * (4 / beatValue);
+    const ticksPerBar = ticksPerBeat * beats;
     const totalTicks = totalBars * ticksPerBar;
     const pxPerTick = w / totalTicks;
 
