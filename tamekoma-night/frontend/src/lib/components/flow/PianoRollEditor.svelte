@@ -8,9 +8,10 @@
     timeSignature: string;
     onNotesChange?: (notes: MidiNote[]) => void;
     onClose: () => void;
+    onSeekToBar?: (barIndex: number) => void;
   }
 
-  let { notes, totalBars, bpm, timeSignature, onNotesChange, onClose }: Props = $props();
+  let { notes, totalBars, bpm, timeSignature, onNotesChange, onClose, onSeekToBar }: Props = $props();
 
   // --- Constants ---
   const TICKS_PER_QUARTER = 480;
@@ -328,6 +329,22 @@
 
   function handleMouseDown(e: MouseEvent) {
     if (e.button !== 0) return;
+
+    // Click on header/ruler area -> seek to bar
+    const rect = getCanvasRect();
+    if (rect && onSeekToBar) {
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      if (y < HEADER_HEIGHT && x >= PITCH_LABEL_WIDTH) {
+        const tick = xToTick(x);
+        const barIndex = Math.floor(tick / ticksPerBar);
+        if (barIndex >= 0 && barIndex < totalBars) {
+          onSeekToBar(barIndex);
+        }
+        return; // Don't start note editing
+      }
+    }
+
     const hit = hitTest(e.clientX, e.clientY);
     if (!hit) {
       selectedIndex = -1;

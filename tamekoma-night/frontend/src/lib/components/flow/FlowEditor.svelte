@@ -9,7 +9,8 @@
   import BlockPopover from './BlockPopover.svelte';
   import ChordEditDialog from './ChordEditDialog.svelte';
   import ImportDialog from './ImportDialog.svelte';
-  import { parseProgression, serialize } from '$lib/chord-parser';
+  import { parseProgression, serialize, resolveRepeats } from '$lib/chord-parser';
+  import { playChordPreview } from '$lib/chord-player';
 import FlowMinimap from './FlowMinimap.svelte';
   import TrackPianoRollRow from './TrackPianoRollRow.svelte';
   import PianoRollEditor from './PianoRollEditor.svelte';
@@ -544,6 +545,34 @@ import FlowMinimap from './FlowMinimap.svelte';
     }
   }
 
+  function handleTimelineContextMenu(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (target.closest('.directive-block') || target.closest('button')) return;
+
+    e.preventDefault();
+
+    const flowContent = e.currentTarget as HTMLElement;
+    const rect = flowContent.getBoundingClientRect();
+    const x = e.clientX - rect.left + flowContent.scrollLeft - measuredLabelWidth;
+    if (x < 0 || measuredContentWidth <= 0) return;
+
+    const barIndex = Math.floor(x / measuredContentWidth * totalBars);
+    if (barIndex < 0 || barIndex >= totalBars) return;
+
+    // Get chord for this bar and play preview
+    const parsed = parseProgression(song.chordProgression);
+    const resolved = resolveRepeats(parsed.bars);
+    if (barIndex < resolved.length) {
+      const bar = resolved[barIndex];
+      for (const entry of bar.entries) {
+        if (entry.type === 'chord') {
+          playChordPreview(entry.chord.raw);
+          break;
+        }
+      }
+    }
+  }
+
   function handleAddTrack() {
     const defaultPrograms = [0, 33, -1, 48, 25, 16];
     const usedPrograms = new Set(song.tracks.map(t => t.program ?? getDefaultProgram(t.instrument)));
@@ -621,7 +650,7 @@ import FlowMinimap from './FlowMinimap.svelte';
     <FlowMinimap {song} {totalBars} />
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="flow-content" onclick={handleTimelineClick}>
+    <div class="flow-content" onclick={handleTimelineClick} oncontextmenu={handleTimelineContextMenu}>
       <!-- Grid layout: label column + timeline columns -->
       <div class="flow-grid" bind:this={flowGridEl}>
         <!-- Section row -->
@@ -798,6 +827,7 @@ import FlowMinimap from './FlowMinimap.svelte';
         pianoRollNotes = newNotes;
       }}
       onClose={() => pianoRollTrackId = null}
+      onSeekToBar={onSeekToBar}
     />
   {/if}
 </div>

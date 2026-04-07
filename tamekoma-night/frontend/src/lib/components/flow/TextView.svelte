@@ -276,6 +276,7 @@
 
     <!-- Tracks -->
     {#if (previewSong.tracks ?? []).length > 0}
+      <h3 class="preview-section-title">Tracks</h3>
       <div class="preview-tracks">
         {#each previewSong.tracks ?? [] as track}
           <div class="track-card">
@@ -490,6 +491,15 @@
     font-size: 0.85rem;
     color: var(--text-muted);
     padding: 4px 8px;
+  }
+
+  /* ── Section title ── */
+  .preview-section-title {
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: var(--space-sm) 0 var(--space-xs);
   }
 
   /* ── Track cards ── */
