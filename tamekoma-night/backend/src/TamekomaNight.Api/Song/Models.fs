@@ -5,6 +5,11 @@ open TamekomaNight.Api
 
 module Models =
 
+    type MidiControlChange =
+        { Tick: int
+          Cc: int
+          Value: int }
+
     type MidiNoteData =
         { Midi: int
           StartTick: int
@@ -17,6 +22,7 @@ module Models =
           Style: string
           Expression: int
           Feel: int
+          ControlChanges: MidiControlChange list option
           GeneratedAt: string }
 
     type DirectiveBlock =
@@ -30,6 +36,7 @@ module Models =
         { Id: string
           Name: string
           Instrument: string
+          Program: int option
           Blocks: DirectiveBlock list
           Volume: float
           Mute: bool

@@ -73,6 +73,11 @@ module Repository =
 
         // --- Firestore document conversion ---
 
+        let private toMidiControlChange (dict: System.Collections.Generic.IDictionary<string, obj>) : MidiControlChange =
+            { Tick = tryGetDictInt dict "tick" 0
+              Cc = tryGetDictInt dict "cc" 0
+              Value = tryGetDictInt dict "value" 0 }
+
         let private toMidiNoteData (dict: System.Collections.Generic.IDictionary<string, obj>) : MidiNoteData =
             { Midi = tryGetDictInt dict "midi" 0
               StartTick = tryGetDictInt dict "startTick" 0
@@ -90,10 +95,21 @@ module Repository =
                     |> Seq.toList
                 | _ -> []
 
+            let controlChanges =
+                match dict.TryGetValue("controlChanges") with
+                | true, (:? System.Collections.IList as list) ->
+                    list
+                    |> Seq.cast<System.Collections.Generic.IDictionary<string, obj>>
+                    |> Seq.map toMidiControlChange
+                    |> Seq.toList
+                    |> Some
+                | _ -> None
+
             { Notes = notes
               Style = tryGetDictString dict "style"
               Expression = tryGetDictInt dict "expression" 0
               Feel = tryGetDictInt dict "feel" 0
+              ControlChanges = controlChanges
               GeneratedAt = tryGetDictString dict "generatedAt" }
 
         let private toDirectiveBlock (dict: System.Collections.Generic.IDictionary<string, obj>) : DirectiveBlock =
@@ -119,9 +135,17 @@ module Repository =
                     |> Seq.toList
                 | _ -> []
 
+            let program =
+                match dict.TryGetValue("program") with
+                | true, v when isNotNull v ->
+                    try Some (System.Convert.ToInt32(v))
+                    with _ -> None
+                | _ -> None
+
             { Id = tryGetDictString dict "id"
               Name = tryGetDictString dict "name"
               Instrument = tryGetDictString dict "instrument"
+              Program = program
               Blocks = blocks
               Volume = tryGetDictFloat dict "volume" 1.0
               Mute = tryGetDictBool dict "mute" false
@@ -171,6 +195,13 @@ module Repository =
 
         // --- Firestore serialization helpers ---
 
+        let private midiControlChangeToDict (cc: MidiControlChange) : System.Collections.Generic.Dictionary<string, obj> =
+            System.Collections.Generic.Dictionary<string, obj>(
+                dict
+                    [ "tick", cc.Tick :> obj
+                      "cc", cc.Cc :> obj
+                      "value", cc.Value :> obj ])
+
         let private midiNoteDataToDict (note: MidiNoteData) : System.Collections.Generic.Dictionary<string, obj> =
             System.Collections.Generic.Dictionary<string, obj>(
                 dict
@@ -182,13 +213,21 @@ module Repository =
 
         let private generatedMidiDataToDict (midi: GeneratedMidiData) : System.Collections.Generic.Dictionary<string, obj> =
             let noteDicts = midi.Notes |> List.map (fun n -> midiNoteDataToDict n :> obj)
-            System.Collections.Generic.Dictionary<string, obj>(
-                dict
-                    [ "notes", (System.Collections.Generic.List<obj>(noteDicts) :> obj)
-                      "style", midi.Style :> obj
-                      "expression", midi.Expression :> obj
-                      "feel", midi.Feel :> obj
-                      "generatedAt", midi.GeneratedAt :> obj ])
+            let baseFields =
+                [ "notes", (System.Collections.Generic.List<obj>(noteDicts) :> obj)
+                  "style", midi.Style :> obj
+                  "expression", midi.Expression :> obj
+                  "feel", midi.Feel :> obj
+                  "generatedAt", midi.GeneratedAt :> obj ]
+
+            let allFields =
+                match midi.ControlChanges with
+                | Some ccs ->
+                    let ccDicts = ccs |> List.map (fun c -> midiControlChangeToDict c :> obj)
+                    baseFields @ [ "controlChanges", (System.Collections.Generic.List<obj>(ccDicts) :> obj) ]
+                | None -> baseFields
+
+            System.Collections.Generic.Dictionary<string, obj>(dict allFields)
 
         let private directiveBlockToDict (block: DirectiveBlock) : System.Collections.Generic.Dictionary<string, obj> =
             let baseFields =
@@ -206,15 +245,21 @@ module Repository =
 
         let private trackToDict (track: Track) : System.Collections.Generic.Dictionary<string, obj> =
             let blockDicts = track.Blocks |> List.map (fun b -> directiveBlockToDict b :> obj)
-            System.Collections.Generic.Dictionary<string, obj>(
-                dict
-                    [ "id", track.Id :> obj
-                      "name", track.Name :> obj
-                      "instrument", track.Instrument :> obj
-                      "blocks", (System.Collections.Generic.List<obj>(blockDicts) :> obj)
-                      "volume", track.Volume :> obj
-                      "mute", track.Mute :> obj
-                      "solo", track.Solo :> obj ])
+            let baseFields =
+                [ "id", track.Id :> obj
+                  "name", track.Name :> obj
+                  "instrument", track.Instrument :> obj
+                  "blocks", (System.Collections.Generic.List<obj>(blockDicts) :> obj)
+                  "volume", track.Volume :> obj
+                  "mute", track.Mute :> obj
+                  "solo", track.Solo :> obj ]
+
+            let allFields =
+                match track.Program with
+                | Some p -> baseFields @ [ "program", p :> obj ]
+                | None -> baseFields
+
+            System.Collections.Generic.Dictionary<string, obj>(dict allFields)
 
         let private sectionToDict (section: Section) : System.Collections.Generic.Dictionary<string, obj> =
             System.Collections.Generic.Dictionary<string, obj>(

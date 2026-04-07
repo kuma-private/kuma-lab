@@ -40,6 +40,7 @@ export interface Track {
 	id: string;
 	name: string;                // "Piano", "Bass"
 	instrument: string;          // "piano", "bass", "drums", "strings", "guitar", "organ"
+	program?: number;            // GM program number (0-127)
 	blocks: DirectiveBlock[];
 	volume: number;              // dB
 	mute: boolean;
@@ -59,6 +60,7 @@ export interface GeneratedMidiData {
 	style: string;
 	expression: number;          // 0-100
 	feel: number;                // 0-100
+	controlChanges?: MidiControlChange[];  // ペダル等
 	generatedAt: string;         // ISO 8601
 }
 
@@ -66,6 +68,13 @@ export interface GeneratedBlockMidi {
 	blockId: string;
 	notes: MidiNote[];
 	sourceHash: string;          // input text hash for cache invalidation
+}
+
+// CC イベント（ペダル等）
+export interface MidiControlChange {
+	tick: number;
+	cc: number;     // CC番号 (64=sustain, 11=expression等)
+	value: number;  // 0-127
 }
 
 export interface MidiNote {
