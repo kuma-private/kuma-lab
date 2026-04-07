@@ -9,6 +9,7 @@
   import { midiToNoteName } from '$lib/chord-player';
   import { showToast } from '$lib/stores/toast.svelte';
   import MiniPianoRoll from './MiniPianoRoll.svelte';
+  import PianoRollEditor from './PianoRollEditor.svelte';
 
   interface Props {
     block: DirectiveBlock;
@@ -88,6 +89,7 @@
   let feelSlider = $state(block.generatedMidi?.feel ?? 50);
   let generatedMidiData = $state<GeneratedMidiData | undefined>(block.generatedMidi);
   let detailOpen = $state(false);
+  let pianoRollOpen = $state(false);
 
   // --- Free mode / melody ---
   let isFreeMode = $derived(directives.mode === 'free');
@@ -723,10 +725,14 @@
       <!-- MIDI preview -->
       <div class="preview-box">
         {#if showPreviewCanvas}
-          <canvas
-            class="preview-canvas"
-            bind:this={previewCanvas}
-          ></canvas>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="preview-clickable" onclick={() => pianoRollOpen = true}>
+            <canvas
+              class="preview-canvas"
+              bind:this={previewCanvas}
+            ></canvas>
+          </div>
         {:else}
           <span class="preview-placeholder">スタイルを入力して「生成」を押してください</span>
         {/if}
@@ -764,6 +770,21 @@
         {/if}
       </div>
     </div>
+
+    {#if pianoRollOpen}
+      <PianoRollEditor
+        notes={previewNotes}
+        totalBars={block.endBar - block.startBar}
+        {bpm}
+        {timeSignature}
+        onNotesChange={(newNotes) => {
+          if (generatedMidiData) {
+            generatedMidiData = { ...generatedMidiData, notes: newNotes };
+          }
+        }}
+        onClose={() => pianoRollOpen = false}
+      />
+    {/if}
 
     <!-- Footer -->
     <div class="popover-footer">
@@ -1087,6 +1108,16 @@
     justify-content: center;
     padding: 0;
     overflow: hidden;
+  }
+
+  .preview-clickable {
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+  .preview-clickable:hover {
+    outline: 1px solid rgba(232, 168, 76, 0.3);
+    border-radius: 4px;
   }
 
   .preview-canvas {

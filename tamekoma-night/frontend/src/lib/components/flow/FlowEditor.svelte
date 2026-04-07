@@ -12,6 +12,7 @@
   import { parseProgression, serialize } from '$lib/chord-parser';
 import FlowMinimap from './FlowMinimap.svelte';
   import TrackPianoRollRow from './TrackPianoRollRow.svelte';
+  import PianoRollEditor from './PianoRollEditor.svelte';
   // Track note colors for inline piano roll
   const TRACK_NOTE_COLORS: Record<string, string> = {
     piano: '#b8a0f0', bass: '#7cb882', drums: '#e8a84c',
@@ -184,6 +185,10 @@ import FlowMinimap from './FlowMinimap.svelte';
 
   // --- Range selection state ---
   let selectedRange = $state<{ startBar: number; endBar: number } | null>(null);
+
+  // --- PianoRollEditor state ---
+  let pianoRollTrackId = $state<string | null>(null);
+  let pianoRollNotes = $state<MidiNote[]>([]);
 
   function extractBarChords(barNumber: number): string {
     const { bars } = parseProgression(song.chordProgression);
@@ -637,13 +642,23 @@ import FlowMinimap from './FlowMinimap.svelte';
               onBlockDelete={(bid) => handleBlockDelete(track.id, bid)}
               onBlockCopy={(bid, s) => handleBlockCopy(track.id, bid, s)}
             />
-            <TrackPianoRollRow
-                notes={trackNotes.get(track.id)?.notes ?? []}
-                {totalBars}
-                bpm={song.bpm}
-                timeSignature={song.timeSignature}
-                color={TRACK_NOTE_COLORS[track.instrument] ?? '#e8a84c'}
-              />
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="piano-roll-clickable" onclick={() => {
+              const tn = trackNotes.get(track.id);
+              if (tn?.notes?.length) {
+                pianoRollTrackId = track.id;
+                pianoRollNotes = tn.notes;
+              }
+            }}>
+              <TrackPianoRollRow
+                  notes={trackNotes.get(track.id)?.notes ?? []}
+                  {totalBars}
+                  bpm={song.bpm}
+                  timeSignature={song.timeSignature}
+                  color={TRACK_NOTE_COLORS[track.instrument] ?? '#e8a84c'}
+                />
+            </div>
           </div>
         {/each}
 
@@ -722,6 +737,19 @@ import FlowMinimap from './FlowMinimap.svelte';
         importDialogOpen = false;
       }}
       onClose={() => importDialogOpen = false}
+    />
+  {/if}
+
+  {#if pianoRollTrackId}
+    <PianoRollEditor
+      notes={pianoRollNotes}
+      {totalBars}
+      bpm={song.bpm}
+      timeSignature={song.timeSignature}
+      onNotesChange={(newNotes) => {
+        pianoRollNotes = newNotes;
+      }}
+      onClose={() => pianoRollTrackId = null}
     />
   {/if}
 </div>
@@ -1095,6 +1123,15 @@ import FlowMinimap from './FlowMinimap.svelte';
   .add-track-btn:hover {
     color: var(--accent-warm);
     border-color: rgba(232, 168, 76, 0.4);
+  }
+
+  /* ---- Piano roll clickable ---- */
+  .piano-roll-clickable {
+    cursor: pointer;
+  }
+  .piano-roll-clickable:hover {
+    outline: 1px solid rgba(232, 168, 76, 0.3);
+    border-radius: 4px;
   }
 
   /* ---- Text view container ---- */
