@@ -300,13 +300,39 @@ module AnthropicClient =
 
         let orDefault d s = if System.String.IsNullOrEmpty(s) then d else s
 
-        let songInfo = songName |> orDefault "不明"
+        // songName may contain section structure info after the song name
+        // Format: "曲名\nセクション構成:\n画像1: Intro\n画像2: A\n..."
+        let songNameParts = songName.Split('\n')
+        let actualSongName = songNameParts.[0].Trim()
+        let hasSectionInfo = songNameParts |> Array.exists (fun l -> l.Contains("セクション構成"))
+
+        let songInfo = actualSongName |> orDefault "不明"
         let artistInfo = artist |> orDefault "不明"
         let urlInfo = sourceUrl |> orDefault ""
         let bpmInfo = if bpm <= 0 then "不明" else string bpm
         let tsInfo = timeSignature |> orDefault "4/4"
         let keyInfo = key |> orDefault "不明"
         let imageCount = List.length images
+
+        let sectionInstruction =
+            if hasSectionInfo then
+                let sectionLines =
+                    songNameParts
+                    |> Array.skipWhile (fun l -> not (l.Contains("セクション構成")))
+                    |> Array.skip 1
+                    |> Array.filter (fun l -> l.Trim() <> "")
+                    |> Array.map (fun l -> l.Trim())
+                    |> String.concat "\n"
+                "\n## セクション構成（必ず使用すること）\n"
+                + "以下のセクション構成が指定されています。各画像に対応するセクション名を `### セクション名` のヘッダーとして必ず出力してください。\n"
+                + sectionLines + "\n\n"
+                + "出力例:\n"
+                + "### Intro\n"
+                + "| Cmaj7 | Am7 | F | G |\n\n"
+                + "### A\n"
+                + "| Am7 | Dm7 | G7 | Cmaj7 |\n\n"
+            else
+                ""
 
         let userMessage =
             "以下の画像はコード譜サイト（U-Fret等）のスクリーンショットです。\n"
@@ -332,12 +358,18 @@ module AnthropicClient =
             + "あなたの音楽理論の知識で小節割りを推論してください。\n"
             + "BPM・和声機能（ii-V、SD→D等）・歌詞密度・曲名の知識を総合的に判断すること。\n"
             + "1コード=1小節のベタ並べは絶対に避けること。\n\n"
-            + "## セクション区切り\n"
-            + "- Aメロ/Bメロ/サビ等のラベルを無理に推測しないこと\n"
-            + "- 音楽的に明確な区切り（歌詞なし部分、転調、コード進行パターンの明らかな変化）がある場合のみ空行で区切る\n"
-            + "- 歌詞なし冒頭でも `// イントロ` とは書かない。空行で区切るだけでよい\n"
-            + "- セクション名は曲名から構造が明確に分かる場合のみ記載してよい\n"
-            + "- 曲名が判明していればその楽曲構造の知識でセクション名を付けてよい\n\n"
+            + (if hasSectionInfo then
+                   "## セクション区切り\n"
+                   + "- セクション構成が指定されているので、指定されたセクション名を `### セクション名` ヘッダーとして必ず出力すること\n"
+                   + "- 各セクションの前に空行を入れること\n\n"
+                   + sectionInstruction
+               else
+                   "## セクション区切り\n"
+                   + "- Aメロ/Bメロ/サビ等のラベルを無理に推測しないこと\n"
+                   + "- 音楽的に明確な区切り（歌詞なし部分、転調、コード進行パターンの明らかな変化）がある場合のみ空行で区切る\n"
+                   + "- 歌詞なし冒頭でも `// イントロ` とは書かない。空行で区切るだけでよい\n"
+                   + "- セクション名は曲名から構造が明確に分かる場合のみ記載してよい\n"
+                   + "- 曲名が判明していればその楽曲構造の知識でセクション名を付けてよい\n\n")
             + "## コード表記\n"
             + "- シャープ: # （F#m, C#m）　フラット: b （Bbm7-5, Ebm）※♭ではなくアルファベットb\n"
             + "- スラッシュコード: G/B, Em7/D　テンション: Cadd9, B7-9, Am7-5\n\n"
@@ -367,7 +399,10 @@ module AnthropicClient =
             + "- A/B→B7-9はドミナント準備の連結で同一小節\n"
             + "- Cmaj7→D/Cは3拍+1拍の不均等分割: `| Cmaj7 - - D/C |`\n"
             + "- Ebm7-5→G#はii°→V（マイナーii-V）で同一小節\n\n"
-            + "コードのみを出力してください。歌詞、説明、セクション名、囲みは不要です。"
+            + (if hasSectionInfo then
+                   "コードと ### セクション名 ヘッダーのみを出力してください。歌詞、説明、囲みは不要です。"
+               else
+                   "コードのみを出力してください。歌詞、説明、セクション名、囲みは不要です。")
 
         async {
             let! result = callWithImages httpClient apiKey "claude-opus-4-20250514" systemPrompt images userMessage 4000

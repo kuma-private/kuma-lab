@@ -431,10 +431,11 @@
   }
 
   .bar-line {
-    color: var(--text-muted);
+    color: var(--accent-primary);
     font-family: var(--font-mono);
-    font-size: 0.85rem;
+    font-size: 1.1em;
     opacity: 0.4;
+    font-weight: 400;
     user-select: none;
   }
 
