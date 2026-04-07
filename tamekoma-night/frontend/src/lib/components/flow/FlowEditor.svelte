@@ -319,9 +319,8 @@ import FlowMinimap from './FlowMinimap.svelte';
   let playheadLeft = $derived.by(() => {
     if (!totalDuration || totalDuration === 0 || currentTime < 0) return -1;
     const progress = currentTime / totalDuration;
-    // Use measured content width if available, otherwise fall back to totalBars * 140
-    const contentWidth = measuredContentWidth > 0 ? measuredContentWidth : totalBars * 140;
-    return measuredLabelWidth + progress * contentWidth;
+    // Each bar is 140px (from CSS minmax(0, 140px))
+    return measuredLabelWidth + progress * totalBars * 140;
   });
 
   // --- Computed totalBars ---
@@ -536,8 +535,7 @@ import FlowMinimap from './FlowMinimap.svelte';
 
     if (x < 0) return; // clicked on label area
 
-    const contentWidth = measuredContentWidth > 0 ? measuredContentWidth : totalBars * 140;
-    const barWidth = contentWidth / totalBars;
+    const barWidth = 140; // matches minmax(0, 140px) in grid-template-columns
     const barIndex = Math.floor(x / barWidth);
 
     if (barIndex >= 0 && barIndex < totalBars) {
@@ -650,7 +648,7 @@ import FlowMinimap from './FlowMinimap.svelte';
     <FlowMinimap {song} {totalBars} />
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="flow-content" onclick={handleTimelineClick} oncontextmenu={handleTimelineContextMenu}>
+    <div class="flow-content" onclick={handleTimelineClick}>
       <!-- Grid layout: label column + timeline columns -->
       <div class="flow-grid" bind:this={flowGridEl}>
         <!-- Section row -->
@@ -823,6 +821,8 @@ import FlowMinimap from './FlowMinimap.svelte';
       {totalBars}
       bpm={song.bpm}
       timeSignature={song.timeSignature}
+      chordProgression={song.chordProgression}
+      musicalKey={song.key}
       onNotesChange={(newNotes) => {
         pianoRollNotes = newNotes;
       }}

@@ -1,17 +1,21 @@
 <script lang="ts">
   import type { MidiNote } from '$lib/types/song';
+  import { playChordPreview } from '$lib/chord-player';
+  import { parseProgression, resolveRepeats } from '$lib/chord-parser';
 
   interface Props {
     notes: MidiNote[];
     totalBars: number;
     bpm: number;
     timeSignature: string;
+    chordProgression?: string;
+    musicalKey?: string;
     onNotesChange?: (notes: MidiNote[]) => void;
     onClose: () => void;
     onSeekToBar?: (barIndex: number) => void;
   }
 
-  let { notes, totalBars, bpm, timeSignature, onNotesChange, onClose, onSeekToBar }: Props = $props();
+  let { notes, totalBars, bpm, timeSignature, chordProgression, musicalKey, onNotesChange, onClose, onSeekToBar }: Props = $props();
 
   // --- Constants ---
   const TICKS_PER_QUARTER = 480;
@@ -434,6 +438,24 @@
     const hit = hitTest(e.clientX, e.clientY);
     if (hit) {
       deleteNote(hit.index);
+    } else if (chordProgression) {
+      // Right-click on empty space: play chord at this bar
+      const rect = getCanvasRect();
+      if (!rect) return;
+      const x = e.clientX - rect.left;
+      const tick = xToTick(x);
+      const barIndex = Math.floor(tick / ticksPerBar);
+
+      const parsed = parseProgression(chordProgression);
+      const resolved = resolveRepeats(parsed.bars);
+      if (barIndex >= 0 && barIndex < resolved.length) {
+        for (const entry of resolved[barIndex].entries) {
+          if (entry.type === 'chord') {
+            playChordPreview(entry.chord.raw);
+            break;
+          }
+        }
+      }
     }
   }
 
