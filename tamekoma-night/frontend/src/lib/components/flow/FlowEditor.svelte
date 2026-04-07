@@ -294,11 +294,33 @@ import FlowMinimap from './FlowMinimap.svelte';
   let arrangeLoading = $state(false);
 
   // --- Playhead position ---
+  let flowGridEl = $state<HTMLDivElement | null>(null);
+  let measuredLabelWidth = $state(120);
+  let measuredContentWidth = $state(0);
+
+  // Measure actual grid column widths from the DOM
+  $effect(() => {
+    if (!flowGridEl) return;
+    const observer = new ResizeObserver(() => {
+      if (!flowGridEl) return;
+      const cols = getComputedStyle(flowGridEl).gridTemplateColumns.split(/\s+/);
+      if (cols.length >= 2) {
+        measuredLabelWidth = parseFloat(cols[0]) || 120;
+        // Sum all remaining columns (the bar columns are inside .row-content, but
+        // the outer grid is "120px 1fr" — the 1fr is the content area width)
+        measuredContentWidth = parseFloat(cols[1]) || 0;
+      }
+    });
+    observer.observe(flowGridEl);
+    return () => observer.disconnect();
+  });
+
   let playheadLeft = $derived.by(() => {
-    if (!totalDuration || totalDuration === 0 || currentTime <= 0) return -1;
+    if (!totalDuration || totalDuration === 0 || currentTime < 0) return -1;
     const progress = currentTime / totalDuration;
-    // 120px label column + progress * totalBars * 140px (bar width)
-    return 120 + progress * totalBars * 140;
+    // Use measured content width if available, otherwise fall back to totalBars * 140
+    const contentWidth = measuredContentWidth > 0 ? measuredContentWidth : totalBars * 140;
+    return measuredLabelWidth + progress * contentWidth;
   });
 
   // --- Computed totalBars ---
@@ -575,7 +597,7 @@ import FlowMinimap from './FlowMinimap.svelte';
     <FlowMinimap {song} {totalBars} />
     <div class="flow-content">
       <!-- Grid layout: label column + timeline columns -->
-      <div class="flow-grid">
+      <div class="flow-grid" bind:this={flowGridEl}>
         <!-- Section row -->
         <div class="row-label">Section</div>
         <div class="row-content">
