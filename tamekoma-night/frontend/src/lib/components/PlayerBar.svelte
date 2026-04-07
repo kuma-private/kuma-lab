@@ -458,7 +458,8 @@
 		flex: 1;
 		min-width: 0;
 		position: relative;
-		overflow: hidden;
+		overflow-x: auto;
+		overflow-y: hidden;
 		border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
 	}
 
