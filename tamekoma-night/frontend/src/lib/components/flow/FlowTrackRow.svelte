@@ -168,6 +168,11 @@
       data-bar={barIndex}
     ></div>
   {/each}
+  {#if track.blocks.length === 0}
+    <div class="empty-track-hint" style:grid-column="1 / {totalBars + 1}" style:grid-row="1">
+      ドラッグでブロックを作成 → クリックでAI生成
+    </div>
+  {/if}
   {#each track.blocks as block (block.id)}
     <div
       class="block-wrapper"
@@ -255,6 +260,18 @@
 
   .resize-edge:hover {
     background: rgba(232, 168, 76, 0.3);
+  }
+
+  .empty-track-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-style: italic;
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: 0;
   }
 
   .context-menu {

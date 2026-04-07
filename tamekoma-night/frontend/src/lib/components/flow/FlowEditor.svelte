@@ -705,19 +705,12 @@ import FlowMinimap from './FlowMinimap.svelte';
         }
         // Auto-create a default piano track if no tracks exist
         if (song.tracks.length === 0) {
-          const parsed = parseProgression(data.chords);
-          const totalBars = parsed.bars.length;
           song.tracks = [{
             id: crypto.randomUUID(),
             name: 'Acoustic Grand',
             instrument: 'piano',
             program: 0,
-            blocks: [{
-              id: crypto.randomUUID(),
-              startBar: 0,
-              endBar: totalBars,
-              directives: '',
-            }],
+            blocks: [],  // Empty — user drags to create blocks
             volume: 0,
             mute: false,
             solo: false,
