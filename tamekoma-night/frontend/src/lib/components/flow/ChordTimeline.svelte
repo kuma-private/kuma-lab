@@ -77,7 +77,7 @@
 
       if (lo === hi) {
         // Single click — seek playback to this bar
-        onBarSeek?.(lo);
+        onBarSeek?.(lo - 1); // Convert 1-based barNumber to 0-based barIndex
       } else {
         // Range selection
         onRangeSelect?.(lo, hi);
