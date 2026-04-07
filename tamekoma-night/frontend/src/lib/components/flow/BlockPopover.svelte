@@ -230,9 +230,11 @@
     }, 2500);
 
     try {
-      const barRange = (block.startBar !== undefined && block.endBar !== undefined)
-        ? `${block.startBar + 1}-${block.endBar}`
-        : '';
+      const startBar1 = (block.startBar ?? 0) + 1;
+      const endBar1 = block.endBar ?? startBar1;
+      const barRange = startBar1 === endBar1
+        ? `${startBar1}`
+        : `${startBar1}-${endBar1}`;
 
       const result = await generateMidi(songId, {
         chordProgression: chordProgression ?? '',
@@ -245,13 +247,20 @@
       });
 
       // Map API response fields to MidiNote type
-      const mappedNotes: MidiNote[] = (result.notes as any[]).map((n: any) => ({
+      const rawNotes = result.notes ?? [];
+      const mappedNotes: MidiNote[] = (rawNotes as any[]).map((n: any) => ({
         midi: n.midi,
         startTick: n.startTick ?? n.tick ?? 0,
         durationTicks: n.durationTicks ?? n.duration ?? 480,
         velocity: n.velocity,
         channel: n.channel ?? 0,
       }));
+
+      if (mappedNotes.length === 0) {
+        aiError = 'AIがノートを生成できませんでした。スタイルやコード進行を確認してください。';
+        showToast(aiError, 'error');
+        return;
+      }
 
       // Map API response CC events to MidiControlChange type
       const mappedCCs: MidiControlChange[] = (result.controlChanges ?? []).map((cc: any) => ({

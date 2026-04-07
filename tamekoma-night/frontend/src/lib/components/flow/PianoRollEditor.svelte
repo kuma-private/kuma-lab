@@ -426,8 +426,6 @@
         e.preventDefault();
         deleteNote(selectedIndex);
       }
-    } else if (e.key === 'Escape') {
-      onClose();
     }
   }
 
@@ -468,42 +466,56 @@
   }
 </script>
 
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') onClose(); }} />
+
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-<div class="piano-roll-overlay" tabindex="0" onkeydown={handleKeydown}>
-  <div class="piano-roll-header">
-    <span class="title">Piano Roll Editor</span>
-    <span class="info">{totalBars} bars | {bpm} BPM | {timeSignature} | {notes.length} notes</span>
-    <div class="controls">
-      <span class="hint">Scroll: pitch | Shift+Scroll: time | Cmd+Scroll: zoom</span>
-      <button class="close-btn" onclick={onClose}>&#215;</button>
+<div class="piano-roll-overlay" onclick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+  <div class="piano-roll-dialog" tabindex="0" onkeydown={handleKeydown}>
+    <div class="piano-roll-header">
+      <span class="title">Piano Roll Editor</span>
+      <span class="info">{totalBars} bars | {bpm} BPM | {timeSignature} | {notes.length} notes</span>
+      <div class="controls">
+        <span class="hint">Scroll: pitch | Shift+Scroll: time | Cmd+Scroll: zoom</span>
+        <button class="close-btn" onclick={onClose}>&#215;</button>
+      </div>
     </div>
-  </div>
-  <div class="piano-roll-body" bind:this={containerEl}>
-    <canvas
-      bind:this={canvasEl}
-      onmousemove={handleMouseMove}
-      onmousedown={handleMouseDown}
-      onmouseup={handleMouseUp}
-      onmouseleave={() => { hoveredIndex = -1; if (dragMode !== 'none') { dragMode = 'none'; } }}
-      ondblclick={handleDblClick}
-      oncontextmenu={handleContextMenu}
-      onwheel={handleWheel}
-    ></canvas>
+    <div class="piano-roll-body" bind:this={containerEl}>
+      <canvas
+        bind:this={canvasEl}
+        onmousemove={handleMouseMove}
+        onmousedown={handleMouseDown}
+        onmouseup={handleMouseUp}
+        onmouseleave={() => { hoveredIndex = -1; if (dragMode !== 'none') { dragMode = 'none'; } }}
+        ondblclick={handleDblClick}
+        oncontextmenu={handleContextMenu}
+        onwheel={handleWheel}
+      ></canvas>
+    </div>
   </div>
 </div>
 
 <style>
   .piano-roll-overlay {
     position: fixed;
-    bottom: 60px;
-    left: 0;
-    right: 0;
-    height: 300px;
+    inset: 0;
+    z-index: var(--z-modal, 100);
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .piano-roll-dialog {
     background: var(--bg-surface, #1a1408);
-    border-top: 2px solid var(--accent-primary, #e8a84c);
-    z-index: 20;
+    border: 1px solid var(--border-default, rgba(138, 126, 104, 0.3));
+    border-radius: var(--radius-lg, 12px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    width: 90vw;
+    max-width: 1200px;
+    height: 70vh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
     outline: none;
   }
 
