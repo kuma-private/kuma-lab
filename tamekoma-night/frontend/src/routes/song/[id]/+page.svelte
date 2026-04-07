@@ -87,31 +87,35 @@
 
 	function finishTsEdit() {
 		editingTs = false;
-		if (store.currentSong && tsInput !== store.currentSong.timeSignature) {
-			// Check for existing MIDI data
-			const hasGeneratedMidi = store.currentSong.tracks.some(t =>
-				t.blocks.some(b => b.generatedMidi?.notes?.length)
+		if (!store.currentSong || tsInput === store.currentSong.timeSignature) return;
+
+		const hasGeneratedMidi = store.currentSong.tracks.some(t =>
+			t.blocks.some(b => b.generatedMidi?.notes?.length)
+		);
+
+		if (hasGeneratedMidi) {
+			const choice = window.confirm(
+				`拍子を ${store.currentSong.timeSignature} から ${tsInput} に変更します。\n\n` +
+				`既存のAI生成MIDIは新しい拍子に合わないため削除されます。\n` +
+				`変更後、各ブロックで再生成してください。\n\n` +
+				`続行しますか？`
 			);
-			if (hasGeneratedMidi) {
-				const confirmed = window.confirm(
-					'拍子を変更すると、既存のAI生成MIDIデータの再生成が必要になります。続行しますか？'
-				);
-				if (!confirmed) return;
-				// Clear generatedMidi from all blocks
-				const updatedSong = { ...store.currentSong, timeSignature: tsInput };
-				for (const track of updatedSong.tracks) {
-					for (const block of track.blocks) {
-						if (block.generatedMidi) {
-							block.generatedMidi = undefined;
-						}
-					}
+			if (!choice) return;
+
+			// Deep copy to avoid mutating the current song object
+			const updatedSong = JSON.parse(JSON.stringify(store.currentSong));
+			updatedSong.timeSignature = tsInput;
+			for (const track of updatedSong.tracks) {
+				for (const block of track.blocks) {
+					block.generatedMidi = undefined;
 				}
-				handleSongChange(updatedSong);
-			} else {
-				handleSongChange({ ...store.currentSong, timeSignature: tsInput });
 			}
-			showToast(`拍子を ${tsInput} に変更しました`, 'success');
+			handleSongChange(updatedSong);
+		} else {
+			handleSongChange({ ...store.currentSong, timeSignature: tsInput });
 		}
+
+		showToast(`拍子を ${tsInput} に変更しました`, 'success');
 	}
 
 	function updateTrackNotes() {
