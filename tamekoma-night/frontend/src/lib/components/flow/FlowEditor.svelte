@@ -253,7 +253,7 @@
   // --- Helpers ---
 
   function emit() {
-    onSongChange(structuredClone(song));
+    onSongChange(JSON.parse(JSON.stringify(song)));
   }
 
   // Section name change

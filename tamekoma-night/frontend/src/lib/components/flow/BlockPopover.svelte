@@ -311,7 +311,37 @@
       return;
     }
 
-    const notes = previewNotes;
+    // Apply pedal processing if CC data exists
+    let notes = [...previewNotes];
+    if (generatedMidiData?.controlChanges?.length) {
+      const pedalCCs = generatedMidiData.controlChanges.filter(cc => cc.cc === 64);
+      if (pedalCCs.length > 0) {
+        // Build pedal ranges
+        const ranges: { start: number; end: number }[] = [];
+        let pedalStart: number | null = null;
+        for (const cc of pedalCCs.sort((a, b) => a.tick - b.tick)) {
+          if (cc.value >= 64 && pedalStart === null) pedalStart = cc.tick;
+          else if (cc.value < 64 && pedalStart !== null) {
+            ranges.push({ start: pedalStart, end: cc.tick });
+            pedalStart = null;
+          }
+        }
+        if (pedalStart !== null) {
+          const maxTick = Math.max(...notes.map(n => n.startTick + n.durationTicks));
+          ranges.push({ start: pedalStart, end: maxTick });
+        }
+        // Extend notes within pedal ranges
+        notes = notes.map(n => {
+          const noteEnd = n.startTick + n.durationTicks;
+          for (const r of ranges) {
+            if (n.startTick >= r.start && noteEnd <= r.end) {
+              return { ...n, durationTicks: r.end - n.startTick };
+            }
+          }
+          return n;
+        });
+      }
+    }
     if (notes.length === 0) return;
 
     const Tone = await import('tone');
