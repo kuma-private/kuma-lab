@@ -544,10 +544,10 @@ import FlowMinimap from './FlowMinimap.svelte';
     if (x < 0) return; // clicked on label area
 
     const barWidth = 140; // matches minmax(0, 140px) in grid-template-columns
-    const barIndex = Math.floor(x / barWidth);
+    const barPosition = x / barWidth; // fractional — not snapped to bar head
 
-    if (barIndex >= 0 && barIndex < totalBars) {
-      onSeekToBar?.(barIndex);
+    if (barPosition >= 0 && barPosition < totalBars) {
+      onSeekToBar?.(barPosition);
     }
   }
 

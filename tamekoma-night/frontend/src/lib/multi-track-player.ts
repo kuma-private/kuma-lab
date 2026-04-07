@@ -572,8 +572,9 @@ export class MultiTrackPlayer {
     }
 
     // Start from current position (set by seekTo or default 0)
+    const pos = transport.seconds;
     transport.stop();
-    transport.start();
+    transport.start(undefined, pos);
     this.setState('playing');
     this.startProgressTracking();
   }
