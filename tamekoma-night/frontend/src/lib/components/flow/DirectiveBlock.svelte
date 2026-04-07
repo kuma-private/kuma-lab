@@ -58,6 +58,10 @@
 >
   {#if isEmpty}
     <span class="block-summary block-summary--empty">empty</span>
+  {:else if block.generatedMidi?.style}
+    <span class="block-summary block-summary--ai">
+      🎵 {block.generatedMidi.style}
+    </span>
   {:else}
     <span class="block-summary">{summary}</span>
   {/if}
@@ -95,6 +99,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1;
+  }
+
+  .block-summary--ai {
+    font-style: italic;
+    opacity: 0.9;
   }
 
   .block-summary--empty {

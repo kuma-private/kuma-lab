@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { MidiNote } from '$lib/types/song';
+	import type { MidiNote, MidiControlChange } from '$lib/types/song';
 
 	interface Props {
-		trackNotes: Map<string, { name: string; instrument: string; notes: MidiNote[] }>;
+		trackNotes: Map<string, { name: string; instrument: string; notes: MidiNote[]; controlChanges?: MidiControlChange[] }>;
 		currentTime?: number;
 		totalDuration?: number;
 		bpm?: number;
@@ -158,6 +158,9 @@
 			ctx.lineTo(Math.max(totalCanvasWidth, localScrollX + canvasWidth), yBase + TRACK_HEIGHT);
 			ctx.stroke();
 
+			// Draw pedal ranges before notes (background layer)
+			drawPedalRanges(ctx, track, yBase, TRACK_HEIGHT);
+
 			if (isEmpty) {
 				trackIndex++;
 				continue;
@@ -202,6 +205,36 @@
 
 			ctx.globalAlpha = 1;
 			trackIndex++;
+		}
+	}
+
+	function drawPedalRanges(
+		ctx: CanvasRenderingContext2D,
+		trackData: { controlChanges?: MidiControlChange[] },
+		trackY: number,
+		trackHeight: number,
+	) {
+		const ccs = trackData.controlChanges?.filter(cc => cc.cc === 64) ?? [];
+		if (ccs.length === 0) return;
+
+		let pedalStart: number | null = null;
+		for (const cc of [...ccs].sort((a, b) => a.tick - b.tick)) {
+			if (cc.value >= 64 && pedalStart === null) {
+				pedalStart = cc.tick;
+			} else if (cc.value < 64 && pedalStart !== null) {
+				const x1 = tickToX(pedalStart);
+				const x2 = tickToX(cc.tick);
+				// Cull off-screen
+				if (x2 >= localScrollX - 10 && x1 <= localScrollX + canvasWidth + 10) {
+					// Pedal area highlight
+					ctx.fillStyle = 'rgba(232, 168, 76, 0.06)';
+					ctx.fillRect(x1, trackY, x2 - x1, trackHeight);
+					// Bottom pedal line
+					ctx.fillStyle = 'rgba(232, 168, 76, 0.3)';
+					ctx.fillRect(x1, trackY + trackHeight - 2, x2 - x1, 2);
+				}
+				pedalStart = null;
+			}
 		}
 	}
 
