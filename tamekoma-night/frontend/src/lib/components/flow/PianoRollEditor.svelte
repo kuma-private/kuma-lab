@@ -569,15 +569,19 @@
 
       // Play chord preview if chord progression is available
       if (chordProgression) {
-        const parsed = parseProgression(chordProgression);
-        const resolved = resolveRepeats(parsed.bars);
-        if (barIndex >= 0 && barIndex < resolved.length) {
-          for (const entry of resolved[barIndex].entries) {
-            if (entry.type === 'chord') {
-              playChordPreview(entry.chord.raw);
-              break;
+        try {
+          const parsed = parseProgression(chordProgression);
+          const resolved = resolveRepeats(parsed.bars);
+          if (barIndex >= 0 && barIndex < resolved.length) {
+            for (const entry of resolved[barIndex].entries) {
+              if (entry.type === 'chord') {
+                playChordPreview(entry.chord.raw).catch(() => {});
+                break;
+              }
             }
           }
+        } catch {
+          // ignore parse errors
         }
       }
     }

@@ -221,7 +221,8 @@ module SongAiHandlers =
         + "3. ロック/ポップ系: 1小節あたり8-16ノート\n"
         + "4. ファンク/カッティング系: 1小節あたり16-32ノート\n"
         + "5. スタイルの指示を最優先で尊重すること\n"
-        + "6. 各コードの構成音を正確に把握してから演奏パターンを組み立てること"
+        + "6. 各コードの構成音を正確に把握してから演奏パターンを組み立てること\n"
+        + "7. スラッシュコード（例: A/B）の場合、/の後の音（B）を最低音として使用してください。ルート（A）ではなくベース指定音（B）が最も低い音になります。"
 
     /// Extract JSON content from text that may contain markdown code fences or extra text.
     /// Handles both JSON arrays (legacy) and JSON objects (new format with notes + cc).

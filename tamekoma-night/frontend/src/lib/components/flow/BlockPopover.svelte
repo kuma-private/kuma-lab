@@ -786,6 +786,7 @@
         totalBars={block.endBar - block.startBar}
         {bpm}
         {timeSignature}
+        {chordProgression}
         onNotesChange={(newNotes) => {
           if (generatedMidiData) {
             generatedMidiData = { ...generatedMidiData, notes: newNotes };
