@@ -61,7 +61,7 @@ type ModeGenerator = (
   nextChord?: VoicedChord,
 ) => MidiNote[];
 
-/** block — 全音を同時に鳴らす。1拍ごと。 */
+/** block — 全音を同時に鳴らす。コードの持続時間いっぱい（whole note）。 */
 function genBlock(
   chord: VoicedChord,
   barStartTick: number,
@@ -69,16 +69,16 @@ function genBlock(
   baseVelocity: number,
   channel: number,
 ): MidiNote[] {
-  const notes: MidiNote[] = [];
-  const dur = Math.floor(ctx.ticksPerBeat * 0.9);
+  // Duration = all beats assigned to this chord (set by generateRhythm via ctx.beats)
+  const dur = ctx.ticksPerBeat * ctx.beats - 1; // -1 tick gap to avoid overlap
 
-  for (let beat = 0; beat < ctx.beats; beat++) {
-    const startTick = barStartTick + beat * ctx.ticksPerBeat;
-    for (const midi of chord.midiNotes) {
-      notes.push({ midi, startTick, durationTicks: dur, velocity: baseVelocity, channel });
-    }
-  }
-  return notes;
+  return chord.midiNotes.map((midi) => ({
+    midi,
+    startTick: barStartTick,
+    durationTicks: dur,
+    velocity: baseVelocity,
+    channel,
+  }));
 }
 
 /** arpUp — 低音→高音へ1拍を4分割 */

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Song, DirectiveBlock, Track, MidiNote, GeneratedMidiData, Section } from '$lib/types/song';
-  import { suggestArrangement, type ArrangeRequest, type ArrangeResponse } from '$lib/api';
+
   import { showToast } from '$lib/stores/toast.svelte';
   import SectionBar from './SectionBar.svelte';
   import ChordTimeline from './ChordTimeline.svelte';
@@ -289,11 +289,6 @@ import FlowMinimap from './FlowMinimap.svelte';
     selectedRange = null;
   }
 
-  // --- AI Arrange state ---
-  let arrangeOpen = $state(false);
-  let arrangeGenre = $state('');
-  let arrangeLoading = $state(false);
-
   // --- Playhead position ---
   let flowGridEl = $state<HTMLDivElement | null>(null);
   let measuredLabelWidth = $state(120);
@@ -386,60 +381,6 @@ import FlowMinimap from './FlowMinimap.svelte';
   function sectionNameForBar(bar: number): string {
     const sec = song.sections.find(s => bar >= s.startBar && bar < s.endBar);
     return sec?.name ?? '';
-  }
-
-  // --- AI Arrange ---
-  async function handleArrange() {
-    if (!songId) {
-      showToast('Song ID が不明です', 'error');
-      return;
-    }
-    if (!arrangeGenre.trim()) {
-      showToast('ジャンルを入力してください', 'error');
-      return;
-    }
-
-    const hasExistingMidi = song.tracks.some(t => t.blocks.some(b => b.generatedMidi));
-    if (hasExistingMidi && !window.confirm('既存のトラックとMIDIデータが置き換えられます。続行しますか？')) {
-      return;
-    }
-
-    arrangeLoading = true;
-    try {
-      const result: ArrangeResponse = await suggestArrangement(songId, {
-        chordProgression: song.chordProgression,
-        genre: arrangeGenre.trim(),
-        key: song.key,
-        bpm: song.bpm,
-      });
-
-      // Apply suggested tracks to song
-      const newTracks: Track[] = result.tracks.map(t => ({
-        id: crypto.randomUUID(),
-        name: t.name,
-        instrument: t.instrument,
-        blocks: t.blocks.map(b => ({
-          id: crypto.randomUUID(),
-          startBar: b.startBar,
-          endBar: b.endBar,
-          directives: b.directives,
-        })),
-        volume: 0,
-        mute: false,
-        solo: false,
-      }));
-
-      song.tracks = newTracks;
-      emit();
-      arrangeOpen = false;
-      arrangeGenre = '';
-      showToast('アレンジを生成しました（既存トラックは置き換えられました）', 'success');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'アレンジ生成に失敗しました';
-      showToast(message, 'error');
-    } finally {
-      arrangeLoading = false;
-    }
   }
 
   // --- Chord chart image import ---
@@ -618,39 +559,14 @@ import FlowMinimap from './FlowMinimap.svelte';
         onclick={() => onTabChange?.('flow')}
       >Flow</button>
     </div>
-    <!-- Right side: AI Arrange button -->
     <div class="tab-bar-right">
       {#if activeTab === 'text'}
         <button class="btn-import" onclick={() => importDialogOpen = true}>
           画像からインポート
         </button>
       {/if}
-      <button class="btn-arrange" onclick={() => arrangeOpen = !arrangeOpen}>
-        AI Arrange
-      </button>
     </div>
   </div>
-
-  {#if arrangeOpen}
-    <div class="arrange-bar">
-      <input
-        type="text"
-        class="arrange-input"
-        placeholder="ジャンルを入力... (例: ボサノバ, ジャズ, ロック)"
-        bind:value={arrangeGenre}
-        disabled={arrangeLoading}
-        onkeydown={(e) => { if (e.key === 'Enter' && !arrangeLoading) handleArrange(); }}
-      />
-      <button class="btn-arrange-go" onclick={handleArrange} disabled={arrangeLoading}>
-        {#if arrangeLoading}
-          <span class="spinner-sm"></span>
-        {:else}
-          アレンジ生成
-        {/if}
-      </button>
-      <button class="btn-arrange-close" onclick={() => arrangeOpen = false} aria-label="Close">&times;</button>
-    </div>
-  {/if}
 
   {#if activeTab === 'flow'}
     <FlowMinimap {song} {totalBars} />
@@ -746,10 +662,9 @@ import FlowMinimap from './FlowMinimap.svelte';
         {/each}
 
         <!-- Add track button -->
-        <div class="row-label">
+        <div class="add-track-row">
           <button class="add-track-btn" onclick={handleAddTrack}>+ Track</button>
         </div>
-        <div class="row-content"></div>
       </div>
       {#if playheadLeft >= 0}
         <div class="playhead-line" style:left="{playheadLeft}px"></div>
@@ -897,24 +812,6 @@ import FlowMinimap from './FlowMinimap.svelte';
     gap: var(--space-xs);
   }
 
-  .btn-arrange {
-    padding: 4px 12px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    font-family: var(--font-sans);
-    border: 1px solid rgba(232, 168, 76, 0.3);
-    border-radius: 6px;
-    background: rgba(232, 168, 76, 0.08);
-    color: var(--accent-primary);
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .btn-arrange:hover {
-    background: rgba(232, 168, 76, 0.18);
-    border-color: rgba(232, 168, 76, 0.5);
-  }
-
   .btn-import {
     padding: 4px 12px;
     font-size: 0.72rem;
@@ -936,78 +833,6 @@ import FlowMinimap from './FlowMinimap.svelte';
   .btn-import:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-  }
-
-  /* ---- Arrange bar ---- */
-  .arrange-bar {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
-    border-bottom: 1px solid var(--border-subtle);
-    background: var(--bg-elevated);
-  }
-
-  .arrange-input {
-    flex: 1;
-    padding: 6px 10px;
-    font-size: 0.82rem;
-    background: var(--bg-base);
-    color: var(--text-primary);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-sm);
-  }
-
-  .arrange-input:focus {
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px rgba(232, 168, 76, 0.15);
-    outline: none;
-  }
-
-  .arrange-input::placeholder {
-    color: var(--text-muted);
-    font-size: 0.78rem;
-  }
-
-  .btn-arrange-go {
-    padding: 6px 14px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    font-family: var(--font-sans);
-    border: none;
-    border-radius: var(--radius-sm);
-    background: var(--accent-primary);
-    color: #fff;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-    min-width: 100px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .btn-arrange-go:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-
-  .btn-arrange-go:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .btn-arrange-close {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 1.1rem;
-    cursor: pointer;
-    padding: 0 4px;
-    line-height: 1;
-  }
-
-  .btn-arrange-close:hover {
-    color: var(--text-primary);
   }
 
   .spinner-sm {
@@ -1196,21 +1021,28 @@ import FlowMinimap from './FlowMinimap.svelte';
     opacity: 0.5;
   }
 
+  .add-track-row {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    padding: var(--space-sm);
+  }
+
   .add-track-btn {
     background: none;
-    border: 1px dashed var(--border-default);
+    border: none;
     border-radius: var(--radius-sm);
     color: var(--text-muted);
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     font-family: var(--font-sans);
-    padding: 2px 10px;
+    padding: 4px 16px;
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
+    transition: color 0.15s, background 0.15s;
   }
 
   .add-track-btn:hover {
     color: var(--accent-warm);
-    border-color: rgba(232, 168, 76, 0.4);
+    background: rgba(232, 168, 76, 0.08);
   }
 
   /* ---- Piano roll clickable ---- */

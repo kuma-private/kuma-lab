@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PlayerState } from '$lib/chord-player';
+	import PianoKeyboard from './PianoKeyboard.svelte';
 
 	let {
 		playerState = 'stopped',
@@ -9,6 +10,7 @@
 		currentChord = null,
 		volume = -10,
 		loop = false,
+		playingNotes = [] as string[],
 		onplay,
 		onpause,
 		onstop,
@@ -23,6 +25,7 @@
 		currentChord?: string | null;
 		volume?: number;
 		loop?: boolean;
+		playingNotes?: string[];
 		onplay?: () => void;
 		onpause?: () => void;
 		onstop?: () => void;
@@ -211,6 +214,14 @@
 			<div class="player-progress-fill" style="width: {progress}%"></div>
 			<div class="player-progress-handle" style="left: {progress}%"></div>
 		</div>
+	</div>
+
+	<!-- Divider -->
+	<div class="dock-divider"></div>
+
+	<!-- Right section: Piano keyboard -->
+	<div class="piano-section">
+		<PianoKeyboard {playingNotes} />
 	</div>
 </div>
 
@@ -436,6 +447,21 @@
 		border: none;
 	}
 
+	.dock-divider {
+		width: 1px;
+		background: var(--border-subtle);
+		margin: 8px 0;
+		flex-shrink: 0;
+	}
+
+	.piano-section {
+		flex: 1;
+		min-width: 0;
+		position: relative;
+		overflow: hidden;
+		border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+	}
+
 	/* Responsive */
 	@media (max-width: 700px) {
 		.player-dock {
@@ -467,6 +493,7 @@
 	}
 
 	@media (max-width: 500px) {
+		.dock-divider { display: none; }
 		.player-progress-fill {
 			background: var(--accent-primary);
 		}
@@ -476,12 +503,22 @@
 		}
 		.player-dock {
 			height: auto;
+			flex-wrap: wrap;
 		}
 		.player-controls-section {
+			width: 100%;
+			flex: none;
 			padding: 4px var(--space-sm);
 		}
 		.player-row-top {
 			justify-content: center;
+		}
+		.piano-section {
+			width: 100%;
+			flex: none;
+			height: 40px;
+			border-top: 1px solid var(--border-subtle);
+			padding: 0;
 		}
 	}
 </style>
