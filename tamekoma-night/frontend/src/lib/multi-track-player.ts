@@ -350,13 +350,7 @@ export class MultiTrackPlayer {
       const trackNotes: MidiNote[] = [];
       const channel = trackIdx;
 
-      // If track has no blocks, create a default block covering the entire progression
-      // so that users hear block chords even without explicitly creating blocks
-      const blocks: DirectiveBlock[] = trackDef.blocks.length > 0
-        ? trackDef.blocks
-        : [{ id: '__default__', startBar: 0, endBar: resolvedBars.length, directives: '' }];
-
-      for (const block of blocks) {
+      for (const block of trackDef.blocks) {
         // AI-generated MIDI: skip voicing/rhythm pipeline entirely
         if (block.generatedMidi && block.generatedMidi.notes.length > 0) {
           let blockNotes = block.generatedMidi.notes;
@@ -468,6 +462,37 @@ export class MultiTrackPlayer {
             return n.durationTicks > maxDuration ? { ...n, durationTicks: maxDuration } : n;
           });
         trackNotes.push(...clampedNotes);
+      }
+
+      // Find uncovered bar ranges and fill with default block chords
+      const coveredBars = new Set<number>();
+      for (const block of trackDef.blocks) {
+        for (let bar = block.startBar; bar < block.endBar; bar++) {
+          coveredBars.add(bar);
+        }
+      }
+
+      // Generate default notes for uncovered bars
+      for (let barIdx = 0; barIdx < resolvedBars.length; barIdx++) {
+        if (coveredBars.has(barIdx)) continue;
+
+        const barChords = chordsPerBar[barIdx] ?? [];
+        if (barChords.length === 0) continue;
+
+        if (trackDef.instrument === 'drums') {
+          const drumConfig: DrumRhythmConfig = { pattern: '8beat' };
+          const drumNotes = generateDrumRhythm(drumConfig, bpm, timeSig, barIdx, 1, 9);
+          trackNotes.push(...drumNotes);
+        } else {
+          const voicingConfig: VoicingConfig = { type: 'close' };
+          const voicedChords = voiceChords(barChords, voicingConfig);
+          const rhythmConfig: RhythmConfig = { mode: 'block' };
+
+          const barNotes = generateRhythm(
+            voicedChords, rhythmConfig, bpm, timeSig, barIdx, channel,
+          );
+          trackNotes.push(...barNotes);
+        }
       }
 
       // Store generated notes for Visualizer API
