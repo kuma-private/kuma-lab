@@ -306,7 +306,7 @@
     const notes = previewNotes;
     if (notes.length === 0) return;
 
-    const { default: Tone } = await import('tone');
+    const Tone = await import('tone');
     await Tone.start();
 
     const { getPianoSampler, isPianoLoaded } = await import('$lib/chord-player');
