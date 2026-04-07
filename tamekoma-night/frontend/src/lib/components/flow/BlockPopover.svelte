@@ -6,6 +6,7 @@
   import { voiceChords, type VoicingConfig } from '$lib/voicing-engine';
   import { generateRhythm, type RhythmConfig } from '$lib/rhythm-engine';
   import { suggestDirectives, generateMidi } from '$lib/api';
+  import { midiToNoteName } from '$lib/chord-player';
   import { showToast } from '$lib/stores/toast.svelte';
   import MiniPianoRoll from './MiniPianoRoll.svelte';
 
@@ -290,8 +291,57 @@
     onClose();
   }
 
-  function handlePreview() {
-    onPreview?.();
+  let previewPlaying = $state(false);
+  let previewTimeouts: ReturnType<typeof setTimeout>[] = [];
+
+  async function handlePreview() {
+    if (previewPlaying) {
+      // Stop
+      previewTimeouts.forEach(clearTimeout);
+      previewTimeouts = [];
+      previewPlaying = false;
+      return;
+    }
+
+    const notes = previewNotes;
+    if (notes.length === 0) return;
+
+    const { default: Tone } = await import('tone');
+    await Tone.start();
+
+    const { getPianoSampler, isPianoLoaded } = await import('$lib/chord-player');
+    const sampler = getPianoSampler();
+
+    // Wait for piano to load
+    if (!isPianoLoaded()) {
+      await new Promise<void>(resolve => {
+        const check = () => isPianoLoaded() ? resolve() : setTimeout(check, 100);
+        check();
+      });
+    }
+
+    previewPlaying = true;
+    const secondsPerTick = 60 / bpm / 480;
+
+    for (const n of notes) {
+      const timeSec = n.startTick * secondsPerTick;
+      const durSec = Math.max(0.05, n.durationTicks * secondsPerTick);
+      const noteName = midiToNoteName(n.midi);
+      const vel = n.velocity / 127;
+
+      const t = setTimeout(() => {
+        try { sampler.triggerAttackRelease(noteName, durSec, Tone.now(), vel); } catch {}
+      }, timeSec * 1000);
+      previewTimeouts.push(t);
+    }
+
+    // Auto stop after all notes
+    const maxTime = Math.max(...notes.map(n => (n.startTick + n.durationTicks) * secondsPerTick));
+    const stopT = setTimeout(() => {
+      previewPlaying = false;
+      previewTimeouts = [];
+    }, (maxTime + 0.5) * 1000);
+    previewTimeouts.push(stopT);
   }
 
   function handleOverlayClick(e: MouseEvent) {
@@ -637,7 +687,7 @@
 
     <!-- Footer -->
     <div class="popover-footer">
-      <button class="footer-btn" onclick={handlePreview}>&#9654; Preview</button>
+      <button class="footer-btn" onclick={handlePreview}>{previewPlaying ? '■ Stop' : '▶ Preview'}</button>
       <button class="footer-btn footer-btn--primary" onclick={handleOk}>OK</button>
     </div>
   </div>
