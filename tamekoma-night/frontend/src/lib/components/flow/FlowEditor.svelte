@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Song, DirectiveBlock, Track, MidiNote, GeneratedMidiData } from '$lib/types/song';
+  import type { Song, DirectiveBlock, Track, MidiNote, GeneratedMidiData, Section } from '$lib/types/song';
   import { suggestArrangement, type ArrangeRequest, type ArrangeResponse } from '$lib/api';
   import { showToast } from '$lib/stores/toast.svelte';
   import SectionBar from './SectionBar.svelte';
@@ -17,6 +17,49 @@ import FlowMinimap from './FlowMinimap.svelte';
     piano: '#b8a0f0', bass: '#7cb882', drums: '#e8a84c',
     strings: '#6ea8d0', guitar: '#f0c060', organ: '#e06050',
   };
+
+  function parseSectionsFromChords(chordText: string): Section[] {
+    const lines = chordText.split('\n');
+    const sections: Section[] = [];
+    let currentBar = 0;
+    let currentSection: { name: string; startBar: number } | null = null;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      const sectionMatch = trimmed.match(/^###\s+(.+)/);
+      if (sectionMatch) {
+        if (currentSection && currentBar > currentSection.startBar) {
+          sections.push({
+            id: crypto.randomUUID(),
+            name: currentSection.name,
+            startBar: currentSection.startBar,
+            endBar: currentBar,
+            color: '',
+          });
+        }
+        currentSection = { name: sectionMatch[1].trim(), startBar: currentBar };
+        continue;
+      }
+
+      if (trimmed.startsWith('|')) {
+        const barCount = (trimmed.match(/\|/g)?.length ?? 1) - 1;
+        currentBar += Math.max(barCount, 0);
+      }
+    }
+
+    if (currentSection && currentBar > currentSection.startBar) {
+      sections.push({
+        id: crypto.randomUUID(),
+        name: currentSection.name,
+        startBar: currentSection.startBar,
+        endBar: currentBar,
+        color: '',
+      });
+    }
+
+    return sections;
+  }
 
   const GM_CATEGORIES = [
     { name: 'Piano', programs: [
@@ -242,6 +285,14 @@ import FlowMinimap from './FlowMinimap.svelte';
   let arrangeOpen = $state(false);
   let arrangeGenre = $state('');
   let arrangeLoading = $state(false);
+
+  // --- Playhead position ---
+  let playheadLeft = $derived.by(() => {
+    if (!totalDuration || totalDuration === 0 || currentTime <= 0) return -1;
+    const progress = currentTime / totalDuration;
+    // 120px label column + progress * totalBars * 140px (bar width)
+    return 120 + progress * totalBars * 140;
+  });
 
   // --- Computed totalBars ---
   // Derive totalBars from sections and track blocks (max endBar across all, minimum 8)
@@ -601,6 +652,9 @@ import FlowMinimap from './FlowMinimap.svelte';
         </div>
         <div class="row-content"></div>
       </div>
+      {#if playheadLeft >= 0}
+        <div class="playhead-line" style:left="{playheadLeft}px"></div>
+      {/if}
     </div>
 
   {:else}
@@ -645,6 +699,10 @@ import FlowMinimap from './FlowMinimap.svelte';
         song.chordProgression = data.chords;
         if (data.title) song.title = data.title;
         if (data.bpm) song.bpm = data.bpm;
+        const parsedSections = parseSectionsFromChords(data.chords);
+        if (parsedSections.length > 0) {
+          song.sections = parsedSections;
+        }
         // Auto-create a default piano track if no tracks exist
         if (song.tracks.length === 0) {
           const parsed = parseProgression(data.chords);
@@ -862,6 +920,18 @@ import FlowMinimap from './FlowMinimap.svelte';
     padding: var(--space-md) 0;
     flex: 1;
     min-height: 300px;
+    position: relative;
+  }
+
+  .playhead-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent-primary);
+    opacity: 0.7;
+    z-index: 10;
+    pointer-events: none;
   }
 
   .flow-grid {
