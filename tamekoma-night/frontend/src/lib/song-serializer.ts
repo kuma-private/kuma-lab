@@ -7,13 +7,6 @@ import type { Song, Section, Track, DirectiveBlock } from '$lib/types/song';
 export function serializeSong(song: Song): string {
 	const lines: string[] = [];
 
-	// Metadata
-	lines.push(`@title: ${song.title}`);
-	lines.push(`@bpm: ${song.bpm}`);
-	lines.push(`@key: ${song.key}`);
-	lines.push(`@time: ${song.timeSignature}`);
-	lines.push('');
-
 	// Chords section
 	lines.push('## Chords');
 	if (song.chordProgression.trim()) {
