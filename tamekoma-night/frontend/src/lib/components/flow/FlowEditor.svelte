@@ -310,6 +310,11 @@ import FlowMinimap from './FlowMinimap.svelte';
       return;
     }
 
+    const hasExistingMidi = song.tracks.some(t => t.blocks.some(b => b.generatedMidi));
+    if (hasExistingMidi && !window.confirm('既存のトラックとMIDIデータが置き換えられます。続行しますか？')) {
+      return;
+    }
+
     arrangeLoading = true;
     try {
       const result: ArrangeResponse = await suggestArrangement(songId, {
@@ -339,7 +344,7 @@ import FlowMinimap from './FlowMinimap.svelte';
       emit();
       arrangeOpen = false;
       arrangeGenre = '';
-      showToast('アレンジを生成しました', 'success');
+      showToast('アレンジを生成しました（既存トラックは置き換えられました）', 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'アレンジ生成に失敗しました';
       showToast(message, 'error');
@@ -438,6 +443,7 @@ import FlowMinimap from './FlowMinimap.svelte';
       startBar: targetStartBar,
       endBar: targetStartBar + duration,
       directives: src.directives,
+      generatedMidi: src.generatedMidi ? JSON.parse(JSON.stringify(src.generatedMidi)) : undefined,
     });
     emit();
   }

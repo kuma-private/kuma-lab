@@ -319,8 +319,11 @@ export function mergeParsedSong(original: Song, parsed: Partial<Song>): Song {
 		key: parsed.key ?? original.key,
 		timeSignature: parsed.timeSignature ?? original.timeSignature,
 		chordProgression: parsed.chordProgression ?? original.chordProgression,
-		sections: parsed.sections ?? original.sections,
-		tracks: parsed.tracks ?? original.tracks,
+		sections: parsed.sections && parsed.sections.length > 0 ? parsed.sections : original.sections,
+		// NOTE: tracks are intentionally NOT merged from parsed data.
+		// The text format doesn't include block/MIDI data, so merging
+		// parsed.tracks would destroy existing track blocks. Tracks are
+		// managed exclusively through the Flow tab.
 		lastEditedAt: new Date().toISOString()
 	};
 }

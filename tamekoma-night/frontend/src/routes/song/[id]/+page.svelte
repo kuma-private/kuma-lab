@@ -132,7 +132,7 @@
 	$effect(() => {
 		const song = store.currentSong;
 		if (!song || !player) return;
-		const json = JSON.stringify({ chords: song.chordProgression, tracks: song.tracks, bpm: song.bpm, ts: song.timeSignature });
+		const json = JSON.stringify({ chords: song.chordProgression, tracks: song.tracks, bpm: song.bpm, ts: song.timeSignature, key: song.key });
 		if (json !== lastSongJson) {
 			lastSongJson = json;
 			loadSongIntoPlayer();
@@ -183,6 +183,7 @@
 		const tracks = store.currentSong.tracks.map(t => ({
 			name: t.name,
 			instrument: t.instrument,
+			program: t.program,
 			notes: allNotes.get(t.id) ?? [],
 		}));
 		const ts = parseTimeSignature(store.currentSong.timeSignature);
