@@ -641,11 +641,13 @@ import FlowMinimap from './FlowMinimap.svelte';
       bpm={song.bpm}
       timeSignature={song.timeSignature}
       key={song.key}
-      onImport={(chords) => {
-        song.chordProgression = chords;
+      onImport={(data) => {
+        song.chordProgression = data.chords;
+        if (data.title) song.title = data.title;
+        if (data.bpm) song.bpm = data.bpm;
         // Auto-create a default piano track if no tracks exist
         if (song.tracks.length === 0) {
-          const parsed = parseProgression(chords);
+          const parsed = parseProgression(data.chords);
           const totalBars = parsed.bars.length;
           song.tracks = [{
             id: crypto.randomUUID(),

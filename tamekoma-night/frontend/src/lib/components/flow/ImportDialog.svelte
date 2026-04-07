@@ -13,7 +13,7 @@
     bpm: number;
     timeSignature: string;
     key: string;
-    onImport: (chords: string) => void;
+    onImport: (data: { chords: string; title?: string; bpm?: number }) => void;
     onClose: () => void;
   } = $props();
 
@@ -26,6 +26,28 @@
   let error = $state('');
 
   let canSubmit = $derived(images.length > 0 && !loading);
+
+  let tapTimes: number[] = [];
+  let tapTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function handleTap() {
+    const now = Date.now();
+    if (tapTimes.length > 0 && now - tapTimes[tapTimes.length - 1] > 2000) {
+      tapTimes = [];
+    }
+    tapTimes.push(now);
+    if (tapTimes.length >= 2) {
+      const intervals = [];
+      for (let i = 1; i < tapTimes.length; i++) {
+        intervals.push(tapTimes[i] - tapTimes[i - 1]);
+      }
+      const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      bpmInput = Math.max(40, Math.min(240, Math.round(60000 / avg)));
+    }
+    if (tapTimes.length > 8) tapTimes = tapTimes.slice(-8);
+    if (tapTimeout) clearTimeout(tapTimeout);
+    tapTimeout = setTimeout(() => { tapTimes = []; }, 2000);
+  }
 
   function handlePaste(e: ClipboardEvent) {
     const items = e.clipboardData?.items;
@@ -83,7 +105,11 @@
         key: musicalKey,
       });
 
-      onImport(result.chords);
+      onImport({
+        chords: result.chords,
+        title: songName || undefined,
+        bpm: bpmInput,
+      });
     } catch (err) {
       error = err instanceof Error ? err.message : 'インポートに失敗しました';
     } finally {
@@ -189,16 +215,19 @@
             placeholder="任意"
           />
         </label>
-        <label class="field-label">
+        <div class="field-label">
           <span>BPM</span>
-          <input
-            type="number"
-            class="field-input"
-            bind:value={bpmInput}
-            min="40"
-            max="240"
-          />
-        </label>
+          <div class="bpm-row">
+            <input
+              type="number"
+              class="field-input bpm-input"
+              bind:value={bpmInput}
+              min="40"
+              max="240"
+            />
+            <button type="button" class="tap-btn" onclick={handleTap}>TAP</button>
+          </div>
+        </div>
       </div>
 
       <!-- Error -->
@@ -439,6 +468,29 @@
     color: var(--text-muted);
     font-size: 0.75rem;
   }
+
+  .bpm-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .bpm-input {
+    flex: 1;
+  }
+  .tap-btn {
+    padding: 6px 16px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .tap-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+  .tap-btn:active { background: rgba(232, 168, 76, 0.15); }
 
   /* Error */
   .import-error {
