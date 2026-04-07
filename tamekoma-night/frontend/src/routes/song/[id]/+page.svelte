@@ -8,6 +8,8 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { MultiTrackPlayer } from '$lib/multi-track-player';
 	import { songToMidi, downloadMidi } from '$lib/midi-export';
+	import { chordToNotes } from '$lib/chord-player';
+	import { parseChord } from '$lib/chord-parser';
 
 	const store = createSongStore();
 	const songId = page.params.id as string;
@@ -19,6 +21,14 @@
 	let currentChord = $state<string | null>(null);
 	let playerVolume = $state(-10);
 	let playerLoop = $state(false);
+
+	// Derive playing note names from current chord for keyboard highlighting
+	let playingNoteNames = $derived.by(() => {
+		if (!currentChord || playerState !== 'playing') return [];
+		try {
+			return chordToNotes(parseChord(currentChord));
+		} catch { return []; }
+	});
 
 	// Track notes for Visualizer
 	let trackNotes = $state<Map<string, { name: string; instrument: string; notes: MidiNote[] }>>(new Map());
@@ -394,6 +404,7 @@
 			currentChord={currentChord}
 			volume={playerVolume}
 			loop={playerLoop}
+			playingNotes={playingNoteNames}
 			onplay={handlePlay}
 			onpause={handlePause}
 			onstop={() => { player?.stop(); }}

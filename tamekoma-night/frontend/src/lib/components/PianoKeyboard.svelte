@@ -23,7 +23,7 @@
 		'A#': { label: 'A#', offsetIndex: 6 },
 	};
 
-	const WHITE_KEY_WIDTH = 20;
+	const WHITE_KEY_WIDTH = 16;
 	const BLACK_KEY_WIDTH = WHITE_KEY_WIDTH * 0.6;
 	const TOTAL_WHITE_KEYS = OCTAVE_COUNT * 7 + 1;
 	const TOTAL_WIDTH = TOTAL_WHITE_KEYS * WHITE_KEY_WIDTH;
@@ -74,8 +74,31 @@
 
 	const keys = buildKeys();
 
+	const allKeys = [...keys.whites, ...keys.blacks];
+
 	const playingSet = $derived(new Set(playingNotes));
 	const isHighlighted = (note: string): boolean => activeKeys.has(note) || playingSet.has(note);
+
+	// Auto-scroll to center on playing notes
+	$effect(() => {
+		if (playingNotes.length === 0 || !scrollContainer) return;
+
+		const notePositions = playingNotes.map(note => {
+			const noteIndex = allKeys.findIndex(k => k.note === note);
+			if (noteIndex === -1) return -1;
+			return allKeys[noteIndex].left;
+		}).filter(x => x >= 0);
+
+		if (notePositions.length === 0) return;
+
+		const scale = isMobile ? mobileScale : 1;
+		const minX = Math.min(...notePositions) * scale;
+		const maxX = Math.max(...notePositions) * scale;
+		const centerX = (minX + maxX) / 2;
+
+		const scrollTarget = centerX - scrollContainer.clientWidth / 2;
+		scrollContainer.scrollTo({ left: Math.max(0, scrollTarget), behavior: 'smooth' });
+	});
 
 	let synthModule: typeof import('$lib/chord-player') | null = null;
 
