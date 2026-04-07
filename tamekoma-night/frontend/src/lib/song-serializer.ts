@@ -41,7 +41,7 @@ export function serializeSong(song: Song): string {
 			while (sectionIndex < sectionsSorted.length) {
 				const sec = sectionsSorted[sectionIndex];
 				if (sec.startBar <= currentBar) {
-					lines.push(`# ${sec.name}`);
+					lines.push(`### ${sec.name}`);
 					sectionIndex++;
 				} else {
 					break;
@@ -234,8 +234,8 @@ export function deserializeSong(text: string): DeserializeResult {
 				continue;
 			}
 
-			// Section comment: // SectionName or # SectionName (without bar range)
-			const commentMatchName = trimmed.match(/^\/\/\s*(.+)$/) ?? trimmed.match(/^#\s+(.+)$/);
+			// Section comment: ### SectionName, # SectionName (legacy), or // SectionName (without bar range)
+			const commentMatchName = trimmed.match(/^###\s+(.+)$/) ?? trimmed.match(/^\/\/\s*(.+)$/) ?? trimmed.match(/^#\s+(.+)$/);
 			if (commentMatchName) {
 				// Count bars accumulated so far to determine startBar
 				let barsAccum = 0;
