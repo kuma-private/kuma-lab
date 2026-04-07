@@ -136,12 +136,35 @@ module SongAiHandlers =
           [<JsonPropertyName("v")>]
           v: int }
 
+    [<CLIMutable>]
+    type MidiCcCompact =
+        { [<JsonPropertyName("t")>]
+          t: int
+          [<JsonPropertyName("cc")>]
+          cc: int
+          [<JsonPropertyName("v")>]
+          v: int }
+
+    [<CLIMutable>]
+    type GenerateMidiCompactResponse =
+        { [<JsonPropertyName("notes")>]
+          notes: MidiNoteCompact array
+          [<JsonPropertyName("cc")>]
+          cc: MidiCcCompact array }
+
     // --- Generate MIDI system prompt ---
 
     let private generateMidiSystemPrompt =
         "あなたは20年のキャリアを持つスタジオミュージシャンです。コード進行、スタイル、2つのパラメータに基づいてMIDIノートデータを出力してください。\n\n"
-        + "出力フォーマット (JSON配列のみ、説明不要):\n"
-        + "[{\"m\": <MIDI番号>, \"t\": <tick>, \"d\": <duration>, \"v\": <velocity>}, ...]\n\n"
+        + "出力フォーマット (JSONオブジェクト、説明不要):\n"
+        + "{\n"
+        + "  \"notes\": [{\"m\": <MIDI番号>, \"t\": <tick>, \"d\": <duration>, \"v\": <velocity>}, ...],\n"
+        + "  \"cc\": [{\"t\": <tick>, \"cc\": <CC番号>, \"v\": <値0-127>}, ...]\n"
+        + "}\n\n"
+        + "ccフィールド:\n"
+        + "- CC64 (サステインペダル): v=127でON、v=0でOFF\n"
+        + "- ピアノの場合: バラード系では小節頭でON、和音が変わる直前でOFF→ONを繰り返す\n"
+        + "- ギター/ベース/ドラム: ccは空配列[]\n\n"
         + "技術仕様:\n"
         + "- 1小節 = 1920 ticks (480 ticks/quarter note, 4/4拍子)\n"
         + "- MIDI番号: C4(中央ド) = 60\n\n"
@@ -173,6 +196,10 @@ module SongAiHandlers =
         + "- 右手(MIDI 56-84): コードトーンやテンションでアルペジオ、和音、メロディ的フレーズ\n"
         + "- ペダル効果: サステインを表現するため、一部のノートのdurationを次の拍や小節にまたがって長くする（特にバラード系）\n"
         + "- 左手と右手は独立したリズムで動かす\n\n"
+        + "【piano でのペダル (CC64) の使い方】\n"
+        + "- バラード/弾き語り: 各小節の頭でON(v=127)、コードが変わる直前にOFF(v=0)→すぐON(v=127)\n"
+        + "- アップテンポ: ペダルは控えめ。各拍の頭でON、裏拍でOFF\n"
+        + "- ジャズ: ほぼペダルなし。レガートで表現\n\n"
         + "【guitar】\n"
         + "- ギターのボイシングを意識（同時発音6音まで、MIDI 40-80の範囲）\n"
         + "- ストラム: 和音の各音を3-8 tickずつずらして下から上（ダウン）or 上から下（アップ）\n\n"
@@ -189,8 +216,9 @@ module SongAiHandlers =
         + "- ファンク/カッティング系: 1小節あたり16-32ノート\n"
         + "- 必ずコード進行のハーモニーに正確に従うこと"
 
-    /// Extract a JSON array from text that may contain markdown code fences or extra text.
-    let private extractJsonArray (text: string) : string =
+    /// Extract JSON content from text that may contain markdown code fences or extra text.
+    /// Handles both JSON arrays (legacy) and JSON objects (new format with notes + cc).
+    let private extractJsonContent (text: string) : string =
         let trimmed = text.Trim()
         // Try to find content within ```json ... ``` or ``` ... ```
         let mutable start = trimmed.IndexOf("```json")
@@ -211,13 +239,18 @@ module SongAiHandlers =
                 else
                     trimmed.Substring(afterFence).Trim()
             else
-                // Find the first '[' and last ']'
-                let bracketStart = trimmed.IndexOf('[')
-                let bracketEnd = trimmed.LastIndexOf(']')
-                if bracketStart >= 0 && bracketEnd > bracketStart then
-                    trimmed.Substring(bracketStart, bracketEnd - bracketStart + 1)
+                // Try JSON object first (new format), then array (legacy)
+                let braceStart = trimmed.IndexOf('{')
+                let braceEnd = trimmed.LastIndexOf('}')
+                if braceStart >= 0 && braceEnd > braceStart then
+                    trimmed.Substring(braceStart, braceEnd - braceStart + 1)
                 else
-                    trimmed
+                    let bracketStart = trimmed.IndexOf('[')
+                    let bracketEnd = trimmed.LastIndexOf(']')
+                    if bracketStart >= 0 && bracketEnd > bracketStart then
+                        trimmed.Substring(bracketStart, bracketEnd - bracketStart + 1)
+                    else
+                        trimmed
 
     /// Parse barRange like "1-4" and return bar count.
     let private parseBarCount (barRange: string) : int =
@@ -258,7 +291,7 @@ module SongAiHandlers =
                                 + $"スタイル: {req.style}、BPM {req.bpm}\n"
                                 + $"Expression: {req.expression}\n"
                                 + $"Feel: {req.feel}\n\n"
-                                + $"{barCount}小節分のMIDIノートをJSON配列で出力。"
+                                + $"{barCount}小節分のMIDIデータをJSONオブジェクトで出力。"
 
                             let! result =
                                 AnthropicClient.callApi httpClient config.AnthropicApiKey "claude-opus-4-20250514" generateMidiSystemPrompt userMessage 4000
@@ -266,15 +299,32 @@ module SongAiHandlers =
 
                             match result with
                             | Ok text ->
-                                let jsonArray = extractJsonArray text
+                                let jsonContent = extractJsonContent text
                                 try
-                                    let compactNotes = System.Text.Json.JsonSerializer.Deserialize<MidiNoteCompact array>(jsonArray)
+                                    // Try new object format first, fall back to legacy array format
+                                    let compactNotes, ccEvents =
+                                        let trimmedJson = jsonContent.TrimStart()
+                                        if trimmedJson.StartsWith("{") then
+                                            let parsed = System.Text.Json.JsonSerializer.Deserialize<GenerateMidiCompactResponse>(jsonContent)
+                                            let cc =
+                                                if isNull (box parsed.cc) then Array.empty
+                                                else parsed.cc
+                                            (parsed.notes, cc)
+                                        else
+                                            // Legacy: plain array of notes, no CC
+                                            let notes = System.Text.Json.JsonSerializer.Deserialize<MidiNoteCompact array>(jsonContent)
+                                            (notes, Array.empty)
                                     let notes =
                                         compactNotes
                                         |> Array.map (fun n ->
                                             {| midi = n.m; tick = n.t; duration = n.d; velocity = n.v |})
+                                    let controlChanges =
+                                        ccEvents
+                                        |> Array.map (fun c ->
+                                            {| tick = c.t; cc = c.cc; value = c.v |})
                                     do! ctx.Response.WriteAsJsonAsync(
                                         {| notes = notes
+                                           controlChanges = controlChanges
                                            style = req.style |> Shared.defaultIfNull ""
                                            expression = req.expression
                                            feel = req.feel |})

@@ -4,7 +4,7 @@
 // Does NOT modify song-player.ts (kept as v1 fallback).
 
 import * as Tone from 'tone';
-import type { Song, Track, MidiNote } from './types/song';
+import type { Song, Track, MidiNote, MidiControlChange } from './types/song';
 import type { ParsedDirectives, NoteRange as DirectiveNoteRange, VelocityValue } from './directive-parser';
 import type { VoicingConfig, NoteRange as VoicingNoteRange } from './voicing-engine';
 import type { RhythmConfig } from './rhythm-engine';
@@ -199,6 +199,54 @@ function createInstrument(
   }
 }
 
+// ── Pedal (sustain) preprocessing ─────────────────────
+
+/**
+ * ペダルイベントに基づいてノートのdurationを延長する。
+ * CC64=127 (ペダルON) から CC64=0 (ペダルOFF) の間に
+ * リリースされるノートのdurationを、ペダルOFFの位置まで延長。
+ */
+function applyPedalToNotes(
+  notes: MidiNote[],
+  controlChanges: MidiControlChange[],
+): MidiNote[] {
+  const pedalEvents = controlChanges
+    .filter(cc => cc.cc === 64)
+    .sort((a, b) => a.tick - b.tick);
+
+  if (pedalEvents.length === 0) return notes;
+
+  // ペダルON/OFF区間を構築
+  const pedalRanges: { start: number; end: number }[] = [];
+  let currentStart: number | null = null;
+
+  for (const evt of pedalEvents) {
+    if (evt.value >= 64 && currentStart === null) {
+      currentStart = evt.tick;
+    } else if (evt.value < 64 && currentStart !== null) {
+      pedalRanges.push({ start: currentStart, end: evt.tick });
+      currentStart = null;
+    }
+  }
+  // 最後のペダルが閉じられていない場合
+  if (currentStart !== null) {
+    const maxTick = Math.max(...notes.map(n => n.startTick + n.durationTicks));
+    pedalRanges.push({ start: currentStart, end: maxTick });
+  }
+
+  // 各ノートに対して、ペダル区間内でリリースされる場合はdurationを延長
+  return notes.map(note => {
+    const noteEnd = note.startTick + note.durationTicks;
+    for (const range of pedalRanges) {
+      if (note.startTick >= range.start && noteEnd <= range.end) {
+        // ノートがペダル区間内で終了 → ペダルOFFまで延長
+        return { ...note, durationTicks: range.end - note.startTick };
+      }
+    }
+    return note;
+  });
+}
+
 // ── MultiTrackPlayer class ────────────────────────────
 
 export class MultiTrackPlayer {
@@ -290,7 +338,12 @@ export class MultiTrackPlayer {
       for (const block of trackDef.blocks) {
         // AI-generated MIDI: skip voicing/rhythm pipeline entirely
         if (block.generatedMidi && block.generatedMidi.notes.length > 0) {
-          trackNotes.push(...block.generatedMidi.notes);
+          let blockNotes = block.generatedMidi.notes;
+          // ペダル処理
+          if (block.generatedMidi.controlChanges?.length) {
+            blockNotes = applyPedalToNotes(blockNotes, block.generatedMidi.controlChanges);
+          }
+          trackNotes.push(...blockNotes);
           continue;
         }
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { parseDirectives, type ParsedDirectives, type VelocityLevel } from '$lib/directive-parser';
-  import type { DirectiveBlock, MidiNote, GeneratedMidiData } from '$lib/types/song';
+  import type { DirectiveBlock, MidiNote, GeneratedMidiData, MidiControlChange } from '$lib/types/song';
   import { parseProgression, resolveRepeats } from '$lib/chord-parser';
   import { voiceChords, type VoicingConfig } from '$lib/voicing-engine';
   import { generateRhythm, type RhythmConfig } from '$lib/rhythm-engine';
@@ -251,9 +251,17 @@
         channel: n.channel ?? 0,
       }));
 
+      // Map API response CC events to MidiControlChange type
+      const mappedCCs: MidiControlChange[] = (result.controlChanges ?? []).map((cc: any) => ({
+        tick: cc.tick ?? cc.t ?? 0,
+        cc: cc.cc,
+        value: cc.value ?? cc.v ?? 0,
+      }));
+
       // Store as GeneratedMidiData
       generatedMidiData = {
         notes: mappedNotes,
+        controlChanges: mappedCCs.length > 0 ? mappedCCs : undefined,
         style: result.style,
         expression: result.expression,
         feel: result.feel,

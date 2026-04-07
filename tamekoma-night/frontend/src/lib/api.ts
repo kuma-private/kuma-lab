@@ -107,7 +107,6 @@ export const suggestArrangement = async (songId: string, data: ArrangeRequest): 
 };
 
 // AI MIDI Generation
-import type { MidiNote } from '$lib/types/song';
 
 export interface GenerateMidiRequest {
 	chordProgression: string;
@@ -120,7 +119,8 @@ export interface GenerateMidiRequest {
 }
 
 export interface GenerateMidiResponse {
-	notes: MidiNote[];
+	notes: any[];           // APIレスポンスの生の形式
+	controlChanges?: any[]; // CC イベント
 	style: string;
 	expression: number;
 	feel: number;
