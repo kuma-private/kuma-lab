@@ -10,9 +10,9 @@
 	let activeKeys = $state<Set<string>>(new Set());
 	let scrollContainer: HTMLDivElement | undefined = $state();
 
-	const OCTAVE_START = 1;
-	const OCTAVE_END = 9; // C1 to B8 + C9
-	const OCTAVE_COUNT = OCTAVE_END - OCTAVE_START; // 8 octaves
+	const OCTAVE_START = 3;
+	const OCTAVE_END = 6; // C3 to B5 + C6
+	const OCTAVE_COUNT = OCTAVE_END - OCTAVE_START; // 3 octaves
 
 	const WHITE_NOTES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 	const BLACK_NOTE_MAP: Record<string, { label: string; offsetIndex: number }> = {
@@ -113,41 +113,6 @@
 		handleKeyUp(note);
 	};
 
-	const scrollToCenter = () => {
-		if (!scrollContainer) return;
-		const c3WhiteIndex = (3 - OCTAVE_START) * 7;
-		const c3Left = c3WhiteIndex * effectiveWhiteWidth;
-		const containerWidth = scrollContainer.clientWidth;
-		scrollContainer.scrollLeft = c3Left - containerWidth * 0.3;
-	};
-
-	onMount(() => {
-		setTimeout(scrollToCenter, 100);
-	});
-
-	$effect(() => {
-		if (!scrollContainer || playingNotes.length === 0) return;
-		const noteToWhiteIndex = (note: string): number => {
-			const match = note.match(/^([A-G]#?)(\d)$/);
-			if (!match) return 0;
-			const [, name, octStr] = match;
-			const oct = parseInt(octStr) - OCTAVE_START;
-			const whiteIdx = WHITE_NOTES.indexOf(name.replace('#', ''));
-			return oct * 7 + whiteIdx;
-		};
-		const indices = playingNotes.map(noteToWhiteIndex);
-		const minIdx = Math.min(...indices);
-		const maxIdx = Math.max(...indices);
-		const minLeft = minIdx * effectiveWhiteWidth;
-		const maxRight = (maxIdx + 1) * effectiveWhiteWidth;
-		const containerWidth = scrollContainer.clientWidth;
-		const scrollLeft = scrollContainer.scrollLeft;
-		if (minLeft < scrollLeft + 20) {
-			scrollContainer.scrollLeft = minLeft - 40;
-		} else if (maxRight > scrollLeft + containerWidth - 20) {
-			scrollContainer.scrollLeft = maxRight - containerWidth + 40;
-		}
-	});
 </script>
 
 <div class="piano-scroll" bind:this={scrollContainer}>
