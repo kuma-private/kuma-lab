@@ -32,20 +32,6 @@
   import { tick } from 'svelte';
   let contextMenu = $state<{ x: number; y: number; blockId: string } | null>(null);
 
-  function handleGridDblClick(e: MouseEvent) {
-    const grid = e.currentTarget as HTMLElement;
-    const rect = grid.getBoundingClientRect();
-    const relX = e.clientX - rect.left;
-    const barWidth = rect.width / totalBars;
-    const bar = Math.floor(relX / barWidth) + 1;
-
-    // Check if clicking on an existing block
-    const target = e.target as HTMLElement;
-    if (target.closest('.directive-block')) return;
-
-    onBlockCreate(bar, bar);
-  }
-
   function handleContextMenu(e: MouseEvent) {
     const target = e.target as HTMLElement;
     const blockEl = target.closest('.directive-block') as HTMLElement | null;
@@ -70,7 +56,7 @@
     if (!contextMenu) return;
     const block = track.blocks.find(b => b.id === contextMenu!.blockId);
     if (block) {
-      onBlockCopy(block.id, block.endBar + 1);
+      onBlockCopy(block.id, block.endBar); // endBar is exclusive, so it's already the next start
     }
     closeContextMenu();
   }
@@ -81,6 +67,57 @@
     closeContextMenu();
   }
 
+  // Drag-to-create handling
+  let dragCreate = $state<{ startBar: number; currentBar: number } | null>(null);
+
+  function barIndexFromX(grid: HTMLElement, clientX: number): number {
+    const cells = grid.querySelectorAll('.grid-cell');
+    for (let i = cells.length - 1; i >= 0; i--) {
+      const r = cells[i].getBoundingClientRect();
+      if (clientX >= r.left) return Number((cells[i] as HTMLElement).dataset.bar ?? i);
+    }
+    return 0;
+  }
+
+  function handleGridMouseDown(e: MouseEvent) {
+    // Only left button, not on existing blocks
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('.directive-block') || target.closest('.resize-edge')) return;
+
+    const grid = e.currentTarget as HTMLElement;
+    const bar = barIndexFromX(grid, e.clientX);
+
+    dragCreate = { startBar: bar, currentBar: bar };
+
+    const handleMove = (me: MouseEvent) => {
+      if (!dragCreate) return;
+      const curBar = barIndexFromX(grid, me.clientX);
+      dragCreate = { ...dragCreate, currentBar: Math.max(0, Math.min(curBar, totalBars - 1)) };
+    };
+
+    const handleUp = () => {
+      if (dragCreate) {
+        const lo = Math.min(dragCreate.startBar, dragCreate.currentBar);
+        const hi = Math.max(dragCreate.startBar, dragCreate.currentBar);
+        onBlockCreate(lo, hi + 1); // 0-based start, exclusive end
+      }
+      dragCreate = null;
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+  }
+
+  function isDragHighlight(barIndex: number): boolean {
+    if (!dragCreate) return false;
+    const lo = Math.min(dragCreate.startBar, dragCreate.currentBar);
+    const hi = Math.max(dragCreate.startBar, dragCreate.currentBar);
+    return barIndex >= lo && barIndex <= hi;
+  }
+
   // Resize handling
   let resizingBlock = $state<{ id: string; startX: number; origEnd: number } | null>(null);
 
@@ -89,16 +126,14 @@
     e.preventDefault();
     const block = track.blocks.find(b => b.id === blockId);
     if (!block) return;
+    const grid = (e.target as HTMLElement).closest('.track-grid') as HTMLElement;
     resizingBlock = { id: blockId, startX: e.clientX, origEnd: block.endBar };
 
     const handleMove = (me: MouseEvent) => {
-      if (!resizingBlock) return;
-      const grid = (e.target as HTMLElement).closest('.track-grid') as HTMLElement;
-      if (!grid) return;
-      const barWidth = grid.getBoundingClientRect().width / totalBars;
-      const delta = Math.round((me.clientX - resizingBlock.startX) / barWidth);
-      const newEnd = Math.max(resizingBlock.origEnd + delta, block!.startBar);
-      onBlockResize(resizingBlock.id, Math.min(newEnd, totalBars));
+      if (!resizingBlock || !grid) return;
+      const newEnd = barIndexFromX(grid, me.clientX) + 1; // exclusive end
+      const clamped = Math.max(newEnd, block!.startBar + 1); // at least 1 bar wide
+      onBlockResize(resizingBlock.id, Math.min(clamped, totalBars));
     };
 
     const handleUp = () => {
@@ -119,11 +154,19 @@
   role="gridcell"
   tabindex="0"
   style:grid-template-columns="repeat({totalBars}, minmax(0, 140px))"
-  ondblclick={handleGridDblClick}
+  onmousedown={handleGridMouseDown}
   oncontextmenu={handleContextMenu}
 >
-  {#each Array.from({ length: totalBars }, (_, i) => i + 1) as barNum}
-    <div class="grid-cell" class:grid-cell--odd={barNum % 2 === 1} class:grid-cell--selected={isBarSelected(barNum)}></div>
+  {#each Array.from({ length: totalBars }, (_, i) => i) as barIndex}
+    <div
+      class="grid-cell"
+      class:grid-cell--odd={barIndex % 2 === 0}
+      class:grid-cell--selected={isBarSelected(barIndex + 1)}
+      class:grid-cell--drag={isDragHighlight(barIndex)}
+      style:grid-column={barIndex + 1}
+      style:grid-row="1"
+      data-bar={barIndex}
+    ></div>
   {/each}
   {#each track.blocks as block (block.id)}
     <div
@@ -186,6 +229,10 @@
 
   .grid-cell--selected {
     background: rgba(232, 168, 76, 0.08);
+  }
+
+  .grid-cell--drag {
+    background: rgba(232, 168, 76, 0.15);
   }
 
   .block-wrapper {

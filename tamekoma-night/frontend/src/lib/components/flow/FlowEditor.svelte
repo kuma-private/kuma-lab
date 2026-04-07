@@ -370,7 +370,7 @@
     const track = song.tracks.find(t => t.id === trackId);
     if (!track) return;
     const block = track.blocks.find(b => b.id === blockId);
-    if (block && newEndBar >= block.startBar) {
+    if (block && newEndBar > block.startBar) { // exclusive endBar must be > startBar
       block.endBar = newEndBar;
       emit();
     }

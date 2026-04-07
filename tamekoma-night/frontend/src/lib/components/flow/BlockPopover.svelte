@@ -295,8 +295,7 @@
 
   // --- Actions ---
   function handleOk() {
-    onSave(rawText, generatedMidiData);
-    onClose();
+    saveAndClose();
   }
 
   let previewPlaying = $state(false);
@@ -382,15 +381,20 @@
     previewTimeouts.push(stopT);
   }
 
+  function saveAndClose() {
+    onSave(rawText, generatedMidiData);
+    onClose();
+  }
+
   function handleOverlayClick(e: MouseEvent) {
     if (e.target === e.currentTarget) {
-      onClose();
+      saveAndClose();
     }
   }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-      onClose();
+      saveAndClose();
     }
   }
 
@@ -610,7 +614,7 @@
     <!-- Header -->
     <div class="popover-header">
       <span class="popover-title">{headerLabel}</span>
-      <button class="btn-icon" onclick={onClose} aria-label="Close">&times;</button>
+      <button class="btn-icon" onclick={saveAndClose} aria-label="Close">&times;</button>
     </div>
 
     <!-- Body -->
