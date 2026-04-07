@@ -225,14 +225,6 @@
       </div>
     {/if}
 
-    <!-- Meta info -->
-    <div class="preview-meta">
-      <div class="meta-title">{previewSong.title || 'Untitled'}</div>
-      <div class="meta-details">
-        {previewSong.bpm ?? 120} BPM / {previewSong.key ?? 'C Major'} / {previewSong.timeSignature ?? '4/4'}
-      </div>
-    </div>
-
     <!-- Chord progression grouped by text line -->
     {#if parsedBars.length > 0}
       <div class="preview-chords">
@@ -379,27 +371,6 @@
 
   .error-msg {
     color: var(--text-secondary);
-  }
-
-  /* ── Meta info ── */
-  .preview-meta {
-    padding: var(--space-sm) var(--space-md);
-    background: var(--bg-surface);
-    border-radius: 8px;
-    border: 1px solid var(--border-subtle);
-  }
-
-  .meta-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 2px;
-  }
-
-  .meta-details {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
   }
 
   /* ── Chord section ── */
