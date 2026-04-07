@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { parseDirectives, type ParsedDirectives, type VelocityLevel } from '$lib/directive-parser';
   import type { DirectiveBlock, MidiNote, GeneratedMidiData } from '$lib/types/song';
   import { parseProgression, resolveRepeats } from '$lib/chord-parser';
@@ -21,6 +22,15 @@
     onClose: () => void;
     onPreview?: () => void;
   }
+
+  const GENERATING_TIPS = [
+    'AIがパターンを生成しています...',
+    'コード進行を分析中...',
+    'ボイシングを最適化中...',
+    'リズムパターンを構築中...',
+    'ダイナミクスを調整中...',
+    '仕上げ処理中...',
+  ];
 
   const MODE_CHIPS = ['block', 'arpUp', 'arpDown', 'bossa', 'jazz', '8beat'] as const;
 
@@ -69,6 +79,8 @@
   let aiPrompt = $state('');
   let aiLoading = $state(false);
   let aiError = $state<string | null>(null);
+  let generatingTip = $state(GENERATING_TIPS[0]);
+  let tipInterval: ReturnType<typeof setInterval> | null = null;
 
   // --- AI MIDI generation state ---
   let expressionSlider = $state(block.generatedMidi?.expression ?? 50);
@@ -206,6 +218,14 @@
     aiLoading = true;
     aiError = null;
 
+    // Start tip rotation
+    let tipIndex = 0;
+    generatingTip = GENERATING_TIPS[0];
+    tipInterval = setInterval(() => {
+      tipIndex = (tipIndex + 1) % GENERATING_TIPS.length;
+      generatingTip = GENERATING_TIPS[tipIndex];
+    }, 2500);
+
     try {
       const barRange = (block.startBar !== undefined && block.endBar !== undefined)
         ? `${block.startBar + 1}-${block.endBar}`
@@ -233,6 +253,14 @@
       // Show AI-generated notes in preview
       previewNotes = result.notes;
 
+      // Explicitly draw after DOM updates to ensure canvas is mounted
+      await tick();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          drawPreview(previewNotes);
+        });
+      });
+
       showToast('MIDIを生成しました', 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : '生成に失敗しました';
@@ -240,6 +268,10 @@
       showToast(message, 'error');
     } finally {
       aiLoading = false;
+      if (tipInterval) {
+        clearInterval(tipInterval);
+        tipInterval = null;
+      }
     }
   }
 
@@ -353,11 +385,12 @@
   /** Draw MidiNote[] on the preview canvas */
   function drawPreview(notes: MidiNote[]) {
     if (!previewCanvas) return;
+    const rect = previewCanvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return; // Canvas not visible yet
     const ctx = previewCanvas.getContext('2d');
     if (!ctx) return;
 
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
-    const rect = previewCanvas.getBoundingClientRect();
     const w = rect.width;
     const h = rect.height;
 
@@ -471,6 +504,12 @@
 
 <div class="popover-overlay" role="presentation" onclick={handleOverlayClick}>
   <div class="popover" role="dialog" aria-modal="true" aria-label="Block Popover">
+    {#if aiLoading}
+      <div class="generating-overlay">
+        <div class="generating-spinner"></div>
+        <p class="generating-text">{generatingTip}</p>
+      </div>
+    {/if}
     <!-- Header -->
     <div class="popover-header">
       <span class="popover-title">{headerLabel}</span>
@@ -610,6 +649,7 @@
 
   /* Popover card */
   .popover {
+    position: relative;
     background: var(--bg-surface);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
@@ -1026,5 +1066,40 @@
   .btn-sm {
     padding: 5px 12px;
     font-size: 0.78rem;
+  }
+
+  /* Generating overlay */
+  .generating-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(8, 6, 4, 0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    border-radius: inherit;
+    z-index: 5;
+  }
+
+  .generating-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border-subtle);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .generating-text {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-align: center;
+    animation: fade-text 0.5s ease;
+  }
+
+  @keyframes fade-text {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 </style>
