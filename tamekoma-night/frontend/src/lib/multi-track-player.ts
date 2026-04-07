@@ -350,7 +350,18 @@ export class MultiTrackPlayer {
       const trackNotes: MidiNote[] = [];
       const channel = trackIdx;
 
-      for (const block of trackDef.blocks) {
+      // If no blocks, create a synthetic default block covering all bars
+      let blocksToProcess = trackDef.blocks;
+      if (blocksToProcess.length === 0 && resolvedBars.length > 0) {
+        blocksToProcess = [{
+          id: '__default__',
+          startBar: 0,
+          endBar: resolvedBars.length,
+          directives: '',
+        }];
+      }
+
+      for (const block of blocksToProcess) {
         // AI-generated MIDI: skip voicing/rhythm pipeline entirely
         if (block.generatedMidi && block.generatedMidi.notes.length > 0) {
           let blockNotes = block.generatedMidi.notes;
