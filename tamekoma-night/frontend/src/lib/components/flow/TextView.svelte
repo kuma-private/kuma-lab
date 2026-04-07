@@ -52,71 +52,81 @@
     }
   });
 
-  // Derived: bars grouped by original text line
-  // Parse each non-empty line separately to preserve line breaks
-  let lineGroupedBars = $derived.by(() => {
-    const prog = previewSong.chordProgression ?? '';
-    if (!prog.trim()) return [] as ParsedBar[][];
-    try {
-      const lines = prog.split('\n');
-      const result: ParsedBar[][] = [];
-      let barOffset = 0;
-      for (const line of lines) {
-        if (!line.trim() || line.trim().startsWith('#')) {
-          // Empty line or comment — push empty group to preserve spacing
-          if (result.length > 0 && line.trim() === '') {
-            // Only add line break if we already have content
-            result.push([]);
-          }
-          continue;
-        }
-        try {
-          const { bars } = parseProgression(line);
-          const resolved = resolveRepeats(bars);
-          // Re-number bars with offset to keep barNumbers sequential
-          const renumbered = resolved.map((b, i) => ({
-            ...b,
-            barNumber: barOffset + i + 1,
-          }));
-          result.push(renumbered);
-          barOffset += resolved.length;
-        } catch {
-          // Skip unparseable lines
-        }
-      }
-      return result;
-    } catch {
-      return [] as ParsedBar[][];
-    }
-  });
-
-  // Derived: for each text line, find the section label (if any) for the first bar
-  let lineSectionLabels = $derived.by(() => {
-    const sections = (previewSong.sections ?? []).slice().sort((a, b) => a.startBar - b.startBar);
-    const allLines = lineGroupedBars;
-
-    // Map line index -> { name, startBar } to show above that line
-    // Show a section label when the first bar of a line starts a new section
-    const labels: ({ name: string; startBar: number } | null)[] = [];
-    let lastSectionName: string | null = null;
-
-    for (const line of allLines) {
-      if (line.length === 0) {
-        labels.push(null);
+  // Derived: bars grouped by original text line, with section labels.
+  // We extract the chords section from the raw `text` (which includes ### headers)
+  // so that section markers can be tracked alongside chord lines.
+  let lineGroupedBarsWithLabels = $derived.by(() => {
+    // Extract the chords section from the raw text
+    const rawLines = text.split('\n');
+    let inChords = false;
+    const chordSectionLines: string[] = [];
+    for (const raw of rawLines) {
+      const trimmed = raw.trim();
+      // Detect ## Chords or === Chords === header
+      if (/^##\s+Chords$/i.test(trimmed) || /^===\s*Chords\s*===$/i.test(trimmed)) {
+        inChords = true;
         continue;
       }
-      const firstBarNum = line[0].barNumber;
-      const sec = sections.find((s) => firstBarNum > s.startBar && firstBarNum <= s.endBar);
-      const secName = sec?.name ?? null;
-      if (secName && secName !== lastSectionName) {
-        labels.push({ name: secName, startBar: sec!.startBar });
-        lastSectionName = secName;
-      } else {
-        labels.push(null);
+      // Detect next section header — stop collecting chord lines
+      if (inChords && (/^##\s+/.test(trimmed) || /^===\s*.+\s*===/.test(trimmed))) {
+        break;
+      }
+      if (inChords) {
+        chordSectionLines.push(raw);
       }
     }
-    return labels;
+
+    const lines: ParsedBar[][] = [];
+    const labels: ({ name: string; startBar: number } | null)[] = [];
+    let barOffset = 0;
+    let pendingSection: string | null = null;
+
+    for (const raw of chordSectionLines) {
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        // Empty line — preserve spacing
+        if (lines.length > 0) {
+          lines.push([]);
+          labels.push(null);
+        }
+        continue;
+      }
+
+      // Section header: ### SectionName, // SectionName, or # SectionName
+      const sectionMatch = trimmed.match(/^###\s+(.+)$/) ?? trimmed.match(/^\/\/\s*(.+)$/) ?? trimmed.match(/^#\s+(.+)$/);
+      if (sectionMatch) {
+        pendingSection = sectionMatch[1].trim();
+        continue;
+      }
+
+      // Chord line
+      try {
+        const { bars } = parseProgression(trimmed);
+        const resolved = resolveRepeats(bars);
+        const renumbered = resolved.map((b, i) => ({
+          ...b,
+          barNumber: barOffset + i + 1,
+        }));
+        lines.push(renumbered);
+
+        if (pendingSection) {
+          labels.push({ name: pendingSection, startBar: barOffset });
+          pendingSection = null;
+        } else {
+          labels.push(null);
+        }
+
+        barOffset += resolved.length;
+      } catch {
+        // Skip unparseable lines
+      }
+    }
+
+    return { lines, labels };
   });
+
+  let lineGroupedBars = $derived(lineGroupedBarsWithLabels.lines);
+  let lineSectionLabels = $derived(lineGroupedBarsWithLabels.labels);
 
   // Sync: when song prop changes from outside, re-serialize
   $effect(() => {

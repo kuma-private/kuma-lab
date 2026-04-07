@@ -346,7 +346,7 @@ function guessInstrument(name: string): string {
 export function mergeParsedSong(original: Song, parsed: Partial<Song>): Song {
 	return {
 		...original,
-		title: parsed.title ?? original.title,
+		title: parsed.title || original.title,
 		bpm: parsed.bpm ?? original.bpm,
 		key: parsed.key ?? original.key,
 		timeSignature: parsed.timeSignature ?? original.timeSignature,

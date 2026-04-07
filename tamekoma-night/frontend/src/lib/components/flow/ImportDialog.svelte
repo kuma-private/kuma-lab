@@ -21,6 +21,7 @@
   let songName = $state('');
   let artist = $state('');
   let sourceUrl = $state('');
+  let bpmInput = $state(bpm);
   let loading = $state(false);
   let error = $state('');
 
@@ -77,7 +78,7 @@
         songName: songNameWithSections || undefined,
         artist: artist || undefined,
         sourceUrl: sourceUrl || undefined,
-        bpm,
+        bpm: bpmInput,
         timeSignature,
         key: musicalKey,
       });
@@ -186,6 +187,16 @@
             class="field-input"
             bind:value={sourceUrl}
             placeholder="任意"
+          />
+        </label>
+        <label class="field-label">
+          <span>BPM</span>
+          <input
+            type="number"
+            class="field-input"
+            bind:value={bpmInput}
+            min="40"
+            max="240"
           />
         </label>
       </div>
