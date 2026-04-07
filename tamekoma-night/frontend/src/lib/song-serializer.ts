@@ -66,13 +66,11 @@ export function serializeSong(song: Song): string {
 		}
 	}
 
-	// Tracks list
-	if (song.tracks.length > 0) {
-		lines.push('');
-		lines.push('## Tracks');
-		for (const track of song.tracks) {
-			lines.push(`- ${track.name}`);
-		}
+	// Tracks list (always output section header so it stays visible in Text tab)
+	lines.push('');
+	lines.push('## Tracks');
+	for (const track of song.tracks) {
+		lines.push(`- ${track.name}`);
 	}
 
 	return lines.join('\n') + '\n';

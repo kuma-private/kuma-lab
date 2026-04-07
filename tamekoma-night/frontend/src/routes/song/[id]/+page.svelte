@@ -34,6 +34,45 @@
 	let editingBpm = $state(false);
 	let bpmInput = $state(120);
 
+	// Tap tempo
+	let tapTimes = $state<number[]>([]);
+	let tapTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	function handleTap() {
+		const now = Date.now();
+
+		// Reset if more than 2 seconds since last tap
+		if (tapTimes.length > 0 && now - tapTimes[tapTimes.length - 1] > 2000) {
+			tapTimes = [];
+		}
+
+		tapTimes = [...tapTimes, now];
+
+		// Need at least 2 taps to calculate BPM
+		if (tapTimes.length >= 2) {
+			const intervals = [];
+			for (let i = 1; i < tapTimes.length; i++) {
+				intervals.push(tapTimes[i] - tapTimes[i - 1]);
+			}
+			const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+			const bpm = Math.round(60000 / avgInterval);
+			const clampedBpm = Math.max(40, Math.min(240, bpm));
+
+			if (store.currentSong) {
+				handleSongChange({ ...store.currentSong, bpm: clampedBpm });
+			}
+		}
+
+		// Keep only last 8 taps
+		if (tapTimes.length > 8) {
+			tapTimes = tapTimes.slice(-8);
+		}
+
+		// Clear after 2 seconds of inactivity
+		if (tapTimeout) clearTimeout(tapTimeout);
+		tapTimeout = setTimeout(() => { tapTimes = []; }, 2000);
+	}
+
 	function startBpmEdit() {
 		if (!store.currentSong) return;
 		bpmInput = store.currentSong.bpm;
@@ -286,6 +325,7 @@
 					<input type="number" class="meta-pill-input" bind:value={bpmInput} min="40" max="240" onblur={finishBpmEdit} onkeydown={(e) => { if (e.key === 'Enter') finishBpmEdit(); }} />
 				{:else}
 					<button class="meta-pill" onclick={startBpmEdit}>{store.currentSong.bpm || 120} BPM</button>
+						<button class="tap-btn" onclick={handleTap} title="タップでBPM設定">TAP</button>
 				{/if}
 				{#if editingTs}
 					<select class="meta-pill-input" bind:value={tsInput} onblur={finishTsEdit} onchange={finishTsEdit}>
@@ -489,6 +529,26 @@
 	}
 	select.meta-pill-input {
 		max-width: 120px;
+	}
+
+	.tap-btn {
+		padding: 2px 8px;
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+		font-weight: 600;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-full);
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: all 0.12s;
+	}
+	.tap-btn:hover {
+		border-color: var(--accent-primary);
+		color: var(--accent-primary);
+	}
+	.tap-btn:active {
+		background: rgba(232, 168, 76, 0.15);
 	}
 
 	.btn-export {
