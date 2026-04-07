@@ -23,7 +23,7 @@
 		'A#': { label: 'A#', offsetIndex: 6 },
 	};
 
-	const WHITE_KEY_WIDTH = 26;
+	const WHITE_KEY_WIDTH = 20;
 	const BLACK_KEY_WIDTH = WHITE_KEY_WIDTH * 0.6;
 	const TOTAL_WHITE_KEYS = OCTAVE_COUNT * 7 + 1;
 	const TOTAL_WIDTH = TOTAL_WHITE_KEYS * WHITE_KEY_WIDTH;
