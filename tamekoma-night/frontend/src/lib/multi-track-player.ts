@@ -464,37 +464,6 @@ export class MultiTrackPlayer {
         trackNotes.push(...clampedNotes);
       }
 
-      // Find uncovered bar ranges and fill with default block chords
-      const coveredBars = new Set<number>();
-      for (const block of trackDef.blocks) {
-        for (let bar = block.startBar; bar < block.endBar; bar++) {
-          coveredBars.add(bar);
-        }
-      }
-
-      // Generate default notes for uncovered bars
-      for (let barIdx = 0; barIdx < resolvedBars.length; barIdx++) {
-        if (coveredBars.has(barIdx)) continue;
-
-        const barChords = chordsPerBar[barIdx] ?? [];
-        if (barChords.length === 0) continue;
-
-        if (trackDef.instrument === 'drums') {
-          const drumConfig: DrumRhythmConfig = { pattern: '8beat' };
-          const drumNotes = generateDrumRhythm(drumConfig, bpm, timeSig, barIdx, 1, 9);
-          trackNotes.push(...drumNotes);
-        } else {
-          const voicingConfig: VoicingConfig = { type: 'close' };
-          const voicedChords = voiceChords(barChords, voicingConfig);
-          const rhythmConfig: RhythmConfig = { mode: 'block' };
-
-          const barNotes = generateRhythm(
-            voicedChords, rhythmConfig, bpm, timeSig, barIdx, channel,
-          );
-          trackNotes.push(...barNotes);
-        }
-      }
-
       // Store generated notes for Visualizer API
       trackInstance.generatedNotes = trackNotes;
 

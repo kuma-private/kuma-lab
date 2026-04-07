@@ -634,15 +634,13 @@ import FlowMinimap from './FlowMinimap.svelte';
               onBlockDelete={(bid) => handleBlockDelete(track.id, bid)}
               onBlockCopy={(bid, s) => handleBlockCopy(track.id, bid, s)}
             />
-            {#if trackNotes.get(track.id)?.notes?.length}
-              <TrackPianoRollRow
-                notes={trackNotes.get(track.id)!.notes}
+            <TrackPianoRollRow
+                notes={trackNotes.get(track.id)?.notes ?? []}
                 {totalBars}
                 bpm={song.bpm}
                 timeSignature={song.timeSignature}
                 color={TRACK_NOTE_COLORS[track.instrument] ?? '#e8a84c'}
               />
-            {/if}
           </div>
         {/each}
 
