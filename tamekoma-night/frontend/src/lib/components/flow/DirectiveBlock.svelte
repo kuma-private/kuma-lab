@@ -119,7 +119,9 @@
       </div>
     </div>
   {:else}
-    <span class="block-summary block-summary--empty">+ AI生成</span>
+    <span class="block-summary block-summary--empty">
+      <span class="empty-icon">+</span> AI生成
+    </span>
   {/if}
   <div class="resize-handle" style:background={colors.border}></div>
 </div>
@@ -142,6 +144,13 @@
   .directive-block--empty {
     border-style: dashed;
     opacity: 0.7;
+    transition: all 0.15s;
+  }
+
+  .directive-block--empty:hover {
+    opacity: 1;
+    border-color: var(--accent-primary);
+    background: rgba(232, 168, 76, 0.06) !important;
   }
 
   .directive-block:hover {
@@ -157,6 +166,20 @@
     font-style: italic;
     color: var(--text-muted);
     opacity: 0.6;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .empty-icon {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    margin-right: 4px;
   }
 
   .block-content-with-roll {

@@ -184,6 +184,7 @@
         class="resize-edge"
         role="separator"
         tabindex="-1"
+        title="ドラッグで範囲を変更"
         onmousedown={(e) => handleResizeStart(block.id, e)}
       ></div>
     </div>
@@ -249,6 +250,11 @@
     width: 12px;
     cursor: ew-resize;
     z-index: 2;
+    transition: background 0.15s;
+  }
+
+  .resize-edge:hover {
+    background: rgba(232, 168, 76, 0.3);
   }
 
   .context-menu {
