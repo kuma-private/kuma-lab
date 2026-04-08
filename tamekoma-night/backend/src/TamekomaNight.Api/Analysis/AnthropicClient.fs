@@ -33,11 +33,11 @@ module AnthropicClient =
         text.Trim().Replace("```json", "").Replace("```", "").Trim()
 
     let private isRetryableStatus (statusCode: int) =
-        statusCode = 503 || statusCode = 529
+        statusCode = 429 || statusCode = 503 || statusCode = 529
 
-    // --- Retry abstraction ---
+    // --- Retry abstraction (exponential backoff: 2s, 4s, 8s) ---
 
-    let private withRetry (maxRetries: int) (delayMs: int) (f: unit -> Async<Result<'a, int * string>>) : Async<Result<'a, string>> =
+    let private withRetry (maxRetries: int) (f: unit -> Async<Result<'a, int * string>>) : Async<Result<'a, string>> =
         let rec loop attempt =
             async {
                 let! result = f ()
@@ -45,7 +45,9 @@ module AnthropicClient =
                 | Ok value ->
                     return Ok value
                 | Error (status, body) when isRetryableStatus status && attempt < maxRetries ->
-                    do! Async.Sleep delayMs
+                    let delay = pown 2 (attempt + 1) * 1000  // 2s, 4s, 8s
+                    printfn $"[AnthropicClient] Retryable error {status}, attempt {attempt + 1}/{maxRetries}, waiting {delay}ms..."
+                    do! Async.Sleep delay
                     return! loop (attempt + 1)
                 | Error (status, body) ->
                     return Error $"Anthropic API error ({status}): {body}"
@@ -75,7 +77,7 @@ module AnthropicClient =
         }
 
     let private sendRequest (httpClient: HttpClient) (apiKey: string) (json: string) : Async<Result<string, string>> =
-        withRetry 1 2000 (fun () ->
+        withRetry 3 (fun () ->
             async {
                 try
                     let! response =
