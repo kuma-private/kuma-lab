@@ -748,6 +748,16 @@ import FlowMinimap from './FlowMinimap.svelte';
       musicalKey={song.key}
       onNotesChange={(newNotes) => {
         pianoRollNotes = newNotes;
+        if (!pianoRollTrackId) return;
+        const track = song.tracks.find(t => t.id === pianoRollTrackId);
+        if (!track) return;
+        for (const block of track.blocks) {
+          if (block.generatedMidi) {
+            block.generatedMidi = { ...block.generatedMidi, notes: newNotes };
+            break;
+          }
+        }
+        emit();
       }}
       onClose={() => pianoRollTrackId = null}
       onSeekToBar={onSeekToBar}

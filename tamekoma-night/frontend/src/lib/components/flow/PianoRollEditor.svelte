@@ -633,7 +633,13 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape') onClose(); }} />
+<svelte:window onkeydown={(e) => {
+  if (e.key === 'Escape') onClose();
+  if (e.key === ' ') {
+    e.stopPropagation();
+    return;
+  }
+}} />
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div class="piano-roll-overlay" onclick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -669,7 +675,10 @@
 <style>
   .piano-roll-overlay {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 80px; /* Leave space for PlayerBar */
     z-index: var(--z-modal, 100);
     background: rgba(0, 0, 0, 0.6);
     display: flex;
