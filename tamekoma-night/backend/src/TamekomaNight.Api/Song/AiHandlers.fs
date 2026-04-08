@@ -241,7 +241,23 @@ module SongAiHandlers =
         + "{\"t\": 5740, \"cc\": 64, \"v\": 0},     // bar 3 終了直前: ペダルOFF\n"
         + "{\"t\": 5760, \"cc\": 64, \"v\": 127},   // bar 4 開始: ペダルON\n"
         + "{\"t\": 7660, \"cc\": 64, \"v\": 0}      // bar 4 終了直前: ペダルOFF\n\n"
-        + "v=127がON、v=0がOFF。各小節でON→OFF→ONを繰り返す。v=0だけは間違い。"
+        + "v=127がON、v=0がOFF。各小節でON→OFF→ONを繰り返す。v=0だけは間違い。\n\n"
+        + "参考パターン例:\n\n"
+        + "【弾き語りピアノバラード（Am7, BPM 80）の1小節】\n"
+        + "左手: A2(t=0,d=1920,v=70) + E3(t=0,d=1920,v=65)\n"
+        + "右手: C4(t=0,d=480,v=65) E4(t=120,d=360,v=60) G4(t=480,d=480,v=68) E4(t=960,d=480,v=62) A4(t=1200,d=240,v=55) G4(t=1440,d=480,v=60)\n"
+        + "→ 左手はルート+5度のロングトーン、右手はアルペジオ的な動き\n\n"
+        + "【ファンクギターカッティング（E7, BPM 110）の1小節の16ビート】\n"
+        + "x=ミュート(v=25-35,d=60), ↓=ダウン(v=80-95,d=90), ↑=アップ(v=70-85,d=60)\n"
+        + "16ビートパターン: x x ↓ x | x ↑ x ↓ | x x ↓ x | ↑ x ↓ ↑\n"
+        + "各ストロークは和音(4-5音同時)を3-8tickずらして配置\n"
+        + "ミュートストローク: 全音を同じMIDI番号で極短duration(d=30-60)、低velocity\n\n"
+        + "【ウォーキングベース（Dm7, BPM 120）の1小節】\n"
+        + "D2(t=0,d=420,v=85) F2(t=480,d=420,v=78) A2(t=960,d=420,v=80) C3(t=1440,d=420,v=82)\n"
+        + "→ 4分音符でコードトーンを上行/下行。次小節への半音アプローチ\n\n"
+        + "【ストリングスパッド（Cmaj7, BPM 80）の1小節】\n"
+        + "C4(t=0,d=1920,v=68) E4(t=0,d=1920,v=65) G4(t=0,d=1920,v=63) B4(t=0,d=1920,v=60)\n"
+        + "→ 全音符の和音。ゆっくりとしたダイナミクス変化はvelocityで表現"
 
     /// Post-process CC events: auto-generate CC64 sustain pedal for piano ballad styles
     /// when the AI fails to produce proper ON/OFF patterns.
@@ -252,7 +268,8 @@ module SongAiHandlers =
         let needsPedal =
             styleLower.Contains("バラード") || styleLower.Contains("弾き語り")
             || styleLower.Contains("ジャズ") || styleLower.Contains("ballad")
-            || styleLower.Contains("jazz")
+            || styleLower.Contains("jazz") || styleLower.Contains("ボサノバ")
+            || styleLower.Contains("bossa")
         if not needsPedal then ccs
         else
         let hasOnEvents = ccs |> Array.exists (fun cc -> cc.cc = 64 && cc.v > 0)
@@ -343,7 +360,7 @@ module SongAiHandlers =
                                 + $"{barCount}小節分のMIDIデータをJSONオブジェクトで出力。"
 
                             let! result =
-                                AnthropicClient.callApi httpClient config.AnthropicApiKey "claude-opus-4-20250514" generateMidiSystemPrompt userMessage 4000
+                                AnthropicClient.callApi httpClient config.AnthropicApiKey "claude-opus-4-20250514" generateMidiSystemPrompt userMessage 8000
                                 |> Async.StartAsTask
 
                             match result with
