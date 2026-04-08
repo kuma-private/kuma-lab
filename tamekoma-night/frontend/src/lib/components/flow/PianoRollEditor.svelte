@@ -41,6 +41,7 @@
   const ROW_HEIGHT = 12; // pixels per semitone
   const MIN_PIXELS_PER_TICK = 0.02;
   const MAX_PIXELS_PER_TICK = 0.8;
+  const DEFAULT_PIXELS_PER_TICK = 0.12;
 
   // --- Parse time signature ---
   let beats = $derived(parseInt(timeSignature.split('/')[0]) || 4);
@@ -65,8 +66,11 @@
   // Scroll & zoom
   let scrollX = $state(0); // ticks offset
   let scrollY = $state(0); // pitch offset (semitones from top)
-  let pixelsPerTick = $state(0.12);
+  let pixelsPerTick = $state(DEFAULT_PIXELS_PER_TICK);
   let initialScrollDone = false;
+
+  // Zoom level as percentage of default
+  let zoomLevel = $derived(pixelsPerTick / DEFAULT_PIXELS_PER_TICK);
 
   // Visible pitch range: show 88 keys (A0=21 to C8=108)
   const PITCH_MIN = 21;
@@ -142,19 +146,10 @@
     const w = rect.width;
     const h = rect.height;
 
-    // Center scroll on notes on first render
+    // Fit to content on first render
     if (!initialScrollDone && _notes.length > 0 && h > 0) {
       initialScrollDone = true;
-      let minMidi = 127;
-      let maxMidi = 0;
-      for (const n of _notes) {
-        if (n.midi < minMidi) minMidi = n.midi;
-        if (n.midi > maxMidi) maxMidi = n.midi;
-      }
-      const centerMidi = (minMidi + maxMidi) / 2;
-      const canvasRows = (h - HEADER_HEIGHT) / ROW_HEIGHT;
-      // scrollY is in semitones from top (PITCH_MAX)
-      scrollY = Math.max(0, Math.min(PITCH_COUNT - 20, (PITCH_MAX - centerMidi) - canvasRows / 2));
+      fitToContent();
     }
 
     canvas.width = w * dpr;
@@ -493,11 +488,11 @@
 
     const dx = e.clientX - dragStartX;
     const dy = e.clientY - dragStartY;
-    const deltaTick = snapTick(dx / pixelsPerTick);
+    const rawDeltaTick = dx / pixelsPerTick;
     const deltaRows = Math.round(dy / ROW_HEIGHT);
 
     if (dragMode === 'move') {
-      const newStartTick = Math.max(0, snapTick(dragOrigStartTick + deltaTick));
+      const newStartTick = Math.max(0, snapTick(dragOrigStartTick + rawDeltaTick));
       const newMidi = Math.max(PITCH_MIN, Math.min(PITCH_MAX, dragOrigMidi - deltaRows));
 
       const updated = [...notes];
@@ -508,7 +503,7 @@
       };
       onNotesChange?.(updated);
     } else if (dragMode === 'resize') {
-      const newDuration = Math.max(MIN_DURATION, snapTick(dragOrigDuration + deltaTick));
+      const newDuration = Math.max(MIN_DURATION, snapTick(dragOrigDuration + rawDeltaTick));
 
       const updated = [...notes];
       updated[selectedIndex] = {
@@ -604,6 +599,35 @@
     onNotesChange?.(updated);
   }
 
+  // --- Fit to content ---
+  function fitToContent() {
+    if (notes.length === 0) return;
+    const canvasWidth = canvasEl?.getBoundingClientRect().width ?? 800;
+    const canvasHeight = canvasEl?.getBoundingClientRect().height ?? 400;
+    const dw = canvasWidth - PITCH_LABEL_WIDTH;
+
+    // Find the extent of all notes
+    let maxEndTick = 0;
+    let minMidi = 127;
+    let maxMidi = 0;
+    for (const n of notes) {
+      const end = n.startTick + n.durationTicks;
+      if (end > maxEndTick) maxEndTick = end;
+      if (n.midi < minMidi) minMidi = n.midi;
+      if (n.midi > maxMidi) maxMidi = n.midi;
+    }
+
+    // Add some padding (1 bar after last note, 2 semitones above/below)
+    const tickExtent = Math.max(maxEndTick + ticksPerBar, ticksPerBar);
+    pixelsPerTick = Math.max(MIN_PIXELS_PER_TICK, Math.min(MAX_PIXELS_PER_TICK, dw / tickExtent));
+    scrollX = 0;
+
+    // Center vertically on note range
+    const centerMidi = (minMidi + maxMidi) / 2;
+    const canvasRows = (canvasHeight - HEADER_HEIGHT) / ROW_HEIGHT;
+    scrollY = Math.max(0, Math.min(PITCH_COUNT - 20, (PITCH_MAX - centerMidi) - canvasRows / 2));
+  }
+
   // --- Scroll / Zoom ---
   function handleWheel(e: WheelEvent) {
     e.preventDefault();
@@ -622,8 +646,8 @@
       scrollX = tickAtMouse - (mouseX - PITCH_LABEL_WIDTH) / newPpt;
       scrollX = Math.max(0, scrollX);
     } else if (e.shiftKey) {
-      // Horizontal scroll
-      const tickDelta = (e.deltaY / pixelsPerTick) * 2;
+      // Horizontal scroll (higher multiplier for faster panning)
+      const tickDelta = (e.deltaY / pixelsPerTick) * 6;
       scrollX = Math.max(0, Math.min(totalTicks - 100, scrollX + tickDelta));
     } else {
       // Vertical scroll (pitch)
@@ -646,8 +670,9 @@
   <div class="piano-roll-dialog" tabindex="0" onkeydown={handleKeydown}>
     <div class="piano-roll-header">
       <span class="title">Piano Roll Editor</span>
-      <span class="info">{totalBars} bars | {bpm} BPM | {timeSignature} | {notes.length} notes</span>
+      <span class="info">{totalBars} bars | {bpm} BPM | {timeSignature} | {notes.length} notes | {Math.round(zoomLevel * 100)}%</span>
       <div class="controls">
+        <button class="fit-btn" onclick={fitToContent} title="全体表示">&#8862;</button>
         <span class="hint">Scroll: pitch | Shift+Scroll: time | Cmd+Scroll: zoom</span>
         <button class="close-btn" onclick={onClose}>&#215;</button>
       </div>
@@ -732,6 +757,22 @@
   .hint {
     font-size: 10px;
     color: var(--text-secondary, rgba(236, 228, 212, 0.35));
+  }
+
+  .fit-btn {
+    background: none;
+    border: 1px solid rgba(138, 126, 104, 0.3);
+    border-radius: 4px;
+    color: var(--text-primary, #ece4d4);
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .fit-btn:hover {
+    background: rgba(232, 168, 76, 0.15);
   }
 
   .close-btn {
