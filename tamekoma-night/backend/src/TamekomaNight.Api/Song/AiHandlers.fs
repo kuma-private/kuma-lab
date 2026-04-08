@@ -243,6 +243,28 @@ module SongAiHandlers =
         + "{\"t\": 7660, \"cc\": 64, \"v\": 0}      // bar 4 終了直前: ペダルOFF\n\n"
         + "v=127がON、v=0がOFF。各小節でON→OFF→ONを繰り返す。v=0だけは間違い。"
 
+    /// Post-process CC events: auto-generate CC64 sustain pedal for piano ballad styles
+    /// when the AI fails to produce proper ON/OFF patterns.
+    let private addPedalIfNeeded (instrument: string) (style: string) (barCount: int) (ccs: MidiCcCompact array) : MidiCcCompact array =
+        if instrument <> "piano" then ccs
+        else
+        let styleLower = (style |> Shared.defaultIfNull "").ToLowerInvariant()
+        let needsPedal =
+            styleLower.Contains("バラード") || styleLower.Contains("弾き語り")
+            || styleLower.Contains("ジャズ") || styleLower.Contains("ballad")
+            || styleLower.Contains("jazz")
+        if not needsPedal then ccs
+        else
+        let hasOnEvents = ccs |> Array.exists (fun cc -> cc.cc = 64 && cc.v > 0)
+        if hasOnEvents then ccs
+        else
+        // Generate pedal pattern: ON at bar start, OFF 20 ticks before bar end
+        let ticksPerBar = 1920
+        [| for i in 0 .. barCount - 1 do
+               let barStart = i * ticksPerBar
+               yield { t = barStart; cc = 64; v = 127 }
+               yield { t = barStart + ticksPerBar - 20; cc = 64; v = 0 } |]
+
     /// Extract JSON content from text that may contain markdown code fences or extra text.
     /// Handles both JSON arrays (legacy) and JSON objects (new format with notes + cc).
     let private extractJsonContent (text: string) : string =
@@ -341,12 +363,13 @@ module SongAiHandlers =
                                             // Legacy: plain array of notes, no CC
                                             let notes = System.Text.Json.JsonSerializer.Deserialize<MidiNoteCompact array>(jsonContent)
                                             (notes, Array.empty)
+                                    let ccWithPedal = addPedalIfNeeded req.instrument req.style barCount ccEvents
                                     let notes =
                                         compactNotes
                                         |> Array.map (fun n ->
                                             {| midi = n.m; tick = n.t; duration = n.d; velocity = n.v |})
                                     let controlChanges =
-                                        ccEvents
+                                        ccWithPedal
                                         |> Array.map (fun c ->
                                             {| tick = c.t; cc = c.cc; value = c.v |})
                                     do! ctx.Response.WriteAsJsonAsync(
