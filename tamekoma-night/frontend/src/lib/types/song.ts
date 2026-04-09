@@ -45,6 +45,8 @@ export interface Track {
 	volume: number;              // dB
 	mute: boolean;
 	solo: boolean;
+	activeStart?: number;        // 0-based bar index where track starts playing
+	activeEnd?: number;          // 0-based exclusive bar index where track stops
 }
 
 export interface DirectiveBlock {

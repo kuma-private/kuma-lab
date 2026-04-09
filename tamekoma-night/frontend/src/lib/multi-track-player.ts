@@ -350,13 +350,16 @@ export class MultiTrackPlayer {
       const trackNotes: MidiNote[] = [];
       const channel = trackIdx;
 
-      // If no blocks, create a synthetic default block covering all bars
+      // If no blocks, create a synthetic default block.
+      // Active range controls the span: activeStart/activeEnd if set, otherwise entire song.
       let blocksToProcess = trackDef.blocks;
       if (blocksToProcess.length === 0 && resolvedBars.length > 0) {
+        const start = trackDef.activeStart ?? 0;
+        const end = trackDef.activeEnd ?? resolvedBars.length;
         blocksToProcess = [{
           id: '__default__',
-          startBar: 0,
-          endBar: resolvedBars.length,
+          startBar: start,
+          endBar: end,
           directives: '',
         }];
       }
@@ -475,33 +478,20 @@ export class MultiTrackPlayer {
         trackNotes.push(...clampedNotes);
       }
 
-      // Generate default block chords for bars not covered by any block
-      const coveredBars = new Set<number>();
-      for (const block of blocksToProcess) {
-        for (let b = block.startBar; b < block.endBar; b++) coveredBars.add(b);
-      }
-      for (let barIdx = 0; barIdx < resolvedBars.length; barIdx++) {
-        if (coveredBars.has(barIdx)) continue;
-        const barChords = chordsPerBar[barIdx] ?? [];
-        if (barChords.length === 0) continue;
-        if (trackDef.instrument === 'drums') {
-          const drumNotes = generateDrumRhythm(
-            { pattern: '8beat' as DrumPatternName, velocity: 80, humanize: 0, swing: 0 },
-            bpm, timeSig, barIdx, 1, 9,
-          );
-          trackNotes.push(...drumNotes);
-        } else {
-          const voiced = voiceChords(barChords, { type: 'close' });
-          const barNotes = generateRhythm(voiced, { mode: 'block' }, bpm, timeSig, barIdx, channel);
-          trackNotes.push(...barNotes);
-        }
-      }
+      // Filter notes to the track's active range
+      const activeStart = trackDef.activeStart ?? 0;
+      const activeEnd = trackDef.activeEnd ?? resolvedBars.length;
+      const activeStartTick = activeStart * ticksPerBar;
+      const activeEndTick = activeEnd * ticksPerBar;
+      const activeNotes = trackNotes.filter(n =>
+        n.startTick >= activeStartTick && n.startTick < activeEndTick
+      );
 
       // Store generated notes
-      trackInstance.generatedNotes = trackNotes;
+      trackInstance.generatedNotes = activeNotes;
 
       // 4. Schedule notes on Transport
-      for (const note of trackNotes) {
+      for (const note of activeNotes) {
         const timeSec = tickToSeconds(note.startTick, bpm);
         const durSec = tickToSeconds(note.durationTicks, bpm);
         const noteName = midiToNoteName(note.midi);

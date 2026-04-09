@@ -628,6 +628,24 @@ import FlowMinimap from './FlowMinimap.svelte';
               </svg>
               <input type="range" class="track-volume" min="-30" max="6" value={track.volume} oninput={(e) => handleTrackVolume(track.id, Number((e.target as HTMLInputElement).value))} aria-label="音量" />
             </div>
+            <div class="track-active-range">
+              <span class="active-label">Active:</span>
+              <input type="number" class="active-input" min="1" max={totalBars}
+                value={(track.activeStart ?? 0) + 1}
+                onchange={(e) => {
+                  track.activeStart = Math.max(0, Number((e.target as HTMLInputElement).value) - 1);
+                  emit();
+                }}
+              />
+              <span>-</span>
+              <input type="number" class="active-input" min="1" max={totalBars}
+                value={track.activeEnd ?? totalBars}
+                onchange={(e) => {
+                  track.activeEnd = Math.min(totalBars, Number((e.target as HTMLInputElement).value));
+                  emit();
+                }}
+              />
+            </div>
           </div>
           <div class="row-content">
             <FlowTrackRow
@@ -1015,6 +1033,27 @@ import FlowMinimap from './FlowMinimap.svelte';
     background: var(--text-muted);
     cursor: pointer;
     border: none;
+  }
+
+  .track-active-range {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+  }
+  .active-label {
+    font-size: 0.6rem;
+  }
+  .active-input {
+    width: 32px;
+    padding: 1px 3px;
+    font-size: 0.65rem;
+    background: var(--bg-base);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 3px;
+    text-align: center;
   }
 
   .row-content {

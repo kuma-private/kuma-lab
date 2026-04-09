@@ -40,7 +40,9 @@ module Models =
           Blocks: DirectiveBlock list
           Volume: float
           Mute: bool
-          Solo: bool }
+          Solo: bool
+          ActiveStart: int option
+          ActiveEnd: int option }
 
     type Section =
         { Id: string

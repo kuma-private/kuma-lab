@@ -163,6 +163,7 @@
       class:grid-cell--odd={barIndex % 2 === 0}
       class:grid-cell--selected={isBarSelected(barIndex + 1)}
       class:grid-cell--drag={isDragHighlight(barIndex)}
+      class:grid-cell--inactive={barIndex < (track.activeStart ?? 0) || barIndex >= (track.activeEnd ?? totalBars)}
       style:grid-column={barIndex + 1}
       style:grid-row="1"
       data-bar={barIndex}
@@ -239,6 +240,17 @@
 
   .grid-cell--drag {
     background: rgba(232, 168, 76, 0.15);
+  }
+
+  .grid-cell--inactive {
+    background: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 3px,
+      rgba(0, 0, 0, 0.06) 3px,
+      rgba(0, 0, 0, 0.06) 6px
+    );
+    opacity: 0.45;
   }
 
   .block-wrapper {

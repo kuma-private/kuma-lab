@@ -142,6 +142,20 @@ module Repository =
                     with _ -> None
                 | _ -> None
 
+            let activeStart =
+                match dict.TryGetValue("activeStart") with
+                | true, v when isNotNull v ->
+                    try Some (System.Convert.ToInt32(v))
+                    with _ -> None
+                | _ -> None
+
+            let activeEnd =
+                match dict.TryGetValue("activeEnd") with
+                | true, v when isNotNull v ->
+                    try Some (System.Convert.ToInt32(v))
+                    with _ -> None
+                | _ -> None
+
             { Id = tryGetDictString dict "id"
               Name = tryGetDictString dict "name"
               Instrument = tryGetDictString dict "instrument"
@@ -149,7 +163,9 @@ module Repository =
               Blocks = blocks
               Volume = tryGetDictFloat dict "volume" 1.0
               Mute = tryGetDictBool dict "mute" false
-              Solo = tryGetDictBool dict "solo" false }
+              Solo = tryGetDictBool dict "solo" false
+              ActiveStart = activeStart
+              ActiveEnd = activeEnd }
 
         let private toSection (dict: System.Collections.Generic.IDictionary<string, obj>) : Section =
             { Id = tryGetDictString dict "id"
