@@ -273,6 +273,7 @@
         {#each previewSong.tracks ?? [] as track}
           <div class="track-card">
             <span class="track-name">{track.name}</span>
+            <span class="track-range">[{(track.activeStart ?? 0) + 1}-{track.activeEnd ?? '\u221E'}]</span>
             <span class="track-instrument">{track.instrument}</span>
           </div>
         {/each}
@@ -495,6 +496,13 @@
     font-weight: 600;
     font-size: 0.85rem;
     color: var(--text-primary);
+  }
+
+  .track-range {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    opacity: 0.7;
   }
 
   .track-instrument {

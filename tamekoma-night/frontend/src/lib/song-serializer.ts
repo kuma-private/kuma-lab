@@ -60,10 +60,21 @@ export function serializeSong(song: Song): string {
 	}
 
 	// Tracks list (always output section header so it stays visible in Text tab)
+	// Compute total bars for default activeEnd display
+	let totalBars = 0;
+	if (song.chordProgression.trim()) {
+		for (const cl of song.chordProgression.trim().split('\n')) {
+			const t = cl.trim();
+			if (t) totalBars += countBarsInLine(t);
+		}
+	}
+
 	lines.push('');
 	lines.push('## Tracks');
 	for (const track of song.tracks) {
-		lines.push(`- ${track.name}`);
+		const start = (track.activeStart ?? 0) + 1;
+		const end = track.activeEnd ?? totalBars;
+		lines.push(`- ${track.name} [${start}-${end}]`);
 	}
 
 	return lines.join('\n') + '\n';
@@ -250,20 +261,28 @@ export function deserializeSong(text: string): DeserializeResult {
 			continue;
 		}
 
-		// Inside tracks list — each line is a track name (with optional leading "- ")
+		// Inside tracks list — each line is a track name (with optional leading "- ") and optional [start-end]
 		if (state === 'tracks-list') {
 			if (!trimmed.startsWith('//')) {
-				const trackName = trimmed.startsWith('- ') ? trimmed.slice(2) : trimmed;
-				if (!trackMap.has(trackName)) {
-					trackMap.set(trackName, {
-						id: crypto.randomUUID(),
-						name: trackName,
-						instrument: guessInstrument(trackName),
-						blocks: [],
-						volume: 0,
-						mute: false,
-						solo: false
-					});
+				const raw = trimmed.startsWith('- ') ? trimmed.slice(2) : trimmed;
+				const trackMatch = raw.match(/^(.+?)(?:\s+\[(\d+)-(\d+)\])?\s*$/);
+				if (trackMatch) {
+					const name = trackMatch[1].trim();
+					const activeStart = trackMatch[2] ? parseInt(trackMatch[2]) - 1 : undefined;
+					const activeEnd = trackMatch[3] ? parseInt(trackMatch[3]) : undefined;
+					if (!trackMap.has(name)) {
+						trackMap.set(name, {
+							id: crypto.randomUUID(),
+							name,
+							instrument: guessInstrument(name),
+							blocks: [],
+							volume: 0,
+							mute: false,
+							solo: false,
+							activeStart,
+							activeEnd
+						});
+					}
 				}
 			}
 			continue;
@@ -337,6 +356,23 @@ function guessInstrument(name: string): string {
 // Merges deserialized partial song into an existing Song, preserving IDs
 
 export function mergeParsedSong(original: Song, parsed: Partial<Song>): Song {
+	// Update active ranges on existing tracks from parsed text data.
+	// We don't replace tracks wholesale (that would destroy blocks/MIDI),
+	// but active range edits in the Text tab should propagate.
+	const mergedTracks = original.tracks.map((t) => {
+		if (parsed.tracks && parsed.tracks.length > 0) {
+			const pt = parsed.tracks.find((p) => p.name === t.name);
+			if (pt) {
+				return {
+					...t,
+					activeStart: pt.activeStart !== undefined ? pt.activeStart : t.activeStart,
+					activeEnd: pt.activeEnd !== undefined ? pt.activeEnd : t.activeEnd
+				};
+			}
+		}
+		return t;
+	});
+
 	return {
 		...original,
 		title: parsed.title || original.title,
@@ -345,10 +381,7 @@ export function mergeParsedSong(original: Song, parsed: Partial<Song>): Song {
 		timeSignature: parsed.timeSignature ?? original.timeSignature,
 		chordProgression: parsed.chordProgression ?? original.chordProgression,
 		sections: parsed.sections && parsed.sections.length > 0 ? parsed.sections : original.sections,
-		// NOTE: tracks are intentionally NOT merged from parsed data.
-		// The text format doesn't include block/MIDI data, so merging
-		// parsed.tracks would destroy existing track blocks. Tracks are
-		// managed exclusively through the Flow tab.
+		tracks: mergedTracks,
 		lastEditedAt: new Date().toISOString()
 	};
 }
