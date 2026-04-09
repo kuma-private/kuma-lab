@@ -372,10 +372,18 @@ export class MultiTrackPlayer {
           if (block.generatedMidi.controlChanges?.length) {
             blockNotes = applyPedalToNotes(blockNotes, block.generatedMidi.controlChanges);
           }
-          // Filter AI-generated notes to block's tick range and clamp duration
           const aiBlockStartTick = block.startBar * ticksPerBar;
           const aiBlockEndTick = block.endBar * ticksPerBar;
+          const blockDurationTicks = aiBlockEndTick - aiBlockStartTick;
+
+          // AI notes may start at tick 0 (relative to block start).
+          // Detect and offset if needed.
+          const maxNoteTick = Math.max(...blockNotes.map(n => n.startTick));
+          const needsOffset = maxNoteTick < blockDurationTicks && aiBlockStartTick > 0;
+          const offset = needsOffset ? aiBlockStartTick : 0;
+
           const clampedAiNotes = blockNotes
+            .map(n => ({ ...n, startTick: n.startTick + offset }))
             .filter(n => n.startTick >= aiBlockStartTick && n.startTick < aiBlockEndTick)
             .map(n => {
               const maxDuration = aiBlockEndTick - n.startTick;
