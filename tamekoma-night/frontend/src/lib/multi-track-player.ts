@@ -16,6 +16,8 @@ import { generateRhythm } from './rhythm-engine';
 import { rootToMidi, midiToNoteName, getPianoSampler } from './chord-player';
 import { generateDrumRhythm } from './drum-patterns';
 import type { RhythmConfig as DrumRhythmConfig, DrumPatternName } from './drum-patterns';
+import { loadSoundFontInstrument, hasSoundFontMapping } from './soundfont-instruments';
+import type { Player as SoundFontPlayer } from './soundfont-instruments';
 
 // ── Types ──────────────────────────────────────────────
 
@@ -39,6 +41,8 @@ export interface TrackInstance {
   generatedNotes: MidiNote[];
   /** Whether this TrackInstance owns its instrument (should dispose on cleanup). */
   ownsInstrument: boolean;
+  /** SoundFont player for realistic playback (null = use Tone.js synth fallback). */
+  soundFontPlayer: SoundFontPlayer | null;
 }
 
 // ── Constants ─────────────────────────────────────────
@@ -282,8 +286,9 @@ export class MultiTrackPlayer {
 
   /**
    * Load a Song: run the full pipeline for every track and schedule on Transport.
+   * Async to allow loading SoundFont instruments from CDN.
    */
-  load(song: Song): void {
+  async load(song: Song): Promise<void> {
     this.clearSchedule();
 
     // 1. Parse chord progression (shared across all tracks)
@@ -334,6 +339,22 @@ export class MultiTrackPlayer {
       // Apply initial mute
       volumeNode.mute = trackDef.mute ?? false;
 
+      // Try to load SoundFont instrument for realistic playback.
+      // Route SoundFont output through the same Tone.js Volume node so that
+      // track volume / mute / solo controls affect SoundFont playback.
+      let sfPlayer: SoundFontPlayer | null = null;
+      if (hasSoundFontMapping(trackDef.instrument)) {
+        try {
+          const rawCtx = Tone.getContext().rawContext;
+          const audioCtx = rawCtx instanceof AudioContext ? rawCtx : rawCtx as unknown as AudioContext;
+          // volumeNode.input is a Tone.Gain whose .input is the raw GainNode
+          const destination = volumeNode.input.input as unknown as AudioNode;
+          sfPlayer = await loadSoundFontInstrument(trackDef.instrument, audioCtx, destination);
+        } catch {
+          // Silently fall back to Tone.js synth
+        }
+      }
+
       const trackInstance: TrackInstance = {
         id: trackDef.id,
         name: trackDef.name,
@@ -344,6 +365,7 @@ export class MultiTrackPlayer {
         scheduledEvents: [],
         generatedNotes: [],
         ownsInstrument,
+        soundFontPlayer: sfPlayer,
       };
 
       // 3. Process each block in the track
@@ -505,10 +527,22 @@ export class MultiTrackPlayer {
         const noteName = midiToNoteName(note.midi);
         const velGain = note.velocity / 127;
 
-        const id = transport.schedule((time) => {
-          instrument.triggerAttackRelease(noteName, durSec, time, velGain);
-        }, timeSec);
-        trackInstance.scheduledEvents.push(id);
+        if (sfPlayer) {
+          // Use SoundFont player (raw Web Audio API) for realistic playback.
+          // soundfont-player's play() uses absolute AudioContext time,
+          // so we convert from Tone.js transport time in the scheduled callback.
+          const sf = sfPlayer;
+          const id = transport.schedule((time) => {
+            sf.play(noteName, time, { duration: durSec, gain: velGain });
+          }, timeSec);
+          trackInstance.scheduledEvents.push(id);
+        } else {
+          // Fallback to Tone.js synth
+          const id = transport.schedule((time) => {
+            instrument.triggerAttackRelease(noteName, durSec, time, velGain);
+          }, timeSec);
+          trackInstance.scheduledEvents.push(id);
+        }
       }
 
       this.tracks.push(trackInstance);

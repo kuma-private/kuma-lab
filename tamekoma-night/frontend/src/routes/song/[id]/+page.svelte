@@ -178,9 +178,9 @@
 		);
 	}
 
-	function loadSongIntoPlayer() {
+	async function loadSongIntoPlayer() {
 		if (!player || !store.currentSong) return;
-		player.load(store.currentSong);
+		await player.load(store.currentSong);
 		totalDuration = player.totalDuration;
 		updateTrackNotes();
 	}
@@ -195,7 +195,7 @@
 
 		await store.loadSong(songId);
 		if (store.currentSong) {
-			loadSongIntoPlayer();
+			await loadSongIntoPlayer();
 		}
 	});
 
