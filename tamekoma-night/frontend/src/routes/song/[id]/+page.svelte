@@ -212,7 +212,10 @@
 		const json = JSON.stringify({ chords: song.chordProgression, tracks: song.tracks, bpm: song.bpm, ts: song.timeSignature, key: song.key });
 		if (json !== lastSongJson) {
 			lastSongJson = json;
-			loadSongIntoPlayer();
+			void loadSongIntoPlayer().then(() => {
+				// Force trackNotes re-assignment to trigger Svelte reactivity
+				trackNotes = new Map(trackNotes);
+			});
 		}
 	});
 

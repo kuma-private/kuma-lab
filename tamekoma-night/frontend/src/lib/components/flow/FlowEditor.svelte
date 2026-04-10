@@ -314,8 +314,20 @@ import FlowMinimap from './FlowMinimap.svelte';
   let playheadLeft = $derived.by(() => {
     if (!totalDuration || totalDuration === 0 || currentTime < 0) return -1;
     const progress = currentTime / totalDuration;
-    // Each bar is 140px (from CSS minmax(0, 140px))
     return measuredLabelWidth + progress * totalBars * 140;
+  });
+
+  // Auto-scroll flow-content to follow playhead during playback
+  $effect(() => {
+    if (playheadLeft < 0 || activeTab !== 'flow') return;
+    const flowContent = document.querySelector('.flow-content') as HTMLElement | null;
+    if (!flowContent) return;
+    const viewLeft = flowContent.scrollLeft;
+    const viewRight = viewLeft + flowContent.clientWidth;
+    // If playhead is near the right edge (within 100px) or past it, scroll
+    if (playheadLeft > viewRight - 100 || playheadLeft < viewLeft + measuredLabelWidth) {
+      flowContent.scrollTo({ left: Math.max(0, playheadLeft - flowContent.clientWidth / 3), behavior: 'smooth' });
+    }
   });
 
   // --- Computed totalBars ---
