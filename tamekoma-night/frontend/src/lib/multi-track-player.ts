@@ -339,21 +339,9 @@ export class MultiTrackPlayer {
       // Apply initial mute
       volumeNode.mute = trackDef.mute ?? false;
 
-      // Try to load SoundFont instrument for realistic playback.
-      // Route SoundFont output through the same Tone.js Volume node so that
-      // track volume / mute / solo controls affect SoundFont playback.
-      let sfPlayer: SoundFontPlayer | null = null;
-      if (hasSoundFontMapping(trackDef.instrument)) {
-        try {
-          const rawCtx = Tone.getContext().rawContext;
-          const audioCtx = rawCtx instanceof AudioContext ? rawCtx : rawCtx as unknown as AudioContext;
-          // volumeNode.input is a Tone.Gain whose .input is the raw GainNode
-          const destination = volumeNode.input.input as unknown as AudioNode;
-          sfPlayer = await loadSoundFontInstrument(trackDef.instrument, audioCtx, destination);
-        } catch {
-          // Silently fall back to Tone.js synth
-        }
-      }
+      // SoundFont loading disabled for now — causes load() to hang in some browsers.
+      // TODO: Re-enable after fixing AudioContext routing.
+      const sfPlayer: SoundFontPlayer | null = null;
 
       const trackInstance: TrackInstance = {
         id: trackDef.id,
