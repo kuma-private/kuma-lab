@@ -389,7 +389,7 @@ export class MultiTrackPlayer {
           // AI notes may start at tick 0 (relative to block start).
           // Detect and offset if needed.
           const maxNoteTick = Math.max(...blockNotes.map(n => n.startTick));
-          const needsOffset = maxNoteTick < blockDurationTicks && aiBlockStartTick > 0;
+          const needsOffset = maxNoteTick <= blockDurationTicks && aiBlockStartTick > 0;
           const offset = needsOffset ? aiBlockStartTick : 0;
 
           const clampedAiNotes = blockNotes
