@@ -145,8 +145,21 @@ name = "bridge-audio"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bridge-plugin-host",
+ "bridge-protocol",
  "cpal",
+ "rtrb",
  "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
+name = "bridge-clap"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bridge-plugin-host",
+ "bridge-protocol",
  "tracing",
 ]
 
@@ -156,6 +169,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bridge-audio",
+ "bridge-clap",
+ "bridge-plugin-host",
  "bridge-protocol",
  "futures-util",
  "serde",
@@ -164,6 +179,15 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "bridge-plugin-host"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bridge-protocol",
+ "tracing",
 ]
 
 [[package]]
@@ -2000,6 +2024,12 @@ name = "regex-syntax"
 version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+
+[[package]]
+name = "rtrb"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7204ed6420f698836b76d4d5c2ec5dec7585fd5c3a788fd1cde855d1de598239"
 
 [[package]]
 name = "rustc-hash"

@@ -8,15 +8,17 @@ fn main() -> anyhow::Result<()> {
     init_tracing();
     info!("cadenza-bridge starting");
 
+    let bind = std::env::var("CADENZA_BRIDGE_BIND")
+        .unwrap_or_else(|_| DEFAULT_BIND_ADDR.to_string());
     thread::Builder::new()
         .name("bridge-tokio".into())
-        .spawn(|| {
+        .spawn(move || {
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .expect("build tokio runtime");
-            rt.block_on(async {
-                if let Err(e) = run_ws_server(DEFAULT_BIND_ADDR).await {
+            rt.block_on(async move {
+                if let Err(e) = run_ws_server(&bind).await {
                     error!("ws server error: {e}");
                 }
             });

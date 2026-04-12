@@ -1,7 +1,7 @@
 // Bridge store — Svelte 5 runes wrapper around BridgeClient.
 
 import { BridgeClient, type BridgeState } from '$lib/bridge/client';
-import type { HandshakeResult } from '$lib/bridge/protocol';
+import type { BridgeEvent, HandshakeResult, PluginCatalogEntry } from '$lib/bridge/protocol';
 
 export type BridgeConnectionState = BridgeState;
 
@@ -10,6 +10,7 @@ class BridgeStore {
 	bridgeVersion = $state<string | null>(null);
 	capabilities = $state<string[]>([]);
 	updateAvailable = $state(false);
+	pluginCatalog = $state<PluginCatalogEntry[]>([]);
 
 	readonly client: BridgeClient;
 	private initialized = false;
@@ -35,7 +36,12 @@ class BridgeStore {
 			this.bridgeVersion = r.bridgeVersion;
 			this.capabilities = r.capabilities;
 			this.updateAvailable = r.updateAvailable;
+			void this.refreshPluginCatalog(true);
 		};
+		this.client.on('plugin.scan.complete', (e: BridgeEvent) => {
+			if (e.type !== 'plugin.scan.complete') return;
+			void this.refreshPluginCatalog(false);
+		});
 	}
 
 	init(): void {
@@ -49,6 +55,25 @@ class BridgeStore {
 
 	dispose(): void {
 		this.client.disconnect();
+	}
+
+	/**
+	 * Trigger a fresh plugin scan (optional) then fetch the current catalog.
+	 * Called automatically after handshake and on plugin.scan.complete events.
+	 */
+	async refreshPluginCatalog(scanFirst: boolean): Promise<void> {
+		try {
+			if (scanFirst) {
+				await this.client.send({ type: 'plugins.scan' });
+			}
+			const list = await this.client.send<PluginCatalogEntry[]>({ type: 'plugins.list' });
+			if (Array.isArray(list)) {
+				this.pluginCatalog = list;
+			}
+		} catch (e) {
+			// Bridge may not yet implement these in early Phase 2 — degrade silently.
+			console.warn('[bridge] plugin catalog refresh failed', e);
+		}
 	}
 }
 

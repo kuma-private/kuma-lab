@@ -1,11 +1,18 @@
+use std::time::Duration;
+
 use anyhow::{Context, Result};
+use bridge_audio::TelemetryEvent;
+use bridge_protocol::{Event, Outgoing};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tracing::{error, info, warn};
 
 use crate::handlers::handle_text;
 use crate::session::SessionState;
+
+const TELEMETRY_TICK: Duration = Duration::from_millis(33); // ~30 Hz
 
 pub async fn run_ws_server(bind_addr: &str) -> Result<()> {
     let listener = TcpListener::bind(bind_addr)
@@ -32,33 +39,89 @@ async fn handle_connection(state: SessionState, stream: TcpStream, peer: String)
         .context("ws handshake")?;
     info!("ws client connected: {peer}");
 
-    let (mut tx, mut rx) = ws.split();
+    let (mut ws_tx, mut ws_rx) = ws.split();
 
-    while let Some(msg) = rx.next().await {
-        let msg = match msg {
-            Ok(m) => m,
-            Err(e) => {
-                error!("recv error from {peer}: {e}");
-                break;
-            }
-        };
+    // Single mpsc for everything the connection task wants to flush back
+    // to the client (responses, events from handlers, telemetry events).
+    let (out_tx, mut out_rx) = mpsc::channel::<Outgoing>(256);
 
-        match msg {
-            WsMessage::Text(text) => {
-                let out = handle_text(&state, &text);
-                let body = serde_json::to_string(&out).context("serialize outgoing")?;
-                tx.send(WsMessage::Text(body)).await.context("ws send")?;
+    // Telemetry drain task: poll the rtrb consumer at ~30 Hz and forward
+    // each TelemetryEvent as a protocol Event into out_tx.
+    let telemetry = state.telemetry();
+    let tel_tx = out_tx.clone();
+    let telemetry_task = tokio::spawn(async move {
+        let mut buf: Vec<TelemetryEvent> = Vec::with_capacity(64);
+        loop {
+            tokio::time::sleep(TELEMETRY_TICK).await;
+            buf.clear();
+            telemetry.try_recv_batch(64, &mut buf);
+            for ev in buf.drain(..) {
+                let outgoing = match ev {
+                    TelemetryEvent::Position { tick, seconds } => {
+                        Outgoing::event(Event::TransportPosition { tick, seconds })
+                    }
+                    TelemetryEvent::StateChange { playing } => {
+                        Outgoing::event(Event::TransportState {
+                            state: if playing { "playing".into() } else { "stopped".into() },
+                        })
+                    }
+                    TelemetryEvent::Xrun => continue,
+                };
+                if tel_tx.send(outgoing).await.is_err() {
+                    return;
+                }
             }
-            WsMessage::Close(_) => {
-                info!("ws client closed: {peer}");
-                break;
+        }
+    });
+
+    // Reader task: pull WS frames, dispatch to handlers, forward response +
+    // any extra events into out_tx.
+    let reader_state = state.clone();
+    let reader_tx = out_tx.clone();
+    let reader_peer = peer.clone();
+    let reader_task = tokio::spawn(async move {
+        while let Some(msg) = ws_rx.next().await {
+            let msg = match msg {
+                Ok(m) => m,
+                Err(e) => {
+                    error!("recv error from {reader_peer}: {e}");
+                    break;
+                }
+            };
+            match msg {
+                WsMessage::Text(text) => {
+                    let res = handle_text(&reader_state, &text);
+                    if reader_tx.send(res.response).await.is_err() {
+                        break;
+                    }
+                    for ev in res.events {
+                        if reader_tx.send(ev).await.is_err() {
+                            return;
+                        }
+                    }
+                }
+                WsMessage::Close(_) => {
+                    info!("ws client closed: {reader_peer}");
+                    break;
+                }
+                WsMessage::Ping(_) => {
+                    // Pings are auto-handled by tungstenite when using
+                    // `accept_async` with default config; nothing to do.
+                }
+                _ => {}
             }
-            WsMessage::Ping(p) => {
-                tx.send(WsMessage::Pong(p)).await.ok();
-            }
-            _ => {}
+        }
+    });
+
+    // Writer loop: drain out_rx and write to the WS sink.
+    while let Some(out) = out_rx.recv().await {
+        let body = serde_json::to_string(&out).context("serialize outgoing")?;
+        if ws_tx.send(WsMessage::Text(body)).await.is_err() {
+            break;
         }
     }
 
+    telemetry_task.abort();
+    reader_task.abort();
     Ok(())
 }

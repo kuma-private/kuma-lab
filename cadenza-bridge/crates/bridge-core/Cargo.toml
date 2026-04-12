@@ -8,6 +8,8 @@ license.workspace = true
 [dependencies]
 bridge-protocol = { path = "../bridge-protocol" }
 bridge-audio = { path = "../bridge-audio" }
+bridge-plugin-host = { path = "../bridge-plugin-host" }
+bridge-clap = { path = "../bridge-clap" }
 tokio = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }

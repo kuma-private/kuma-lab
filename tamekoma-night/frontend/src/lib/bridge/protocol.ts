@@ -16,7 +16,16 @@ export interface RequestEnvelope {
 
 export type Command =
 	| { type: 'handshake'; version: string }
-	| { type: 'debug.sine'; on: boolean };
+	| { type: 'debug.sine'; on: boolean }
+	| { type: 'plugins.scan' }
+	| { type: 'plugins.list' }
+	| { type: 'project.load'; project: BridgeProject }
+	| { type: 'project.patch'; ops: JsonPatchOp[] }
+	| { type: 'transport.play'; fromTick?: number }
+	| { type: 'transport.stop' }
+	| { type: 'transport.seek'; tick: number }
+	| { type: 'midi.noteOn'; trackId: string; pitch: number; velocity: number }
+	| { type: 'midi.noteOff'; trackId: string; pitch: number };
 
 // ── Incoming (Bridge → browser) ─────────────────────────
 
@@ -36,12 +45,16 @@ export interface BridgeErrorBody {
 	message: string;
 }
 
-export type BridgeEvent = {
-	type: 'handshake.ack';
-	bridgeVersion: string;
-	capabilities: string[];
-	updateAvailable: boolean;
-};
+export type BridgeEvent =
+	| {
+			type: 'handshake.ack';
+			bridgeVersion: string;
+			capabilities: string[];
+			updateAvailable: boolean;
+	  }
+	| { type: 'transport.position'; tick: number; seconds: number }
+	| { type: 'transport.state'; state: 'playing' | 'paused' | 'stopped' }
+	| { type: 'plugin.scan.complete'; count: number };
 
 // ── Typed results ───────────────────────────────────────
 
@@ -50,6 +63,59 @@ export interface HandshakeResult {
 	capabilities: string[];
 	updateAvailable: boolean;
 }
+
+// ── Domain types (Phase 2) ──────────────────────────────
+
+export interface BridgeProject {
+	version: string;
+	bpm: number;
+	timeSignature: [number, number];
+	sampleRate: number;
+	tracks: BridgeTrackState[];
+}
+
+export interface BridgeTrackState {
+	id: string;
+	name: string;
+	instrument: BridgeInstrumentRef | null;
+	clips: BridgeMidiClip[];
+	volumeDb: number;
+	pan: number;
+	mute: boolean;
+	solo: boolean;
+}
+
+export interface BridgeInstrumentRef {
+	pluginFormat: 'clap' | 'vst3' | 'builtin';
+	pluginId: string;
+}
+
+export interface BridgeMidiClip {
+	id: string;
+	startTick: number;
+	lengthTicks: number;
+	notes: BridgeMidiNote[];
+}
+
+export interface BridgeMidiNote {
+	pitch: number;
+	velocity: number;
+	startTick: number;
+	lengthTicks: number;
+}
+
+export interface PluginCatalogEntry {
+	format: 'clap' | 'vst3' | 'builtin';
+	id: string;
+	name: string;
+	vendor: string;
+	path: string;
+}
+
+export type JsonPatchOp =
+	| { op: 'add'; path: string; value: unknown }
+	| { op: 'remove'; path: string }
+	| { op: 'replace'; path: string; value: unknown };
 
 export class BridgeRpcError extends Error {
 	readonly code: string;

@@ -1,5 +1,5 @@
 [package]
-name = "bridge-audio"
+name = "bridge-plugin-host"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,9 +7,5 @@ license.workspace = true
 
 [dependencies]
 bridge-protocol = { path = "../bridge-protocol" }
-bridge-plugin-host = { path = "../bridge-plugin-host" }
-cpal = { workspace = true }
-rtrb = { workspace = true }
 anyhow = { workspace = true }
-thiserror = { workspace = true }
 tracing = { workspace = true }
