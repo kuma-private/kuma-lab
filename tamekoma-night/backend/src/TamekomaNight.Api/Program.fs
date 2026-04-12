@@ -194,6 +194,14 @@ module Program =
         mapRoute app "POST" "/api/automation/suggest"
             (authRL (TamekomaNight.Api.Automation.Handlers.suggestHandler config))
 
+        // Stripe — Phase 9 scaffolding. Checkout returns a stub URL;
+        // the real SDK integration lands in Phase 10. Webhook is
+        // intentionally unauthenticated (Stripe has no cookie).
+        mapRoute app "POST" "/api/stripe/checkout"
+            (auth (TamekomaNight.Api.Stripe.Handlers.checkoutHandler config))
+        mapRoute app "POST" "/api/stripe/webhook"
+            (TamekomaNight.Api.Stripe.Handlers.webhookHandler config)
+
         // SPA fallback
         app.MapFallbackToFile("index.html") |> ignore
 
