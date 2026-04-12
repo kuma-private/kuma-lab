@@ -522,6 +522,120 @@ class SongStore {
 		);
 	};
 
+	setAutomationPointCurve = (
+		trackId: string,
+		nodeId: string,
+		paramId: string,
+		pointId: string,
+		curve: AutomationCurve
+	): void => {
+		this.mutate(
+			(draft) => {
+				const t = draft.tracks.find((x) => x.id === trackId);
+				const lane = t?.automation?.find((a) => a.nodeId === nodeId && a.paramId === paramId);
+				const p = lane?.points.find((x) => x.id === pointId);
+				if (p) p.curve = curve;
+			},
+			[
+				{
+					op: 'replace',
+					path: `/tracks/${escapeJsonPointer(trackId)}/automation/${escapeJsonPointer(nodeId)}/${escapeJsonPointer(paramId)}/points/${escapeJsonPointer(pointId)}/curve`,
+					value: curve
+				}
+			]
+		);
+	};
+
+	/**
+	 * Create an empty automation lane if one does not already exist for
+	 * (nodeId, paramId) on the given track. Returns false if a matching lane
+	 * already exists (no-op), true otherwise.
+	 */
+	addAutomationLane = (trackId: string, nodeId: string, paramId: string): boolean => {
+		const existing = this.currentSong?.tracks
+			.find((t) => t.id === trackId)
+			?.automation?.find((a) => a.nodeId === nodeId && a.paramId === paramId);
+		if (existing) return false;
+		const lane = { nodeId, paramId, points: [] };
+		this.mutate(
+			(draft) => {
+				const t = draft.tracks.find((x) => x.id === trackId);
+				if (!t) return;
+				if (!t.automation) t.automation = [];
+				t.automation.push(lane);
+			},
+			[
+				{
+					op: 'add',
+					path: `/tracks/${escapeJsonPointer(trackId)}/automation/-`,
+					value: lane
+				}
+			]
+		);
+		return true;
+	};
+
+	/**
+	 * Remove an entire automation lane (nodeId, paramId) from a track.
+	 */
+	removeAutomationLane = (trackId: string, nodeId: string, paramId: string): void => {
+		this.mutate(
+			(draft) => {
+				const t = draft.tracks.find((x) => x.id === trackId);
+				if (!t || !t.automation) return;
+				t.automation = t.automation.filter((a) => !(a.nodeId === nodeId && a.paramId === paramId));
+			},
+			[
+				{
+					op: 'remove',
+					path: `/tracks/${escapeJsonPointer(trackId)}/automation/${escapeJsonPointer(nodeId)}/${escapeJsonPointer(paramId)}`
+				}
+			]
+		);
+	};
+
+	/**
+	 * Replace all automation points in [startTick, endTick) with newPoints.
+	 * Points outside the range are preserved. Lane is created if missing.
+	 * Used by the AI curve "Apply" flow.
+	 */
+	replaceAutomationRange = (
+		trackId: string,
+		nodeId: string,
+		paramId: string,
+		startTick: number,
+		endTick: number,
+		newPoints: Array<{ tick: number; value: number; curve?: AutomationCurve }>
+	): void => {
+		const stamped: AutomationPoint[] = newPoints.map((p) => ({
+			id: crypto.randomUUID(),
+			tick: p.tick,
+			value: p.value,
+			curve: p.curve ?? 'linear'
+		}));
+		this.mutate(
+			(draft) => {
+				const t = draft.tracks.find((x) => x.id === trackId);
+				if (!t) return;
+				if (!t.automation) t.automation = [];
+				let lane = t.automation.find((a) => a.nodeId === nodeId && a.paramId === paramId);
+				if (!lane) {
+					lane = { nodeId, paramId, points: [] };
+					t.automation.push(lane);
+				}
+				const kept = lane.points.filter((p) => p.tick < startTick || p.tick >= endTick);
+				lane.points = [...kept, ...stamped].sort((a, b) => a.tick - b.tick);
+			},
+			[
+				{
+					op: 'replace',
+					path: `/tracks/${escapeJsonPointer(trackId)}/automation/${escapeJsonPointer(nodeId)}/${escapeJsonPointer(paramId)}/points`,
+					value: stamped
+				}
+			]
+		);
+	};
+
 	// ── Phase 3: bus operations ──────────────────────────
 
 	addBus = (name: string): string => {

@@ -11,6 +11,7 @@
   import { parseProgression, serialize } from '$lib/chord-parser';
   import Visualizer from '$lib/components/visualizer/Visualizer.svelte';
   import MixerTab from '$lib/components/mixer/MixerTab.svelte';
+  import AutomationTab from '$lib/components/automation/AutomationTab.svelte';
   import { planStore } from '$lib/stores/plan.svelte';
 
   let {
@@ -29,10 +30,11 @@
     totalDuration?: number;
   } = $props();
 
-  type TabId = 'flow' | 'visualizer' | 'text' | 'mixer';
+  type TabId = 'flow' | 'visualizer' | 'text' | 'mixer' | 'automation';
   let activeTab = $state<TabId>('flow');
-  // Premium users see the Mixer tab; free users don't.
+  // Premium users see the Mixer and Automation tabs; free users don't.
   let showMixerTab = $derived(planStore.isPremium);
+  let showAutomationTab = $derived(planStore.isPremium);
 
   // --- BlockPopover state ---
   let popoverBlock = $state<DirectiveBlock | null>(null);
@@ -389,6 +391,15 @@
           onclick={() => activeTab = 'mixer'}
         >Mixer</button>
       {/if}
+      {#if showAutomationTab}
+        <button
+          class="tab"
+          role="tab"
+          aria-selected={activeTab === 'automation'}
+          class:tab--active={activeTab === 'automation'}
+          onclick={() => activeTab = 'automation'}
+        >Automation</button>
+      {/if}
     </div>
     <!-- Right side: AI Arrange button -->
     <div class="tab-bar-right">
@@ -499,6 +510,10 @@
   {:else if activeTab === 'mixer' && showMixerTab}
     <div class="mixer-container">
       <MixerTab {song} />
+    </div>
+  {:else if activeTab === 'automation' && showAutomationTab}
+    <div class="automation-container">
+      <AutomationTab {song} />
     </div>
   {:else}
     <div class="text-view-container">
@@ -868,6 +883,13 @@
 
   /* ---- Mixer container ---- */
   .mixer-container {
+    display: flex;
+    flex: 1;
+    min-height: 420px;
+  }
+
+  /* ---- Automation container ---- */
+  .automation-container {
     display: flex;
     flex: 1;
     min-height: 420px;
