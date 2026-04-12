@@ -1,3 +1,5 @@
+import type { Automation, Bus, ChainNode, Master, PluginRef, Send } from './chain';
+
 export interface Song {
 	id: string;
 	title: string;
@@ -10,6 +12,9 @@ export interface Song {
 	createdBy: string;
 	createdAt: string;
 	lastEditedAt: string;
+	// Bridge extensions (optional, additive)
+	buses?: Bus[];
+	master?: Master;
 }
 
 /** List API returns summary with counts instead of full arrays */
@@ -44,6 +49,18 @@ export interface Track {
 	volume: number;              // dB
 	mute: boolean;
 	solo: boolean;
+	// Bridge extensions (optional, additive)
+	chain?: ChainNode[];
+	sends?: Send[];
+	pan?: number;
+	automation?: Automation[];
+	/**
+	 * Bridge instrument plugin (built-in or third-party). When set, the
+	 * Bridge routes this track's MIDI through the chosen plugin instead
+	 * of falling back to silence. Independent from the legacy `instrument`
+	 * string above which drives in-browser Tone.js playback.
+	 */
+	instrumentPlugin?: PluginRef;
 }
 
 export interface DirectiveBlock {

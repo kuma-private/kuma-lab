@@ -85,6 +85,8 @@ module Program =
         let config = Config.load ()
         let repo = Repository.create config.FirestoreProjectId
         let songRepo = TamekomaNight.Api.Song.Repository.create config.FirestoreProjectId
+        let userRepo =
+            TamekomaNight.Api.User.Repository.create config.FirestoreProjectId
 
         let builder = WebApplication.CreateBuilder(args)
 
@@ -130,9 +132,9 @@ module Program =
 
         // Auth routes
         mapRoute app "GET" "/auth/google" AuthHandlers.loginHandler
-        mapRoute app "GET" "/auth/callback-complete" (AuthHandlers.callbackCompleteHandler config)
+        mapRoute app "GET" "/auth/callback-complete" (AuthHandlers.callbackCompleteHandler config userRepo)
         mapRoute app "POST" "/auth/logout" AuthHandlers.logoutHandler
-        mapRoute app "GET" "/auth/me" (auth (AuthHandlers.meHandler devMode))
+        mapRoute app "GET" "/auth/me" (auth (AuthHandlers.meHandler devMode config userRepo))
 
         // Thread API - collection routes
         mapRoute app "GET" "/api/threads" (auth (ThreadHandlers.listThreads repo))
@@ -176,6 +178,29 @@ module Program =
         mapRouteWithId app "POST" "/api/songs/{id}/suggest" (withIdRL (TamekomaNight.Api.Song.SongAiHandlers.suggestDirectives config))
         mapRouteWithId app "POST" "/api/songs/{id}/arrange" (withIdRL (TamekomaNight.Api.Song.SongAiHandlers.suggestArrangement config))
         mapRouteWithId app "POST" "/api/songs/{id}/generate-midi" (withIdRL (TamekomaNight.Api.Song.SongAiHandlers.generateMidi config))
+
+        // Cadenza Bridge — ticket issuance / verification
+        mapRoute app "POST" "/api/bridge/ticket"
+            (auth (TamekomaNight.Api.Bridge.Handlers.issueTicketHandler config userRepo))
+        // Verify is intentionally NOT behind cookie auth — Bridge has no cookie;
+        // the JWT in the request body is the credential.
+        mapRoute app "POST" "/api/bridge/verify-ticket"
+            (TamekomaNight.Api.Bridge.Handlers.verifyTicketHandler config)
+
+        // Mixer / Automation NL suggest endpoints (Premium only in practice,
+        // gated at the UI layer and by rate limit).
+        mapRoute app "POST" "/api/mixer/suggest"
+            (authRL (TamekomaNight.Api.Mixer.Handlers.suggestHandler config))
+        mapRoute app "POST" "/api/automation/suggest"
+            (authRL (TamekomaNight.Api.Automation.Handlers.suggestHandler config))
+
+        // Stripe — Phase 9 scaffolding. Checkout returns a stub URL;
+        // the real SDK integration lands in Phase 10. Webhook is
+        // intentionally unauthenticated (Stripe has no cookie).
+        mapRoute app "POST" "/api/stripe/checkout"
+            (auth (TamekomaNight.Api.Stripe.Handlers.checkoutHandler config))
+        mapRoute app "POST" "/api/stripe/webhook"
+            (TamekomaNight.Api.Stripe.Handlers.webhookHandler config)
 
         // SPA fallback
         app.MapFallbackToFile("index.html") |> ignore

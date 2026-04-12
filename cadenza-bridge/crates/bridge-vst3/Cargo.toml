@@ -1,0 +1,25 @@
+[package]
+name = "bridge-vst3"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+build = "build.rs"
+description = "VST3 host shim for Cadenza Bridge"
+
+[features]
+default = []
+# Enables the real VST3 SDK link via the C++ shim. Set implicitly by
+# build.rs when the VST3_SDK_PATH environment variable points at a
+# vendored Steinberg VST3 SDK checkout (git submodule or local copy).
+# See crates/bridge-vst3/README.md for details.
+vst3-sdk = []
+
+[dependencies]
+bridge-protocol = { path = "../bridge-protocol" }
+bridge-plugin-host = { path = "../bridge-plugin-host" }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+
+[build-dependencies]
+cc = "1.0"

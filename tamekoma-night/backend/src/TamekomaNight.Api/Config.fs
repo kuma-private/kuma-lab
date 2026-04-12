@@ -10,7 +10,10 @@ type AppConfig =
       JwtSigningKey: string
       FrontendUrl: string
       FirestoreProjectId: string
-      AnthropicApiKey: string }
+      AnthropicApiKey: string
+      /// Comma-separated uids that should be treated as premium regardless of Firestore state.
+      /// Set via CADENZA_DEV_PREMIUM_UIDS. Used only for local development / QA.
+      DevPremiumUids: string list }
 
 module Config =
 
@@ -42,6 +45,20 @@ module Config =
         | "true" | "1" -> true
         | _ -> false
 
+    let private parseDevPremiumUids () : string list =
+        match Environment.GetEnvironmentVariable("CADENZA_DEV_PREMIUM_UIDS") with
+        | null | "" -> []
+        | raw ->
+            raw.Split([| ',' |], StringSplitOptions.RemoveEmptyEntries)
+            |> Array.map (fun s -> s.Trim())
+            |> Array.filter (fun s -> s.Length > 0)
+            |> Array.toList
+
+    /// Return true when the given uid appears in CADENZA_DEV_PREMIUM_UIDS.
+    let isDevPremiumUid (config: AppConfig) (uid: string) : bool =
+        if System.String.IsNullOrEmpty(uid) then false
+        else config.DevPremiumUids |> List.exists (fun u -> u = uid)
+
     let load () : AppConfig =
         let env key =
             match Environment.GetEnvironmentVariable(key) with
@@ -53,17 +70,21 @@ module Config =
             | null | "" -> defaultValue
             | v -> v
 
+        let devPremiumUids = parseDevPremiumUids ()
+
         if devMode then
             { GoogleClientId = envOr "GOOGLE_CLIENT_ID" "dev-client-id"
               GoogleClientSecret = envOr "GOOGLE_CLIENT_SECRET" "dev-client-secret"
               JwtSigningKey = envOr "JWT_SIGNING_KEY" "dev-signing-key-at-least-32-chars-long!"
               FrontendUrl = envOr "FRONTEND_URL" ""
               FirestoreProjectId = envOr "FIRESTORE_PROJECT_ID" ""
-              AnthropicApiKey = envOr "ANTHROPIC_API_KEY" "" }
+              AnthropicApiKey = envOr "ANTHROPIC_API_KEY" ""
+              DevPremiumUids = devPremiumUids }
         else
             { GoogleClientId = env "GOOGLE_CLIENT_ID"
               GoogleClientSecret = env "GOOGLE_CLIENT_SECRET"
               JwtSigningKey = env "JWT_SIGNING_KEY"
               FrontendUrl = envOr "FRONTEND_URL" ""
               FirestoreProjectId = envOr "FIRESTORE_PROJECT_ID" ""
-              AnthropicApiKey = envOr "ANTHROPIC_API_KEY" "" }
+              AnthropicApiKey = envOr "ANTHROPIC_API_KEY" ""
+              DevPremiumUids = devPremiumUids }

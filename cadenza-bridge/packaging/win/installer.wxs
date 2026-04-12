@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product
+        Id="*"
+        Name="Cadenza Bridge"
+        Language="1033"
+        Version="$(var.Version)"
+        Manufacturer="Cadenza.fm"
+        UpgradeCode="8c1f6f0a-3c8b-4a85-9c7e-ca8d3c8a1c01">
+        <Package
+            InstallerVersion="500"
+            Compressed="yes"
+            InstallScope="perUser"
+            Description="Cadenza Bridge — local VST/CLAP host companion for Cadenza.fm"
+            Manufacturer="Cadenza.fm" />
+
+        <MajorUpgrade
+            DowngradeErrorMessage="A newer version of Cadenza Bridge is already installed." />
+
+        <MediaTemplate EmbedCab="yes" />
+
+        <Feature Id="MainFeature" Title="Cadenza Bridge" Level="1">
+            <ComponentRef Id="BridgeExe" />
+            <ComponentRef Id="WatchdogExe" />
+            <ComponentRef Id="AutoStartRegistry" />
+            <ComponentRef Id="StartMenuShortcut" />
+        </Feature>
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="LocalAppDataFolder">
+                <Directory Id="APPROOT" Name="CadenzaBridge">
+                    <Component Id="BridgeExe" Guid="*">
+                        <File Id="cadenza_bridge.exe"
+                              Source="$(var.BridgeExe)"
+                              KeyPath="yes" />
+                    </Component>
+                    <Component Id="WatchdogExe" Guid="*">
+                        <File Id="cadenza_watchdog.exe"
+                              Source="$(var.WatchdogExe)"
+                              KeyPath="yes" />
+                    </Component>
+                    <Component Id="AutoStartRegistry" Guid="*">
+                        <RegistryValue
+                            Root="HKCU"
+                            Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                            Name="CadenzaBridge"
+                            Type="string"
+                            Value="[APPROOT]cadenza-watchdog.exe"
+                            KeyPath="yes" />
+                    </Component>
+                </Directory>
+            </Directory>
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="AppShortcutFolder" Name="Cadenza Bridge">
+                    <Component Id="StartMenuShortcut" Guid="*">
+                        <Shortcut Id="CadenzaBridgeShortcut"
+                                  Name="Cadenza Bridge"
+                                  Description="Launch Cadenza Bridge"
+                                  Target="[APPROOT]cadenza-watchdog.exe"
+                                  WorkingDirectory="APPROOT" />
+                        <RemoveFolder Id="RemoveAppShortcutFolder" On="uninstall" />
+                        <RegistryValue
+                            Root="HKCU"
+                            Key="Software\Cadenza.fm\CadenzaBridge"
+                            Name="installed"
+                            Type="integer"
+                            Value="1"
+                            KeyPath="yes" />
+                    </Component>
+                </Directory>
+            </Directory>
+        </Directory>
+
+        <UIRef Id="WixUI_Minimal" />
+    </Product>
+</Wix>

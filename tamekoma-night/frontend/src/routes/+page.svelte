@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { createSongStore } from '$lib/stores/song.svelte';
+	import { songStore } from '$lib/stores/song.svelte';
+	import { planStore } from '$lib/stores/plan.svelte';
 	import { getMe } from '$lib/api';
 	import type { UserInfo } from '$lib/api';
 
-	const songStore = createSongStore();
 	let authChecked = $state(false);
 	let user = $state<UserInfo | null>(null);
 	let loggedIn = $derived(user !== null);
@@ -12,6 +12,7 @@
 	onMount(async () => {
 		try {
 			user = await getMe();
+			planStore.initFromAuth(user.tier);
 		} catch {
 			user = null;
 		}
