@@ -198,6 +198,8 @@ dependencies = [
  "bridge-clap",
  "bridge-plugin-host",
  "bridge-protocol",
+ "bridge-updater",
+ "dirs",
  "futures-util",
  "serde",
  "serde_json",
@@ -233,11 +235,24 @@ name = "bridge-ui-tray"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bridge-core",
  "objc2 0.5.2",
  "objc2-app-kit 0.2.2",
  "tao",
  "tracing",
  "tray-icon",
+]
+
+[[package]]
+name = "bridge-updater"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bridge-protocol",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -273,6 +288,16 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tracing",
+]
+
+[[package]]
+name = "cadenza-watchdog"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

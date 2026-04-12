@@ -84,6 +84,28 @@ pub enum Command {
         bit_depth: u8,
         path: String,
     },
+    #[serde(rename = "chain.showEditor")]
+    ChainShowEditor {
+        #[serde(rename = "trackId")]
+        track_id: String,
+        #[serde(rename = "nodeId")]
+        node_id: String,
+    },
+    #[serde(rename = "chain.hideEditor")]
+    ChainHideEditor {
+        #[serde(rename = "trackId")]
+        track_id: String,
+        #[serde(rename = "nodeId")]
+        node_id: String,
+    },
+    #[serde(rename = "system.setAutostart")]
+    SystemSetAutostart { enabled: bool },
+    #[serde(rename = "system.getAutostart")]
+    SystemGetAutostart,
+    #[serde(rename = "update.check")]
+    UpdateCheck,
+    #[serde(rename = "update.apply")]
+    UpdateApply,
 }
 
 fn default_sample_rate() -> u32 {
@@ -307,6 +329,28 @@ pub enum Event {
     TransportState { state: String },
     #[serde(rename = "plugin.scan.complete")]
     PluginScanComplete { count: u32 },
+    #[serde(rename = "editor.closed")]
+    EditorClosed {
+        #[serde(rename = "trackId")]
+        track_id: String,
+        #[serde(rename = "nodeId")]
+        node_id: String,
+    },
+    #[serde(rename = "update.progress")]
+    UpdateProgress { phase: String, percent: u32 },
+}
+
+/// Snapshot of update-availability info surfaced through `handshake.ack` and
+/// `update.check`. All fields are optional because the updater may be in a
+/// "not yet checked" state on first connect.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInfoSnapshot {
+    pub current_version: String,
+    pub latest_version: String,
+    pub release_url: String,
+    pub release_notes: String,
+    pub download_url: String,
 }
 
 impl Outgoing {
@@ -342,11 +386,32 @@ impl Outgoing {
 }
 
 pub fn handshake_result() -> serde_json::Value {
-    serde_json::json!({
+    handshake_result_with_update(None)
+}
+
+pub fn handshake_result_with_update(update: Option<&UpdateInfoSnapshot>) -> serde_json::Value {
+    let mut obj = serde_json::json!({
         "bridgeVersion": BRIDGE_VERSION,
-        "capabilities": ["audio", "debug", "plugins", "transport", "project"],
-        "updateAvailable": false,
-    })
+        "capabilities": [
+            "audio",
+            "debug",
+            "plugins",
+            "transport",
+            "project",
+            "render",
+            "editor",
+            "autostart",
+            "update",
+        ],
+        "updateAvailable": update.is_some(),
+    });
+    if let Some(info) = update {
+        let map = obj.as_object_mut().expect("json object");
+        map.insert("latestVersion".into(), info.latest_version.clone().into());
+        map.insert("releaseNotes".into(), info.release_notes.clone().into());
+        map.insert("releaseUrl".into(), info.release_url.clone().into());
+    }
+    obj
 }
 
 #[cfg(test)]
@@ -486,6 +551,63 @@ mod tests {
         let msg: Message = serde_json::from_str(raw).unwrap();
         let Message::Request { command, .. } = msg;
         assert!(matches!(command, Command::ProjectHash));
+    }
+
+    #[test]
+    fn parses_chain_show_editor() {
+        let raw = r#"{"kind":"request","id":"e","command":{"type":"chain.showEditor","trackId":"t1","nodeId":"n1"}}"#;
+        let msg: Message = serde_json::from_str(raw).unwrap();
+        let Message::Request { command, .. } = msg;
+        match command {
+            Command::ChainShowEditor { track_id, node_id } => {
+                assert_eq!(track_id, "t1");
+                assert_eq!(node_id, "n1");
+            }
+            _ => panic!("expected chain.showEditor"),
+        }
+    }
+
+    #[test]
+    fn parses_system_set_autostart() {
+        let raw = r#"{"kind":"request","id":"a","command":{"type":"system.setAutostart","enabled":true}}"#;
+        let msg: Message = serde_json::from_str(raw).unwrap();
+        let Message::Request { command, .. } = msg;
+        match command {
+            Command::SystemSetAutostart { enabled } => assert!(enabled),
+            _ => panic!("expected system.setAutostart"),
+        }
+    }
+
+    #[test]
+    fn parses_update_check_and_apply() {
+        let raw = r#"{"kind":"request","id":"u","command":{"type":"update.check"}}"#;
+        let msg: Message = serde_json::from_str(raw).unwrap();
+        let Message::Request { command, .. } = msg;
+        assert!(matches!(command, Command::UpdateCheck));
+
+        let raw2 = r#"{"kind":"request","id":"u2","command":{"type":"update.apply"}}"#;
+        let msg2: Message = serde_json::from_str(raw2).unwrap();
+        let Message::Request { command, .. } = msg2;
+        assert!(matches!(command, Command::UpdateApply));
+    }
+
+    #[test]
+    fn handshake_result_with_update_includes_fields() {
+        let info = UpdateInfoSnapshot {
+            current_version: "0.1.0".into(),
+            latest_version: "0.2.0".into(),
+            release_url: "https://example.test/v0.2.0".into(),
+            release_notes: "what's new".into(),
+            download_url: "https://example.test/d.zip".into(),
+        };
+        let v = handshake_result_with_update(Some(&info));
+        assert_eq!(v["updateAvailable"], true);
+        assert_eq!(v["latestVersion"], "0.2.0");
+        assert_eq!(v["releaseUrl"], "https://example.test/v0.2.0");
+        assert_eq!(v["releaseNotes"], "what's new");
+        let none = handshake_result_with_update(None);
+        assert_eq!(none["updateAvailable"], false);
+        assert!(none.get("latestVersion").is_none());
     }
 
     #[test]

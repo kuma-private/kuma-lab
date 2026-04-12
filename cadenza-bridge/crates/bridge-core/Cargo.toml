@@ -10,6 +10,7 @@ bridge-protocol = { path = "../bridge-protocol" }
 bridge-audio = { path = "../bridge-audio" }
 bridge-plugin-host = { path = "../bridge-plugin-host" }
 bridge-clap = { path = "../bridge-clap" }
+bridge-updater = { path = "../bridge-updater" }
 tokio = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
@@ -18,3 +19,4 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+dirs = { workspace = true }

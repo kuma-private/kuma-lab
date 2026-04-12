@@ -1,4 +1,4 @@
-use bridge_protocol::{handshake_result, Command, Event, Message, Outgoing};
+use bridge_protocol::{handshake_result_with_update, Command, Event, Message, Outgoing};
 use serde_json::json;
 use tracing::{debug, error};
 
@@ -38,7 +38,10 @@ pub fn handle_text(state: &SessionState, raw: &str) -> HandleResult {
 fn dispatch(state: &SessionState, id: String, command: Command) -> HandleResult {
     debug!("dispatch id={id} command={command:?}");
     match command {
-        Command::Handshake { version: _ } => HandleResult::just(Outgoing::ok(id, handshake_result())),
+        Command::Handshake { version: _ } => {
+            let info = state.update_info();
+            HandleResult::just(Outgoing::ok(id, handshake_result_with_update(info.as_ref())))
+        }
         Command::DebugSine { on } => match state.set_sine(on) {
             Ok(()) => HandleResult::just(Outgoing::ok(id, json!({ "on": on }))),
             Err(e) => HandleResult::just(Outgoing::err(id, "audio_error", &e.to_string())),
@@ -134,6 +137,62 @@ fn dispatch(state: &SessionState, id: String, command: Command) -> HandleResult 
             Ok(()) => HandleResult::just(Outgoing::ok(id, json!({ "ok": true }))),
             Err(e) => HandleResult::just(Outgoing::err(id, "midi_error", &e.to_string())),
         },
+        Command::ChainShowEditor { track_id, node_id } => {
+            match state.chain_show_editor(&track_id, &node_id) {
+                Ok(()) => HandleResult::just(Outgoing::ok(
+                    id,
+                    json!({ "trackId": track_id, "nodeId": node_id, "visible": true }),
+                )),
+                Err(e) => HandleResult::just(Outgoing::err(id, "editor_error", &e.to_string())),
+            }
+        }
+        Command::ChainHideEditor { track_id, node_id } => {
+            match state.chain_hide_editor(&track_id, &node_id) {
+                Ok(()) => {
+                    // Placeholder editors don't emit their own close
+                    // event (no OS window to listen to). Emit one
+                    // synchronously so the frontend's optimistic open
+                    // state resets.
+                    let closed = Outgoing::event(Event::EditorClosed {
+                        track_id: track_id.clone(),
+                        node_id: node_id.clone(),
+                    });
+                    HandleResult {
+                        response: Outgoing::ok(
+                            id,
+                            json!({ "trackId": track_id, "nodeId": node_id, "visible": false }),
+                        ),
+                        events: vec![closed],
+                    }
+                }
+                Err(e) => HandleResult::just(Outgoing::err(id, "editor_error", &e.to_string())),
+            }
+        }
+        Command::SystemSetAutostart { enabled } => match state.system_set_autostart(enabled) {
+            Ok(()) => HandleResult::just(Outgoing::ok(id, json!({ "enabled": enabled }))),
+            Err(e) => HandleResult::just(Outgoing::err(id, "autostart_error", &e.to_string())),
+        },
+        Command::SystemGetAutostart => match state.system_get_autostart() {
+            Ok(enabled) => HandleResult::just(Outgoing::ok(id, json!({ "enabled": enabled }))),
+            Err(e) => HandleResult::just(Outgoing::err(id, "autostart_error", &e.to_string())),
+        },
+        Command::UpdateCheck => match state.update_check_sync() {
+            Ok(found) => {
+                let info = state.update_info();
+                HandleResult::just(Outgoing::ok(
+                    id,
+                    json!({
+                        "updateAvailable": found,
+                        "info": info,
+                    }),
+                ))
+            }
+            Err(e) => HandleResult::just(Outgoing::err(id, "update_error", &e.to_string())),
+        },
+        Command::UpdateApply => match state.update_apply() {
+            Ok(()) => HandleResult::just(Outgoing::ok(id, json!({ "ok": true }))),
+            Err(e) => HandleResult::just(Outgoing::err(id, "update_error", &e.to_string())),
+        },
     }
 }
 
@@ -170,6 +229,111 @@ mod tests {
         let resp = serde_json::to_value(&r.response).unwrap();
         assert_eq!(resp["ok"], true);
         assert_eq!(r.events.len(), 1);
+    }
+
+    #[test]
+    fn chain_show_hide_editor_toggles_count() {
+        let state = SessionState::new();
+        // Load a project with one track + one insert.
+        let load = r#"{"kind":"request","id":"p","command":{"type":"project.load","project":{
+            "version":"1","bpm":120,"timeSignature":[4,4],"sampleRate":48000,
+            "tracks":[{"id":"t1","name":"Lead","clips":[],
+                "inserts":[{"id":"n1","kind":"insert","plugin":{"format":"builtin","uid":"gain","name":"Gain"}}]
+            }]
+        }}}"#;
+        let _ = handle_text(&state, load);
+
+        // Show editor.
+        let r = handle_text(
+            &state,
+            r#"{"kind":"request","id":"e1","command":{"type":"chain.showEditor","trackId":"t1","nodeId":"n1"}}"#,
+        );
+        let v = serde_json::to_value(&r.response).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["result"]["visible"], true);
+        assert_eq!(state.editor_count(), 1);
+
+        // Hide editor — should emit editor.closed event.
+        let r = handle_text(
+            &state,
+            r#"{"kind":"request","id":"e2","command":{"type":"chain.hideEditor","trackId":"t1","nodeId":"n1"}}"#,
+        );
+        let v = serde_json::to_value(&r.response).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["result"]["visible"], false);
+        assert_eq!(state.editor_count(), 0);
+        assert_eq!(r.events.len(), 1);
+        let ev = serde_json::to_value(&r.events[0]).unwrap();
+        assert_eq!(ev["event"]["type"], "editor.closed");
+    }
+
+    #[test]
+    fn chain_show_editor_unknown_node_errors() {
+        let state = SessionState::new();
+        let load = r#"{"kind":"request","id":"p","command":{"type":"project.load","project":{
+            "version":"1","bpm":120,"timeSignature":[4,4],"sampleRate":48000,
+            "tracks":[{"id":"t1","name":"Lead","clips":[]}]
+        }}}"#;
+        let _ = handle_text(&state, load);
+        let r = handle_text(
+            &state,
+            r#"{"kind":"request","id":"e","command":{"type":"chain.showEditor","trackId":"t1","nodeId":"nope"}}"#,
+        );
+        let v = serde_json::to_value(&r.response).unwrap();
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["error"]["code"], "editor_error");
+    }
+
+    #[test]
+    fn update_check_returns_cached_state() {
+        let state = SessionState::new();
+        // No update → false.
+        let r = handle_text(
+            &state,
+            r#"{"kind":"request","id":"u1","command":{"type":"update.check"}}"#,
+        );
+        let v = serde_json::to_value(&r.response).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["result"]["updateAvailable"], false);
+
+        // Seed an update in the bridge state → handshake should surface it.
+        let info = bridge_protocol::UpdateInfoSnapshot {
+            current_version: "0.1.0".into(),
+            latest_version: "0.2.0".into(),
+            release_url: "https://example.test/r".into(),
+            release_notes: "notes".into(),
+            download_url: "https://example.test/d.zip".into(),
+        };
+        state.bridge_state().set_update_info(Some(info));
+
+        let r = handle_text(
+            &state,
+            r#"{"kind":"request","id":"u2","command":{"type":"update.check"}}"#,
+        );
+        let v = serde_json::to_value(&r.response).unwrap();
+        assert_eq!(v["result"]["updateAvailable"], true);
+
+        // Handshake should now include latestVersion/releaseUrl.
+        let h = handle_text(
+            &state,
+            r#"{"kind":"request","id":"h","command":{"type":"handshake","version":"0.1"}}"#,
+        );
+        let v = serde_json::to_value(&h.response).unwrap();
+        assert_eq!(v["result"]["updateAvailable"], true);
+        assert_eq!(v["result"]["latestVersion"], "0.2.0");
+        assert_eq!(v["result"]["releaseUrl"], "https://example.test/r");
+    }
+
+    #[test]
+    fn update_apply_without_info_errors() {
+        let state = SessionState::new();
+        let r = handle_text(
+            &state,
+            r#"{"kind":"request","id":"ua","command":{"type":"update.apply"}}"#,
+        );
+        let v = serde_json::to_value(&r.response).unwrap();
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["error"]["code"], "update_error");
     }
 
     #[test]

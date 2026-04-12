@@ -7,7 +7,9 @@ members = [
     "crates/bridge-core",
     "crates/bridge-plugin-host",
     "crates/bridge-clap",
+    "crates/bridge-updater",
     "bin/cadenza-bridge",
+    "bin/cadenza-watchdog",
 ]
 
 [workspace.package]
@@ -32,6 +34,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 hound = "3.5"
 blake3 = "1.5"
+dirs = "6"
 
 [workspace.dependencies.objc2]
 version = "0.5"

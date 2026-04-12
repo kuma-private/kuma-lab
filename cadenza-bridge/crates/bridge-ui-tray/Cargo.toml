@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+bridge-core = { path = "../bridge-core" }
 tray-icon = { workspace = true }
 tao = { workspace = true }
 anyhow = { workspace = true }

@@ -1,7 +1,9 @@
+use std::sync::Arc;
 use std::thread;
 
-use bridge_core::{init_tracing, run_ws_server, DEFAULT_BIND_ADDR};
-use bridge_ui_tray::run_tray_event_loop;
+use bridge_core::bridge_state::BridgeState;
+use bridge_core::{init_tracing, run_ws_server_with_state, DEFAULT_BIND_ADDR};
+use bridge_ui_tray::{run_tray_event_loop_with, DefaultTrayActions};
 use tracing::{error, info};
 
 fn main() -> anyhow::Result<()> {
@@ -10,6 +12,11 @@ fn main() -> anyhow::Result<()> {
 
     let bind = std::env::var("CADENZA_BRIDGE_BIND")
         .unwrap_or_else(|_| DEFAULT_BIND_ADDR.to_string());
+
+    // Shared cross-thread state visible to both the WS server and the
+    // tray's menu refresh loop.
+    let bridge_state = BridgeState::new();
+    let ws_state = bridge_state.clone();
     thread::Builder::new()
         .name("bridge-tokio".into())
         .spawn(move || {
@@ -18,7 +25,7 @@ fn main() -> anyhow::Result<()> {
                 .build()
                 .expect("build tokio runtime");
             rt.block_on(async move {
-                if let Err(e) = run_ws_server(&bind).await {
+                if let Err(e) = run_ws_server_with_state(&bind, ws_state).await {
                     error!("ws server error: {e}");
                 }
             });
@@ -34,6 +41,6 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    run_tray_event_loop()?;
+    run_tray_event_loop_with(bridge_state, Arc::new(DefaultTrayActions))?;
     Ok(())
 }

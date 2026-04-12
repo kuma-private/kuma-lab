@@ -9,18 +9,35 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tracing::{error, info, warn};
 
+use crate::bridge_state::{BridgeState, Status};
 use crate::handlers::handle_text;
 use crate::session::SessionState;
+use crate::update_poll;
 
 const TELEMETRY_TICK: Duration = Duration::from_millis(33); // ~30 Hz
 
 pub async fn run_ws_server(bind_addr: &str) -> Result<()> {
-    let listener = TcpListener::bind(bind_addr)
-        .await
-        .with_context(|| format!("bind {bind_addr}"))?;
-    info!("bridge WS listening on {bind_addr}");
+    let bridge_state = BridgeState::new();
+    run_ws_server_with_state(bind_addr, bridge_state).await
+}
 
-    let state = SessionState::new();
+pub async fn run_ws_server_with_state(
+    bind_addr: &str,
+    bridge_state: BridgeState,
+) -> Result<()> {
+    bridge_state.set_status(Status::Starting);
+    let listener = TcpListener::bind(bind_addr).await.with_context(|| {
+        bridge_state.set_status(Status::Error);
+        format!("bind {bind_addr}")
+    })?;
+    info!("bridge WS listening on {bind_addr}");
+    bridge_state.set_status(Status::Listening);
+
+    // Fire-and-forget background poll task. Held on to via the join
+    // handle so tests that shut down the listener can abort it.
+    let _poll = update_poll::spawn_poller(bridge_state.clone());
+
+    let state = SessionState::with_bridge_state(bridge_state.clone());
 
     loop {
         let (stream, peer) = listener.accept().await.context("accept")?;

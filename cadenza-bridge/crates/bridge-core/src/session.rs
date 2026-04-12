@@ -1,14 +1,19 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use bridge_audio::{AudioHandle, RtCommand, TelemetryReceiver};
 use bridge_clap::{scanner, ClapFactory, PluginCatalog};
 use bridge_plugin_host::{
-    apply_patch_to_project, hash_project, render_to_wav, render::RenderResult, Graph,
+    apply_patch_to_project, hash_project, make_placeholder_editor, render_to_wav,
+    render::RenderResult, Graph, PluginEditor,
 };
 use bridge_protocol::{
     ChainNodeSpec, JsonPatchOp, PluginDescriptor, PluginRef, Project,
 };
+
+use crate::autostart::{self, Target as AutostartTarget};
+use crate::bridge_state::BridgeState;
 
 /// Snapshot of the currently loaded project's track ids, in order. The
 /// network thread maps `track_id` strings on incoming midi.note* commands
@@ -25,6 +30,8 @@ impl TrackIndex {
     }
 }
 
+type EditorMap = HashMap<(String, String), Box<dyn PluginEditor>>;
+
 #[derive(Clone)]
 pub struct SessionState {
     audio: AudioHandle,
@@ -35,16 +42,32 @@ pub struct SessionState {
     /// then triggers a fresh `Graph` rebuild that gets pushed to the audio
     /// thread.
     project: Arc<Mutex<Option<Project>>>,
+    /// Open plugin-editor windows keyed by `(track_id, node_id)`. Phase 7
+    /// always produces `PlaceholderEditor` instances; Phase 8 will swap in
+    /// the real platform editor when the plugin actually exposes a view.
+    editors: Arc<Mutex<EditorMap>>,
+    /// Cross-subsystem shared state (tray, updater, autostart UI).
+    bridge_state: BridgeState,
 }
 
 impl SessionState {
     pub fn new() -> Self {
+        Self::with_bridge_state(BridgeState::new())
+    }
+
+    pub fn with_bridge_state(bridge_state: BridgeState) -> Self {
         Self {
             audio: AudioHandle::spawn(),
             catalog: Arc::new(Mutex::new(PluginCatalog::empty())),
             track_index: Arc::new(Mutex::new(TrackIndex::default())),
             project: Arc::new(Mutex::new(None)),
+            editors: Arc::new(Mutex::new(HashMap::new())),
+            bridge_state,
         }
+    }
+
+    pub fn bridge_state(&self) -> &BridgeState {
+        &self.bridge_state
     }
 
     pub fn audio(&self) -> &AudioHandle {
@@ -63,7 +86,9 @@ impl SessionState {
     // ── plugins ────────────────────────────────────────
     pub fn plugins_scan(&self) -> usize {
         let mut cat = self.catalog.lock().expect("catalog poisoned");
-        cat.rescan()
+        let count = cat.rescan();
+        self.bridge_state.set_plugin_count(count as u32);
+        count
     }
 
     pub fn plugins_list(&self) -> Vec<PluginDescriptor> {
@@ -280,6 +305,125 @@ impl SessionState {
         self.audio
             .send_rt(RtCommand::LiveNoteOff { track_idx, pitch })
     }
+
+    // ── chain.showEditor / chain.hideEditor ────────────
+    pub fn chain_show_editor(&self, track_id: &str, node_id: &str) -> anyhow::Result<()> {
+        // Look up the node in the current project just to confirm it
+        // exists — the placeholder doesn't actually need the plugin
+        // reference, but returning ok for a bogus node id would mask
+        // frontend bugs.
+        let plugin_name = {
+            let p = self.project.lock().expect("project poisoned");
+            let project = p
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("no project loaded"))?;
+            let track = project
+                .tracks
+                .iter()
+                .find(|t| t.id == track_id)
+                .ok_or_else(|| anyhow::anyhow!("unknown track id: {track_id}"))?;
+            let node = track
+                .inserts
+                .iter()
+                .find(|n| n.id == node_id)
+                .ok_or_else(|| anyhow::anyhow!("unknown insert id: {node_id}"))?;
+            node.plugin.name.clone()
+        };
+
+        let key = (track_id.to_string(), node_id.to_string());
+        let mut editors = self.editors.lock().expect("editors poisoned");
+        let entry = editors
+            .entry(key)
+            .or_insert_with(|| make_placeholder_editor(plugin_name));
+        entry.show()
+    }
+
+    pub fn chain_hide_editor(&self, track_id: &str, node_id: &str) -> anyhow::Result<()> {
+        let key = (track_id.to_string(), node_id.to_string());
+        let mut editors = self.editors.lock().expect("editors poisoned");
+        if let Some(ed) = editors.get_mut(&key) {
+            ed.hide()?;
+        }
+        // Drop the editor after hide — Phase 8 real windows will keep
+        // them around for snappy re-show, but the placeholder has no
+        // state worth caching.
+        editors.remove(&key);
+        Ok(())
+    }
+
+    /// Total number of open plugin editors. Used by the tray's status line
+    /// and the integration tests.
+    pub fn editor_count(&self) -> usize {
+        self.editors.lock().expect("editors poisoned").len()
+    }
+
+    // ── system.*  ──────────────────────────────────────
+    pub fn system_set_autostart(&self, enabled: bool) -> anyhow::Result<()> {
+        let exe = watchdog_target_exe()?;
+        let target = AutostartTarget::default_for(exe)?;
+        if enabled {
+            autostart::enable_autostart(&target)?;
+        } else {
+            autostart::disable_autostart(&target)?;
+        }
+        self.bridge_state.set_autostart_enabled(enabled);
+        Ok(())
+    }
+
+    pub fn system_get_autostart(&self) -> anyhow::Result<bool> {
+        let exe = watchdog_target_exe()?;
+        let target = AutostartTarget::default_for(exe)?;
+        let enabled = autostart::is_autostart_enabled(&target);
+        self.bridge_state.set_autostart_enabled(enabled);
+        Ok(enabled)
+    }
+
+    // ── update.*  ──────────────────────────────────────
+    /// Synchronous update check. Phase 7 always returns `Ok(false)` (no
+    /// update) because `bridge_updater::check_for_update` short-circuits
+    /// on empty `CADENZA_BRIDGE_REPO`. The caller may also get back the
+    /// latest polled state via `update_info()`.
+    ///
+    /// The async version lives in `update_poll` and runs in a tokio task
+    /// at startup.
+    pub fn update_check_sync(&self) -> anyhow::Result<bool> {
+        // For now, just read whatever the background poll task has
+        // cached into `bridge_state`. The protocol command asks "is
+        // there an update?" and the answer is whatever the poller knows.
+        Ok(self.bridge_state.update_info().is_some())
+    }
+
+    pub fn update_apply(&self) -> anyhow::Result<()> {
+        // Phase 7 stub: the real apply path lives in bridge-updater and
+        // is gated until Phase 9.
+        let Some(_info) = self.bridge_state.update_info() else {
+            return Err(anyhow::anyhow!("no update available to apply"));
+        };
+        Err(anyhow::anyhow!(
+            "update apply not yet implemented (Phase 9)"
+        ))
+    }
+
+    pub fn update_info(&self) -> Option<bridge_protocol::UpdateInfoSnapshot> {
+        self.bridge_state.update_info()
+    }
+}
+
+/// Resolve the watchdog executable path for the autostart registration. In
+/// dev we assume the watchdog lives next to the bridge binary in the same
+/// cargo target directory. In production the installer deposits it under
+/// `/Applications/Cadenza Bridge.app/Contents/MacOS/` or equivalent.
+fn watchdog_target_exe() -> anyhow::Result<PathBuf> {
+    let exe = std::env::current_exe()?;
+    let parent = exe
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("current_exe has no parent"))?;
+    let name = if cfg!(target_os = "windows") {
+        "cadenza-watchdog.exe"
+    } else {
+        "cadenza-watchdog"
+    };
+    Ok(parent.join(name))
 }
 
 impl Default for SessionState {

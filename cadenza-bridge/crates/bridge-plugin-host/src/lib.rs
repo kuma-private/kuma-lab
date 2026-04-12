@@ -12,6 +12,7 @@ pub mod node;
 pub mod patch;
 pub mod render;
 pub mod transport;
+pub mod window;
 
 pub use automation::{Automation, AutomationFrame, AutomationPoint, Curve};
 pub use clip::MidiClip;
@@ -25,6 +26,7 @@ pub use node::{Instrument, Node, SilentInstrument};
 pub use patch::{apply_patch, apply_patch_to_project};
 pub use render::{render_to_wav, RenderResult};
 pub use transport::Transport;
+pub use window::{make_placeholder_editor, PlaceholderEditor, PluginEditor};
 
 /// PPQ (pulses per quarter note) used by Cadenza projects. Matches the
 /// frontend default. All `tick` units in the protocol use this resolution.

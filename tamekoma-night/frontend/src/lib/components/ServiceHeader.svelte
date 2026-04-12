@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { UserInfo } from '$lib/api';
 	import HelpModal from '$lib/components/HelpModal.svelte';
+	import BridgeUpdateBadge from '$lib/components/shell/BridgeUpdateBadge.svelte';
 	import DevPlanToggle from '$lib/components/dev/DevPlanToggle.svelte';
 	import { planStore } from '$lib/stores/plan.svelte';
 
@@ -55,6 +56,7 @@
 		Cadenza.fm
 	</a>
 	<div class="service-right">
+		<BridgeUpdateBadge />
 		<DevPlanToggle />
 		<button class="btn-help" onclick={() => helpOpen = true} title="ヘルプ">?</button>
 		{#if loaded}

@@ -25,7 +25,13 @@ export type Command =
 	| { type: 'transport.stop' }
 	| { type: 'transport.seek'; tick: number }
 	| { type: 'midi.noteOn'; trackId: string; pitch: number; velocity: number }
-	| { type: 'midi.noteOff'; trackId: string; pitch: number };
+	| { type: 'midi.noteOff'; trackId: string; pitch: number }
+	| { type: 'chain.showEditor'; trackId: string; nodeId: string }
+	| { type: 'chain.hideEditor'; trackId: string; nodeId: string }
+	| { type: 'system.setAutostart'; enabled: boolean }
+	| { type: 'system.getAutostart' }
+	| { type: 'update.check' }
+	| { type: 'update.apply' };
 
 // ── Incoming (Bridge → browser) ─────────────────────────
 
@@ -54,7 +60,9 @@ export type BridgeEvent =
 	  }
 	| { type: 'transport.position'; tick: number; seconds: number }
 	| { type: 'transport.state'; state: 'playing' | 'paused' | 'stopped' }
-	| { type: 'plugin.scan.complete'; count: number };
+	| { type: 'plugin.scan.complete'; count: number }
+	| { type: 'editor.closed'; trackId: string; nodeId: string }
+	| { type: 'update.progress'; phase: string; percent: number };
 
 // ── Typed results ───────────────────────────────────────
 
@@ -62,6 +70,14 @@ export interface HandshakeResult {
 	bridgeVersion: string;
 	capabilities: string[];
 	updateAvailable: boolean;
+	latestVersion?: string;
+	releaseNotes?: string;
+	releaseUrl?: string;
+}
+
+export interface UpdateProgress {
+	phase: string;
+	percent: number;
 }
 
 // ── Domain types (Phase 2) ──────────────────────────────
