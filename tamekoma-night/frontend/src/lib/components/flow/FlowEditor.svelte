@@ -10,7 +10,8 @@
   import ChordEditDialog from './ChordEditDialog.svelte';
   import { parseProgression, serialize } from '$lib/chord-parser';
   import Visualizer from '$lib/components/visualizer/Visualizer.svelte';
-  // MixerView removed — M/S/Vol integrated into track labels
+  import MixerTab from '$lib/components/mixer/MixerTab.svelte';
+  import { planStore } from '$lib/stores/plan.svelte';
 
   let {
     song,
@@ -28,7 +29,10 @@
     totalDuration?: number;
   } = $props();
 
-  let activeTab = $state<'flow' | 'visualizer' | 'text'>('flow');
+  type TabId = 'flow' | 'visualizer' | 'text' | 'mixer';
+  let activeTab = $state<TabId>('flow');
+  // Premium users see the Mixer tab; free users don't.
+  let showMixerTab = $derived(planStore.isPremium);
 
   // --- BlockPopover state ---
   let popoverBlock = $state<DirectiveBlock | null>(null);
@@ -376,6 +380,15 @@
         class:tab--active={activeTab === 'text'}
         onclick={() => activeTab = 'text'}
       >Text</button>
+      {#if showMixerTab}
+        <button
+          class="tab"
+          role="tab"
+          aria-selected={activeTab === 'mixer'}
+          class:tab--active={activeTab === 'mixer'}
+          onclick={() => activeTab = 'mixer'}
+        >Mixer</button>
+      {/if}
     </div>
     <!-- Right side: AI Arrange button -->
     <div class="tab-bar-right">
@@ -482,6 +495,10 @@
         {totalDuration}
         bpm={song.bpm}
       />
+    </div>
+  {:else if activeTab === 'mixer' && showMixerTab}
+    <div class="mixer-container">
+      <MixerTab {song} />
     </div>
   {:else}
     <div class="text-view-container">
@@ -847,5 +864,12 @@
     display: flex;
     flex: 1;
     min-height: 200px;
+  }
+
+  /* ---- Mixer container ---- */
+  .mixer-container {
+    display: flex;
+    flex: 1;
+    min-height: 420px;
   }
 </style>

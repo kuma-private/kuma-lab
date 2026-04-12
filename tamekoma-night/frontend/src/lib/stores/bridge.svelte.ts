@@ -11,6 +11,33 @@ class BridgeStore {
 	capabilities = $state<string[]>([]);
 	updateAvailable = $state(false);
 	pluginCatalog = $state<PluginCatalogEntry[]>([]);
+	/**
+	 * Per-track peak/rms level (0..1). Phase 5: populated by no one — the Rust
+	 * side does not yet emit `level.meter` events. Meters render silent bars
+	 * until Phase 6 wires real events.
+	 */
+	meters = $state<Record<string, { peak: number; rms: number }>>({});
+
+	/**
+	 * Built-in plugins always available regardless of Bridge state. The Rust
+	 * side hard-codes the same set; keep ids in sync with bridge-plugin-host.
+	 */
+	readonly builtinCatalog: PluginCatalogEntry[] = [
+		{ format: 'builtin', id: 'gain', name: 'Gain', vendor: 'Cadenza', path: 'builtin:gain' },
+		{ format: 'builtin', id: 'svf', name: 'Filter', vendor: 'Cadenza', path: 'builtin:svf' },
+		{
+			format: 'builtin',
+			id: 'compressor',
+			name: 'Compressor',
+			vendor: 'Cadenza',
+			path: 'builtin:compressor'
+		}
+	];
+
+	/** Built-ins first, then whatever the Bridge scan returned. */
+	get fullCatalog(): PluginCatalogEntry[] {
+		return [...this.builtinCatalog, ...this.pluginCatalog];
+	}
 
 	readonly client: BridgeClient;
 	private initialized = false;
