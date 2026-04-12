@@ -1,3 +1,5 @@
+import type { Automation, Bus, ChainNode, Master, Send } from './chain';
+
 export interface Song {
 	id: string;
 	title: string;
@@ -10,6 +12,9 @@ export interface Song {
 	createdBy: string;
 	createdAt: string;
 	lastEditedAt: string;
+	// Bridge extensions (optional, additive)
+	buses?: Bus[];
+	master?: Master;
 }
 
 /** List API returns summary with counts instead of full arrays */
@@ -44,6 +49,11 @@ export interface Track {
 	volume: number;              // dB
 	mute: boolean;
 	solo: boolean;
+	// Bridge extensions (optional, additive)
+	chain?: ChainNode[];
+	sends?: Send[];
+	pan?: number;
+	automation?: Automation[];
 }
 
 export interface DirectiveBlock {

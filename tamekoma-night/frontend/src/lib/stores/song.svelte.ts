@@ -1,5 +1,6 @@
 import type { Song, SongListItem, Track, DirectiveBlock, Section } from '$lib/types/song';
 import * as api from '$lib/api';
+import { hydrateSong } from '$lib/song-serializer';
 
 export const createSongStore = () => {
 	let songs = $state<SongListItem[]>([]);
@@ -42,7 +43,7 @@ export const createSongStore = () => {
 			loading = true;
 			error = null;
 			try {
-				currentSong = await api.getSong(id);
+				currentSong = hydrateSong(await api.getSong(id));
 			} catch (e) {
 				error = e instanceof Error ? e.message : String(e);
 			} finally {
@@ -78,7 +79,7 @@ export const createSongStore = () => {
 					sections: currentSong.sections,
 					tracks: currentSong.tracks,
 				});
-				currentSong = saved;
+				currentSong = hydrateSong(saved);
 				songs = songs.map((s) =>
 					s.id === saved.id
 						? { ...s, title: saved.title, bpm: saved.bpm, key: saved.key, timeSignature: saved.timeSignature, lastEditedAt: saved.lastEditedAt, trackCount: saved.tracks.length, sectionCount: saved.sections.length }

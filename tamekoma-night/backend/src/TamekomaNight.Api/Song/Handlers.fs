@@ -110,7 +110,9 @@ module SongHandlers =
                       LastEditedBy = user.UserId
                       LastEditedAt = DateTime.UtcNow
                       Visibility = "private"
-                      SharedWith = [] }
+                      SharedWith = []
+                      Buses = None
+                      Master = None }
 
                 let! created = repo.Create(song)
                 do! respondJson ctx 201 {| id = created.Id |}

@@ -26,6 +26,65 @@ module Models =
           Directives: string
           GeneratedMidi: GeneratedMidiData option }
 
+    // ── Bridge (VST hosting) data model extensions ────────
+    // All fields are optional on Track/Song so existing songs remain valid.
+
+    /// Reference to a plugin (VST3/CLAP/builtin).
+    [<CLIMutable>]
+    type PluginRef =
+        { Format: string     // "vst3" | "clap" | "builtin"
+          Uid: string        // URI or plugin path
+          Name: string
+          Vendor: string }   // "" if unknown
+
+    /// One slot in a track's (or bus's) plugin chain.
+    [<CLIMutable>]
+    type ChainNode =
+        { Id: string
+          Kind: string       // "instrument" | "insert" | "bus"
+          Plugin: PluginRef
+          Bypass: bool
+          Params: System.Collections.Generic.Dictionary<string, float>
+          StateBlob: string option }  // base64 opaque plugin state
+
+    /// One send from a track to a bus.
+    [<CLIMutable>]
+    type Send =
+        { Id: string
+          DestBusId: string
+          Level: float
+          Pre: bool }
+
+    /// Single automation breakpoint.
+    [<CLIMutable>]
+    type AutomationPoint =
+        { Tick: int
+          Value: float
+          Curve: string option }  // "linear" | "hold" | "bezier"
+
+    /// Automation points for one param on one node.
+    [<CLIMutable>]
+    type Automation =
+        { NodeId: string
+          ParamId: string
+          Points: AutomationPoint list }
+
+    /// Group/aux bus with its own chain, sends and gain.
+    [<CLIMutable>]
+    type Bus =
+        { Id: string
+          Name: string
+          Chain: ChainNode list
+          Sends: Send list
+          Volume: float
+          Pan: float }
+
+    /// Master output chain.
+    [<CLIMutable>]
+    type Master =
+        { Chain: ChainNode list
+          Volume: float }
+
     type Track =
         { Id: string
           Name: string
@@ -33,7 +92,12 @@ module Models =
           Blocks: DirectiveBlock list
           Volume: float
           Mute: bool
-          Solo: bool }
+          Solo: bool
+          // Bridge extensions (optional, additive)
+          Chain: ChainNode list option
+          Sends: Send list option
+          Pan: float option
+          Automation: Automation list option }
 
     type Section =
         { Id: string
@@ -57,7 +121,10 @@ module Models =
           LastEditedBy: string
           LastEditedAt: DateTime
           Visibility: string
-          SharedWith: string list }
+          SharedWith: string list
+          // Bridge extensions (optional, additive)
+          Buses: Bus list option
+          Master: Master option }
 
     type CreateSongRequest = { title: string }
 

@@ -2,6 +2,25 @@
 
 import type { Song, Section, Track, DirectiveBlock } from '$lib/types/song';
 
+// ── Hydration ──────────────────────────────────────────
+// Fill Bridge-optional fields with defaults when loading from backend / JSON.
+// Additive only: existing fields are preserved untouched.
+
+export function hydrateSong(song: Song): Song {
+	return {
+		...song,
+		buses: song.buses ?? [],
+		master: song.master ?? { chain: [], volume: 1 },
+		tracks: song.tracks.map((t) => ({
+			...t,
+			chain: t.chain ?? [],
+			sends: t.sends ?? [],
+			pan: t.pan ?? 0,
+			automation: t.automation ?? []
+		}))
+	};
+}
+
 // ── Serialize ──────────────────────────────────────────
 
 export function serializeSong(song: Song): string {

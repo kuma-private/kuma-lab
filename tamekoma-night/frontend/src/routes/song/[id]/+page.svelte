@@ -6,7 +6,9 @@
 	import FlowEditor from '$lib/components/flow/FlowEditor.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { MultiTrackPlayer } from '$lib/multi-track-player';
+	import { createEngine, chooseEngineKind, type PlaybackEngine } from '$lib/playback/engine';
+	import { bridgeStore } from '$lib/stores/bridge.svelte';
+	import { planStore } from '$lib/stores/plan.svelte';
 	import { songToMidi, downloadMidi } from '$lib/midi-export';
 
 	const store = createSongStore();
@@ -23,8 +25,9 @@
 	// Track notes for Visualizer
 	let trackNotes = $state<Map<string, { name: string; instrument: string; notes: MidiNote[] }>>(new Map());
 
-	// MultiTrackPlayer instance
-	let player: MultiTrackPlayer | null = null;
+	// Playback engine instance (Tone for Free, Bridge for Premium)
+	let player: PlaybackEngine | null = null;
+	let currentEngineKind: 'tone' | 'bridge' | null = null;
 
 	// Inline title editing
 	let editingTitle = $state(false);
@@ -38,24 +41,38 @@
 		);
 	}
 
-	function loadSongIntoPlayer() {
+	async function loadSongIntoPlayer() {
 		if (!player || !store.currentSong) return;
-		player.load(store.currentSong);
+		await player.load(store.currentSong);
 		totalDuration = player.totalDuration;
 		updateTrackNotes();
 	}
 
+	function attachEngineCallbacks(engine: PlaybackEngine) {
+		engine.onStateChange = (s) => {
+			if (s === 'idle') return;
+			playerState = s === 'playing' ? 'playing' : s === 'paused' ? 'paused' : 'stopped';
+		};
+		engine.onProgress = (ct, td) => { currentTime = ct; totalDuration = td; };
+		engine.onBarChange = (_idx) => { /* reserved */ };
+		engine.onChordChange = (chord) => { currentChord = chord; };
+	}
+
+	async function buildEngine() {
+		const desired = { plan: planStore.tier, bridgeConnected: bridgeStore.state === 'connected' };
+		const kind = chooseEngineKind(desired);
+		const engine = await createEngine(desired);
+		attachEngineCallbacks(engine);
+		player = engine;
+		currentEngineKind = kind;
+	}
+
 	onMount(async () => {
-		player = new MultiTrackPlayer({
-			onStateChange: (state) => { playerState = state; },
-			onProgress: (ct, td) => { currentTime = ct; totalDuration = td; },
-			onBarChange: (_idx) => { /* reserved */ },
-			onChordChange: (chord) => { currentChord = chord; },
-		});
+		await buildEngine();
 
 		await store.loadSong(songId);
 		if (store.currentSong) {
-			loadSongIntoPlayer();
+			await loadSongIntoPlayer();
 		}
 	});
 
@@ -72,8 +89,23 @@
 		const json = JSON.stringify({ chords: song.chordProgression, tracks: song.tracks, bpm: song.bpm, ts: song.timeSignature });
 		if (json !== lastSongJson) {
 			lastSongJson = json;
-			loadSongIntoPlayer();
+			void loadSongIntoPlayer();
 		}
+	});
+
+	// Re-create engine when plan or bridge connection changes such that a different engine is needed.
+	// For Phase 1 this almost never fires since planStore.tier defaults to 'free'.
+	$effect(() => {
+		const desired = { plan: planStore.tier, bridgeConnected: bridgeStore.state === 'connected' };
+		const needed = chooseEngineKind(desired);
+		if (!player || needed === currentEngineKind) return;
+		const prev = player;
+		player = null;
+		prev.dispose();
+		void (async () => {
+			await buildEngine();
+			if (store.currentSong) await loadSongIntoPlayer();
+		})();
 	});
 
 	const handleSave = async () => {
@@ -128,7 +160,7 @@
 	}
 
 	const handlePlay = async () => { await player?.play(); };
-	const handlePause = () => { player?.pause(); };
+	const handlePause = () => { void player?.pause(); };
 
 	const handleKeydown = (e: KeyboardEvent) => {
 		// Cmd/Ctrl+S: 保存
@@ -234,8 +266,8 @@
 			loop={playerLoop}
 			onplay={handlePlay}
 			onpause={handlePause}
-			onstop={() => { player?.stop(); }}
-			onseek={(t) => { player?.seekTo(t); }}
+			onstop={() => { void player?.stop(); }}
+			onseek={(t) => { void player?.seekTo(t); }}
 			onVolumeChange={(v) => { playerVolume = v; player?.setVolume(v); }}
 			onLoopChange={(l) => { playerLoop = l; }}
 		/>
