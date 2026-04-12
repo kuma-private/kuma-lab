@@ -1,11 +1,13 @@
 pub mod autostart;
 pub mod bridge_state;
+pub mod entitlement;
 pub mod handlers;
 pub mod session;
 pub mod update_poll;
 pub mod ws_server;
 
 pub use bridge_state::{BridgeState, Status as BridgeStatus};
+pub use entitlement::{Entitlements, EntitlementCache};
 pub use session::SessionState;
 pub use ws_server::{run_ws_server, run_ws_server_with_state};
 

@@ -19,6 +19,28 @@ impl HandleResult {
             events: Vec::new(),
         }
     }
+
+    fn err(id: impl Into<String>, code: &str, message: &str) -> Self {
+        Self::just(Outgoing::err(id, code, message))
+    }
+}
+
+/// Phase 8: gate a feature on the cached entitlement shape. Used by
+/// handlers that should only run for premium users. Returns an error
+/// `HandleResult` when the feature isn't granted.
+macro_rules! require_premium {
+    ($state:expr, $id:expr, $feature:ident) => {
+        if !$state.entitlements().entitlements().$feature {
+            return HandleResult::err(
+                $id,
+                "premium_required",
+                concat!(
+                    "This feature requires Premium: ",
+                    stringify!($feature)
+                ),
+            );
+        }
+    };
 }
 
 pub fn handle_text(state: &SessionState, raw: &str) -> HandleResult {
@@ -76,10 +98,17 @@ fn dispatch(state: &SessionState, id: String, command: Command) -> HandleResult 
             track_id,
             position,
             plugin,
-        } => match state.chain_add_node(&track_id, position, &plugin) {
-            Ok(node_id) => HandleResult::just(Outgoing::ok(id, json!({ "nodeId": node_id }))),
-            Err(e) => HandleResult::just(Outgoing::err(id, "chain_error", &e.to_string())),
-        },
+        } => {
+            match plugin.format.as_str() {
+                "vst3" => require_premium!(state, id.clone(), vst_hosting),
+                "clap" => require_premium!(state, id.clone(), clap_hosting),
+                _ => {}
+            }
+            match state.chain_add_node(&track_id, position, &plugin) {
+                Ok(node_id) => HandleResult::just(Outgoing::ok(id, json!({ "nodeId": node_id }))),
+                Err(e) => HandleResult::just(Outgoing::err(id, "chain_error", &e.to_string())),
+            }
+        }
         Command::ChainRemoveNode { track_id, node_id } => {
             match state.chain_remove_node(&track_id, &node_id) {
                 Ok(()) => HandleResult::just(Outgoing::ok(id, json!({ "ok": true }))),
@@ -101,18 +130,21 @@ fn dispatch(state: &SessionState, id: String, command: Command) -> HandleResult 
             sample_rate,
             bit_depth,
             path,
-        } => match state.render_wav(from_tick, to_tick, sample_rate, bit_depth, &path) {
-            Ok(res) => HandleResult::just(Outgoing::ok(
-                id,
-                json!({
-                    "path": res.path.to_string_lossy(),
-                    "frames": res.frames,
-                    "sampleRate": res.sample_rate,
-                    "bitDepth": res.bit_depth,
-                }),
-            )),
-            Err(e) => HandleResult::just(Outgoing::err(id, "render_error", &e.to_string())),
-        },
+        } => {
+            require_premium!(state, id.clone(), wav_high_quality_export);
+            match state.render_wav(from_tick, to_tick, sample_rate, bit_depth, &path) {
+                Ok(res) => HandleResult::just(Outgoing::ok(
+                    id,
+                    json!({
+                        "path": res.path.to_string_lossy(),
+                        "frames": res.frames,
+                        "sampleRate": res.sample_rate,
+                        "bitDepth": res.bit_depth,
+                    }),
+                )),
+                Err(e) => HandleResult::just(Outgoing::err(id, "render_error", &e.to_string())),
+            }
+        }
         Command::TransportPlay { from_tick } => match state.transport_play(from_tick) {
             Ok(()) => HandleResult::just(Outgoing::ok(id, json!({ "ok": true }))),
             Err(e) => HandleResult::just(Outgoing::err(id, "transport_error", &e.to_string())),
@@ -192,6 +224,30 @@ fn dispatch(state: &SessionState, id: String, command: Command) -> HandleResult 
         Command::UpdateApply => match state.update_apply() {
             Ok(()) => HandleResult::just(Outgoing::ok(id, json!({ "ok": true }))),
             Err(e) => HandleResult::just(Outgoing::err(id, "update_error", &e.to_string())),
+        },
+        Command::SessionVerify { ticket } => match state.session_verify(&ticket) {
+            Ok(session) => HandleResult::just(Outgoing::ok(
+                id,
+                json!({
+                    "valid": true,
+                    "userId": session.user_id,
+                    "tier": session.tier,
+                    "entitlements": {
+                        "bridgeAccess": session.entitlements.bridge_access,
+                        "vstHosting": session.entitlements.vst_hosting,
+                        "clapHosting": session.entitlements.clap_hosting,
+                        "wavHighQualityExport": session.entitlements.wav_high_quality_export,
+                        "automation": session.entitlements.automation,
+                        "mixerNlEdit": session.entitlements.mixer_nl_edit,
+                        "builtinSynths": session.entitlements.builtin_synths,
+                    }
+                }),
+            )),
+            Err(e) => HandleResult::just(Outgoing::err(
+                id,
+                "verify_failed",
+                &e.to_string(),
+            )),
         },
     }
 }

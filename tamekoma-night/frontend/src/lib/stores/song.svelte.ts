@@ -226,6 +226,12 @@ class SongStore {
 		if (ops.length === 0) return;
 		if (bridgeStore.state === 'connected') {
 			bridgeStore.client.send({ type: 'project.patch', ops }).catch((e) => {
+				// Phase 8: premium_required is surfaced to the UI via the
+				// global bridge store so a single modal handler can render.
+				if (e && typeof e === 'object' && 'code' in e && (e as { code?: string }).code === 'premium_required') {
+					bridgeStore.notifyPremiumRequired('project.patch');
+					return;
+				}
 				console.warn('[song.mutate] bridge patch rejected:', e);
 			});
 		}
@@ -687,6 +693,15 @@ class SongStore {
 		this.currentSong = draft;
 		if (bridgeStore.state === 'connected') {
 			bridgeStore.client.send({ type: 'project.patch', ops }).catch((e) => {
+				if (
+					e &&
+					typeof e === 'object' &&
+					'code' in e &&
+					(e as { code?: string }).code === 'premium_required'
+				) {
+					bridgeStore.notifyPremiumRequired('project.patch');
+					return;
+				}
 				console.warn('[song.applyPatch] bridge patch rejected:', e);
 			});
 		}

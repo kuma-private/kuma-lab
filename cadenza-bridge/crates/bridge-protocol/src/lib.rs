@@ -106,6 +106,12 @@ pub enum Command {
     UpdateCheck,
     #[serde(rename = "update.apply")]
     UpdateApply,
+    /// Phase 8: premium ticket verification. The browser sends the
+    /// short-lived JWT it obtained from `POST /api/bridge/ticket`;
+    /// the Bridge calls `/api/bridge/verify-ticket` and caches the
+    /// resulting entitlements for subsequent commands.
+    #[serde(rename = "session.verify")]
+    SessionVerify { ticket: String },
 }
 
 fn default_sample_rate() -> u32 {
@@ -575,6 +581,17 @@ mod tests {
         match command {
             Command::SystemSetAutostart { enabled } => assert!(enabled),
             _ => panic!("expected system.setAutostart"),
+        }
+    }
+
+    #[test]
+    fn parses_session_verify() {
+        let raw = r#"{"kind":"request","id":"sv","command":{"type":"session.verify","ticket":"abc.def.ghi"}}"#;
+        let msg: Message = serde_json::from_str(raw).unwrap();
+        let Message::Request { command, .. } = msg;
+        match command {
+            Command::SessionVerify { ticket } => assert_eq!(ticket, "abc.def.ghi"),
+            _ => panic!("expected session.verify"),
         }
     }
 

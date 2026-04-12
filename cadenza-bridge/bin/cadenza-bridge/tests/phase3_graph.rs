@@ -292,7 +292,11 @@ fn dispatcher_chain_add_node_updates_graph() {
 }
 
 #[test]
-fn dispatcher_chain_add_node_rejects_clap_format() {
+fn dispatcher_chain_add_node_rejects_unknown_format() {
+    // Phase 8: clap/vst3/builtin are all valid at the session layer.
+    // Entitlement gating for clap/vst3 happens in `handlers::dispatch`
+    // via `require_premium!`, not here. What the session layer still
+    // rejects is any other (typo'd) format string.
     let state = SessionState::new();
     let project = Project {
         version: "1".into(),
@@ -317,14 +321,14 @@ fn dispatcher_chain_add_node_rejects_clap_format() {
     };
     state.project_load(&project).unwrap();
     let plugin = PluginRef {
-        format: "clap".into(),
-        uid: "/some/plugin.clap".into(),
+        format: "lv2".into(),
+        uid: "/some/plugin.lv2".into(),
         name: "X".into(),
         vendor: None,
     };
     let res = state.chain_add_node("t1", 0, &plugin);
     let err = res.unwrap_err().to_string();
-    assert!(err.contains("not yet implemented"), "got: {err}");
+    assert!(err.contains("unsupported plugin format"), "got: {err}");
 }
 
 // ── 8. project.patch via dispatcher ──────────────────────────────────────

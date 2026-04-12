@@ -6,14 +6,16 @@ use bridge_audio::{AudioHandle, RtCommand, TelemetryReceiver};
 use bridge_clap::{scanner, ClapFactory, PluginCatalog};
 use bridge_plugin_host::{
     apply_patch_to_project, hash_project, make_placeholder_editor, render_to_wav,
-    render::RenderResult, Graph, PluginEditor,
+    render::RenderResult, Graph, Instrument, SilentInstrument, PluginEditor,
 };
 use bridge_protocol::{
     ChainNodeSpec, JsonPatchOp, PluginDescriptor, PluginRef, Project,
 };
+use bridge_vst3::{Vst3Catalog, Vst3Factory};
 
 use crate::autostart::{self, Target as AutostartTarget};
 use crate::bridge_state::BridgeState;
+use crate::entitlement::{EntitlementCache, VerifiedSession};
 
 /// Snapshot of the currently loaded project's track ids, in order. The
 /// network thread maps `track_id` strings on incoming midi.note* commands
@@ -36,6 +38,7 @@ type EditorMap = HashMap<(String, String), Box<dyn PluginEditor>>;
 pub struct SessionState {
     audio: AudioHandle,
     catalog: Arc<Mutex<PluginCatalog>>,
+    vst3_catalog: Arc<Mutex<Vst3Catalog>>,
     track_index: Arc<Mutex<TrackIndex>>,
     /// Authoritative copy of the loaded project — the only source of truth on
     /// the network thread. Every patch / chain.* command mutates this and
@@ -48,6 +51,8 @@ pub struct SessionState {
     editors: Arc<Mutex<EditorMap>>,
     /// Cross-subsystem shared state (tray, updater, autostart UI).
     bridge_state: BridgeState,
+    /// Cached premium entitlements. Populated by `session.verify`.
+    entitlements: EntitlementCache,
 }
 
 impl SessionState {
@@ -59,11 +64,19 @@ impl SessionState {
         Self {
             audio: AudioHandle::spawn(),
             catalog: Arc::new(Mutex::new(PluginCatalog::empty())),
+            vst3_catalog: Arc::new(Mutex::new(Vst3Catalog::empty())),
             track_index: Arc::new(Mutex::new(TrackIndex::default())),
             project: Arc::new(Mutex::new(None)),
             editors: Arc::new(Mutex::new(HashMap::new())),
             bridge_state,
+            entitlements: EntitlementCache::new(),
         }
+    }
+
+    /// Read-only access to the entitlement cache. Handlers call
+    /// `state.entitlements().is_premium()` to gate commands.
+    pub fn entitlements(&self) -> &EntitlementCache {
+        &self.entitlements
     }
 
     pub fn bridge_state(&self) -> &BridgeState {
@@ -85,15 +98,38 @@ impl SessionState {
 
     // ── plugins ────────────────────────────────────────
     pub fn plugins_scan(&self) -> usize {
-        let mut cat = self.catalog.lock().expect("catalog poisoned");
-        let count = cat.rescan();
-        self.bridge_state.set_plugin_count(count as u32);
-        count
+        let clap_count = {
+            let mut cat = self.catalog.lock().expect("catalog poisoned");
+            cat.rescan()
+        };
+        let vst3_count = {
+            let mut cat = self.vst3_catalog.lock().expect("vst3 catalog poisoned");
+            cat.rescan()
+        };
+        let total = clap_count + vst3_count;
+        self.bridge_state.set_plugin_count(total as u32);
+        total
     }
 
     pub fn plugins_list(&self) -> Vec<PluginDescriptor> {
-        let cat = self.catalog.lock().expect("catalog poisoned");
-        cat.plugins.clone()
+        let mut out = {
+            let cat = self.catalog.lock().expect("catalog poisoned");
+            cat.plugins.clone()
+        };
+        let vst3 = {
+            let cat = self.vst3_catalog.lock().expect("vst3 catalog poisoned");
+            cat.plugins.clone()
+        };
+        out.extend(vst3);
+        out
+    }
+
+    // ── session.verify (Phase 8) ───────────────────────
+    /// Verify a premium ticket by POSTing it to the backend and
+    /// caching the resulting entitlements. Blocking HTTP — callers
+    /// running inside a tokio context should wrap in `spawn_blocking`.
+    pub fn session_verify(&self, ticket: &str) -> anyhow::Result<VerifiedSession> {
+        self.entitlements.refresh_blocking(ticket)
     }
 
     // ── project.load ───────────────────────────────────
@@ -113,11 +149,40 @@ impl SessionState {
     }
 
     fn build_graph(&self, project: &Project) -> anyhow::Result<Graph> {
-        let factory = {
+        let clap_factory = {
             let cat = self.catalog.lock().expect("catalog poisoned");
             ClapFactory::new(cat.clone())
         };
-        Graph::from_project(project, |id| factory.make_instrument(id))
+        let vst3_factory = {
+            let cat = self.vst3_catalog.lock().expect("vst3 catalog poisoned");
+            // max_block_size 512 matches Phase 2 default; audio thread
+            // will `set_block_size` on rebuild if the device uses a
+            // different value.
+            Vst3Factory::new(cat.clone(), project.sample_rate, 512)
+        };
+        // Route by looking up the instrument ref's format field. The
+        // `Graph::from_project` closure only sees the plugin id today,
+        // so we scan the project's tracks for the format and choose
+        // the right factory. This keeps Graph::from_project agnostic
+        // of plugin backends.
+        Graph::from_project(project, |id| {
+            // Find which format owns this id. A future refactor could
+            // pass the format through directly; for Phase 8 we do a
+            // cheap linear scan per id.
+            let format = project
+                .tracks
+                .iter()
+                .find_map(|t| match &t.instrument {
+                    Some(ir) if ir.plugin_id == id => Some(ir.plugin_format.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| "clap".into());
+            match format.as_str() {
+                "vst3" => vst3_factory.make_instrument(id),
+                "clap" => clap_factory.make_instrument(id),
+                _ => Some(Box::new(SilentInstrument) as Box<dyn Instrument>),
+            }
+        })
     }
 
     /// Mutate `self.project` under the lock with the provided closure, then
@@ -165,11 +230,15 @@ impl SessionState {
         position: usize,
         plugin: &PluginRef,
     ) -> anyhow::Result<String> {
-        if plugin.format != "builtin" {
-            return Err(anyhow::anyhow!(
-                "{} hosting not yet implemented",
-                plugin.format
-            ));
+        // Phase 8 accepts "builtin", "clap", and "vst3". Real rendering
+        // for clap/vst3 depends on whether the respective SDK is
+        // vendored at build time — the graph rebuild path logs a
+        // warning and falls back to Silent instruments when not.
+        match plugin.format.as_str() {
+            "builtin" | "clap" | "vst3" => {}
+            other => {
+                return Err(anyhow::anyhow!("unsupported plugin format: {other}"));
+            }
         }
         let node_id = format!("node-{}", uuid_like());
         let track_id_owned = track_id.to_string();
@@ -435,7 +504,9 @@ impl Default for SessionState {
 /// Re-export the scanner free function so other crates can hit it without
 /// pulling bridge-clap in directly.
 pub fn scan_default_paths() -> Vec<PluginDescriptor> {
-    scanner::scan_default_paths()
+    let mut out = scanner::scan_default_paths();
+    out.extend(bridge_vst3::scan_default_paths());
+    out
 }
 
 /// Cheap monotonic id generator. Not a real UUID; used for chain node ids

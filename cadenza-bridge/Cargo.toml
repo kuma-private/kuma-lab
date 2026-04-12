@@ -7,6 +7,7 @@ members = [
     "crates/bridge-core",
     "crates/bridge-plugin-host",
     "crates/bridge-clap",
+    "crates/bridge-vst3",
     "crates/bridge-updater",
     "bin/cadenza-bridge",
     "bin/cadenza-watchdog",

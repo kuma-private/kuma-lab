@@ -10,6 +10,7 @@ bridge-protocol = { path = "../bridge-protocol" }
 bridge-audio = { path = "../bridge-audio" }
 bridge-plugin-host = { path = "../bridge-plugin-host" }
 bridge-clap = { path = "../bridge-clap" }
+bridge-vst3 = { path = "../bridge-vst3" }
 bridge-updater = { path = "../bridge-updater" }
 tokio = { workspace = true }
 tokio-tungstenite = { workspace = true }
@@ -20,3 +21,8 @@ anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 dirs = { workspace = true }
+ureq = { version = "2.10", default-features = false, features = ["json", "tls"] }
+jsonwebtoken = { version = "9", default-features = false }
+
+[dev-dependencies]
+tokio = { workspace = true }

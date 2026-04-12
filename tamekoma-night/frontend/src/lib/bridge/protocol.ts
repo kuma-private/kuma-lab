@@ -26,12 +26,19 @@ export type Command =
 	| { type: 'transport.seek'; tick: number }
 	| { type: 'midi.noteOn'; trackId: string; pitch: number; velocity: number }
 	| { type: 'midi.noteOff'; trackId: string; pitch: number }
+	| {
+			type: 'chain.addNode';
+			trackId: string;
+			position: number;
+			plugin: { format: 'builtin' | 'clap' | 'vst3'; uid: string; name: string; vendor?: string };
+	  }
 	| { type: 'chain.showEditor'; trackId: string; nodeId: string }
 	| { type: 'chain.hideEditor'; trackId: string; nodeId: string }
 	| { type: 'system.setAutostart'; enabled: boolean }
 	| { type: 'system.getAutostart' }
 	| { type: 'update.check' }
-	| { type: 'update.apply' };
+	| { type: 'update.apply' }
+	| { type: 'session.verify'; ticket: string };
 
 // ── Incoming (Bridge → browser) ─────────────────────────
 
