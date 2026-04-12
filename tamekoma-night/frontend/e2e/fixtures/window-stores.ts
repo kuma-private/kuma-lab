@@ -16,6 +16,8 @@ export interface BridgeStoreSnapshot {
 	builtinCatalog: Array<{ id: string; name: string; format: string }>;
 }
 
+/** Returns a sentinel snapshot with state='idle' when __cadenza isn't yet
+ * exposed (e.g. before hydration). Tests should poll until state flips. */
 export async function readBridgeStore(page: Page): Promise<BridgeStoreSnapshot> {
 	return page.evaluate<BridgeStoreSnapshot>(() => {
 		const w = window as unknown as {
@@ -33,7 +35,15 @@ export async function readBridgeStore(page: Page): Promise<BridgeStoreSnapshot> 
 		};
 		const b = w.__cadenza?.bridgeStore;
 		if (!b) {
-			throw new Error('__cadenza.bridgeStore not exposed — is cadenzaE2E=1 set?');
+			return {
+				state: 'idle',
+				bridgeVersion: null,
+				capabilities: [],
+				updateAvailable: false,
+				handshakeResult: null,
+				pluginCatalog: [],
+				builtinCatalog: []
+			};
 		}
 		// Strip reactive state proxies via JSON round-trip for serialization.
 		return JSON.parse(
@@ -48,6 +58,14 @@ export async function readBridgeStore(page: Page): Promise<BridgeStoreSnapshot> 
 			})
 		);
 	});
+}
+
+/** Wait for the layout to hydrate and expose __cadenza. */
+export async function waitForCadenzaReady(page: Page, timeoutMs = 10_000): Promise<void> {
+	await page.waitForFunction(
+		() => typeof (window as { __cadenza?: unknown }).__cadenza !== 'undefined',
+		{ timeout: timeoutMs }
+	);
 }
 
 export interface CurrentSongSnapshot {

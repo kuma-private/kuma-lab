@@ -30,13 +30,7 @@
 			Mixer 機能を使うには <strong>Cadenza Bridge</strong> をインストール・起動してください。
 		</p>
 		<div class="actions">
-			<a
-				class="btn primary"
-				href="https://github.com/kuma-private/cadenza-bridge/releases"
-				target="_blank"
-				rel="noopener noreferrer"
-				title="Phase 9 で配布開始"
-			>
+			<a class="btn primary" href="/bridge" title="Cadenza Bridge のダウンロードページへ">
 				Bridge をインストール
 			</a>
 			<button class="btn ghost" type="button" onclick={handleRetry}>再接続を試す</button>

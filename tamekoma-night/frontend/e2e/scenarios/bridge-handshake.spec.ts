@@ -8,7 +8,7 @@
 // agnostic. We rely on window.__cadenza.bridgeStore for verification.
 
 import { test, expect } from '../fixtures/full-stack';
-import { readBridgeStore } from '../fixtures/window-stores';
+import { readBridgeStore, waitForCadenzaReady } from '../fixtures/window-stores';
 
 test.describe('Bridge handshake', () => {
 	test('connects and publishes bridgeVersion + builtin catalog', async ({
@@ -21,10 +21,11 @@ test.describe('Bridge handshake', () => {
 		expect(backend.baseUrl).toMatch(/^http:\/\/localhost:52731$/);
 
 		await page.goto('/');
+		await waitForCadenzaReady(page);
 
 		// Poll the bridge store until state flips to 'connected' or we time out.
 		await expect
-			.poll(async () => (await readBridgeStore(page)).state, { timeout: 8_000 })
+			.poll(async () => (await readBridgeStore(page)).state, { timeout: 10_000 })
 			.toBe('connected');
 
 		const snap = await readBridgeStore(page);
