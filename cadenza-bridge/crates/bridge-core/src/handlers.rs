@@ -43,6 +43,33 @@ macro_rules! require_premium {
     };
 }
 
+/// Inspect a JSON Patch op `value` and return the embedded plugin format
+/// when the value contains a chain-node payload (`{ ..., plugin: { format } }`)
+/// or a bare plugin ref (`{ format, uid, ... }`). Used by the project.patch
+/// handler to enforce premium gating on patches that smuggle in vst3/clap
+/// plugin nodes via /tracks/{id}/chain/-.
+fn extract_plugin_format(value: &serde_json::Value) -> Option<String> {
+    // Direct plugin ref shape: { "format": "vst3", ... }
+    if let Some(f) = value.get("format").and_then(|v| v.as_str()) {
+        return Some(f.to_string());
+    }
+    // Chain node shape: { "plugin": { "format": "vst3", ... }, ... }
+    if let Some(plugin) = value.get("plugin") {
+        if let Some(f) = plugin.get("format").and_then(|v| v.as_str()) {
+            return Some(f.to_string());
+        }
+    }
+    // Track state shape (project.load via patch): { "instrument": { ... } }
+    if let Some(inst) = value.get("instrument") {
+        if let Some(plugin) = inst.get("plugin") {
+            if let Some(f) = plugin.get("format").and_then(|v| v.as_str()) {
+                return Some(f.to_string());
+            }
+        }
+    }
+    None
+}
+
 pub fn handle_text(state: &SessionState, raw: &str) -> HandleResult {
     let msg: Message = match serde_json::from_str(raw) {
         Ok(m) => m,
@@ -86,10 +113,28 @@ fn dispatch(state: &SessionState, id: String, command: Command) -> HandleResult 
             )),
             Err(e) => HandleResult::just(Outgoing::err(id, "project_error", &e.to_string())),
         },
-        Command::ProjectPatch { ops } => match state.project_patch(&ops) {
-            Ok(applied) => HandleResult::just(Outgoing::ok(id, json!({ "applied": applied }))),
-            Err(e) => HandleResult::just(Outgoing::err(id, "patch_error", &e.to_string())),
-        },
+        Command::ProjectPatch { ops } => {
+            // Scan ops for premium-gated plugin formats before applying.
+            // Without this gate, an `add /tracks/{id}/chain/-` op with a
+            // vst3/clap plugin payload would bypass the chain.addNode gate.
+            for op in &ops {
+                if op.op == "add" || op.op == "replace" {
+                    if let Some(value) = &op.value {
+                        if let Some(format) = extract_plugin_format(value) {
+                            match format.as_str() {
+                                "vst3" => require_premium!(state, id.clone(), vst_hosting),
+                                "clap" => require_premium!(state, id.clone(), clap_hosting),
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+            match state.project_patch(&ops) {
+                Ok(applied) => HandleResult::just(Outgoing::ok(id, json!({ "applied": applied }))),
+                Err(e) => HandleResult::just(Outgoing::err(id, "patch_error", &e.to_string())),
+            }
+        }
         Command::ProjectHash => match state.project_hash() {
             Ok(h) => HandleResult::just(Outgoing::ok(id, json!({ "hash": h }))),
             Err(e) => HandleResult::just(Outgoing::err(id, "project_error", &e.to_string())),
