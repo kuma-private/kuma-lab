@@ -1,0 +1,23 @@
+[package]
+name = "cadenza-bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "cadenza-bridge"
+path = "src/main.rs"
+
+[dependencies]
+bridge-core = { path = "../../crates/bridge-core" }
+bridge-ui-tray = { path = "../../crates/bridge-ui-tray" }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+serde_json = { workspace = true }

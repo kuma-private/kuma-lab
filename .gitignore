@@ -28,6 +28,8 @@ node_modules/
 # .NET
 **/bin/
 **/obj/
+!cadenza-bridge/bin/
+!cadenza-bridge/bin/**
 
 # Terraform
 .terraform/
