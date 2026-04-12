@@ -2,6 +2,8 @@
 //! non-zero status; verify the watchdog respawns it the configured number
 //! of times, then give up cleanly when `max_restarts` is hit.
 
+#![cfg(unix)]
+
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -21,7 +23,6 @@ fn fake_child_script() -> PathBuf {
 }
 
 #[test]
-#[cfg(unix)]
 fn respawns_failed_child_up_to_max_restarts() {
     let tmp_log = std::env::temp_dir().join(format!(
         "cadenza-watchdog-test-{}-{}.log",
