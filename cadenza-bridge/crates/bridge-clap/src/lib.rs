@@ -1,12 +1,11 @@
 //! CLAP plugin support for the Cadenza Bridge.
 //!
-//! Phase 2 deviation: the upstream `clack-host` crate referenced by the
-//! design doc is not currently published on crates.io. Rather than vendor a
-//! git dependency at this stage we ship the *plumbing* — directory scanning,
-//! plugin descriptor catalog, and an `Instrument` factory hook — backed by
-//! a stub instrument that emits silence. Phase 2.5 will swap the stub for a
-//! real clack-host (or alternative clap-sys-based) backend without touching
-//! the rest of the bridge code.
+//! Phase 8.5: this crate hosts real CLAP plugins via `clap-sys` FFI. The
+//! audio graph sees CLAP plugins through the shared `Instrument` trait —
+//! `ClapInstrument::load` opens a `.clap` bundle, activates the plugin, and
+//! routes MIDI + audio through `clap_plugin.process`. If a plugin fails to
+//! load the factory logs a warning and falls back to `SilentInstrument` so
+//! the rest of the bridge keeps playing.
 
 pub mod factory;
 pub mod plugin;

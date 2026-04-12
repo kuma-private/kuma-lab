@@ -152,6 +152,7 @@ impl SessionState {
         let clap_factory = {
             let cat = self.catalog.lock().expect("catalog poisoned");
             ClapFactory::new(cat.clone())
+                .with_audio_settings(project.sample_rate, 512)
         };
         let vst3_factory = {
             let cat = self.vst3_catalog.lock().expect("vst3 catalog poisoned");

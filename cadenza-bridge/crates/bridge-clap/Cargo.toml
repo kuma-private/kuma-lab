@@ -10,3 +10,5 @@ bridge-protocol = { path = "../bridge-protocol" }
 bridge-plugin-host = { path = "../bridge-plugin-host" }
 anyhow = { workspace = true }
 tracing = { workspace = true }
+clap-sys = "0.5"
+libloading = "0.9"
