@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { UserInfo } from '$lib/api';
 	import HelpModal from '$lib/components/HelpModal.svelte';
+	import DevPlanToggle from '$lib/components/dev/DevPlanToggle.svelte';
 
 	let user = $state<UserInfo | null>(null);
 	let loaded = $state(false);
@@ -52,6 +53,7 @@
 		Cadenza.fm
 	</a>
 	<div class="service-right">
+		<DevPlanToggle />
 		<button class="btn-help" onclick={() => helpOpen = true} title="ヘルプ">?</button>
 		{#if loaded}
 			{#if user}

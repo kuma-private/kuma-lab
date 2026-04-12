@@ -30,6 +30,8 @@ anyhow = "1"
 thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+hound = "3.5"
+blake3 = "1.5"
 
 [workspace.dependencies.objc2]
 version = "0.5"

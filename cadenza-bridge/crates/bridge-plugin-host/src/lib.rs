@@ -2,16 +2,28 @@
 //! Cadenza Bridge. The actual CLAP host backend lives in `bridge-clap`,
 //! and is plugged into a [`Node::Instrument`] via the [`Instrument`] trait.
 
+pub mod automation;
 pub mod clip;
+pub mod effects;
 pub mod graph;
+pub mod hash;
 pub mod midi;
 pub mod node;
+pub mod patch;
+pub mod render;
 pub mod transport;
 
+pub use automation::{Automation, AutomationFrame, AutomationPoint, Curve};
 pub use clip::MidiClip;
-pub use graph::{Graph, Track};
+pub use effects::{
+    make_builtin, Compressor, GainEffect, InsertEffect, StateVariableFilter, SvfMode,
+};
+pub use graph::{Bus, EffectNode, Graph, Master, Send, Track};
+pub use hash::hash_project;
 pub use midi::{MidiEvent, MidiEventKind};
 pub use node::{Instrument, Node, SilentInstrument};
+pub use patch::{apply_patch, apply_patch_to_project};
+pub use render::{render_to_wav, RenderResult};
 pub use transport::Transport;
 
 /// PPQ (pulses per quarter note) used by Cadenza projects. Matches the

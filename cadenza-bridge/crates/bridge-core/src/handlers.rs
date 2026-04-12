@@ -1,6 +1,6 @@
 use bridge_protocol::{handshake_result, Command, Event, Message, Outgoing};
 use serde_json::json;
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 
 use crate::session::SessionState;
 
@@ -61,13 +61,55 @@ fn dispatch(state: &SessionState, id: String, command: Command) -> HandleResult 
             )),
             Err(e) => HandleResult::just(Outgoing::err(id, "project_error", &e.to_string())),
         },
-        Command::ProjectPatch { ops } => {
-            warn!("project.patch ignored ({} ops) — Phase 3", ops.len());
-            HandleResult::just(Outgoing::ok(
-                id,
-                json!({ "applied": 0, "note": "patch ignored in Phase 2" }),
-            ))
+        Command::ProjectPatch { ops } => match state.project_patch(&ops) {
+            Ok(applied) => HandleResult::just(Outgoing::ok(id, json!({ "applied": applied }))),
+            Err(e) => HandleResult::just(Outgoing::err(id, "patch_error", &e.to_string())),
+        },
+        Command::ProjectHash => match state.project_hash() {
+            Ok(h) => HandleResult::just(Outgoing::ok(id, json!({ "hash": h }))),
+            Err(e) => HandleResult::just(Outgoing::err(id, "project_error", &e.to_string())),
+        },
+        Command::ChainAddNode {
+            track_id,
+            position,
+            plugin,
+        } => match state.chain_add_node(&track_id, position, &plugin) {
+            Ok(node_id) => HandleResult::just(Outgoing::ok(id, json!({ "nodeId": node_id }))),
+            Err(e) => HandleResult::just(Outgoing::err(id, "chain_error", &e.to_string())),
+        },
+        Command::ChainRemoveNode { track_id, node_id } => {
+            match state.chain_remove_node(&track_id, &node_id) {
+                Ok(()) => HandleResult::just(Outgoing::ok(id, json!({ "ok": true }))),
+                Err(e) => HandleResult::just(Outgoing::err(id, "chain_error", &e.to_string())),
+            }
         }
+        Command::ChainSetParam {
+            track_id,
+            node_id,
+            param_id,
+            value,
+        } => match state.chain_set_param(&track_id, &node_id, &param_id, value) {
+            Ok(()) => HandleResult::just(Outgoing::ok(id, json!({ "ok": true }))),
+            Err(e) => HandleResult::just(Outgoing::err(id, "chain_error", &e.to_string())),
+        },
+        Command::RenderWav {
+            from_tick,
+            to_tick,
+            sample_rate,
+            bit_depth,
+            path,
+        } => match state.render_wav(from_tick, to_tick, sample_rate, bit_depth, &path) {
+            Ok(res) => HandleResult::just(Outgoing::ok(
+                id,
+                json!({
+                    "path": res.path.to_string_lossy(),
+                    "frames": res.frames,
+                    "sampleRate": res.sample_rate,
+                    "bitDepth": res.bit_depth,
+                }),
+            )),
+            Err(e) => HandleResult::just(Outgoing::err(id, "render_error", &e.to_string())),
+        },
         Command::TransportPlay { from_tick } => match state.transport_play(from_tick) {
             Ok(()) => HandleResult::just(Outgoing::ok(id, json!({ "ok": true }))),
             Err(e) => HandleResult::just(Outgoing::err(id, "transport_error", &e.to_string())),

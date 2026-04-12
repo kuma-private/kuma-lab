@@ -15,6 +15,11 @@ export const PPQ = 480;
 export const BRIDGE_PROJECT_VERSION = '0.1';
 export const DEFAULT_SAMPLE_RATE = 48_000;
 
+/** RFC 6901 escape: ~ → ~0, / → ~1. Used as a single JSON Pointer segment. */
+export function escapeJsonPointer(s: string): string {
+	return s.replace(/~/g, '~0').replace(/\//g, '~1');
+}
+
 function parseTimeSignature(ts: string): [number, number] {
 	const parts = ts.split('/');
 	if (parts.length === 2) {

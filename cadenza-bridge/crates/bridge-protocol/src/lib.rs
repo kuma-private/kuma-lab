@@ -24,6 +24,8 @@ pub enum Command {
     ProjectLoad { project: Project },
     #[serde(rename = "project.patch")]
     ProjectPatch { ops: Vec<JsonPatchOp> },
+    #[serde(rename = "project.hash")]
+    ProjectHash,
     #[serde(rename = "transport.play")]
     TransportPlay {
         #[serde(default, rename = "fromTick")]
@@ -46,6 +48,50 @@ pub enum Command {
         track_id: String,
         pitch: u8,
     },
+    #[serde(rename = "chain.addNode")]
+    ChainAddNode {
+        #[serde(rename = "trackId")]
+        track_id: String,
+        position: usize,
+        plugin: PluginRef,
+    },
+    #[serde(rename = "chain.removeNode")]
+    ChainRemoveNode {
+        #[serde(rename = "trackId")]
+        track_id: String,
+        #[serde(rename = "nodeId")]
+        node_id: String,
+    },
+    #[serde(rename = "chain.setParam")]
+    ChainSetParam {
+        #[serde(rename = "trackId")]
+        track_id: String,
+        #[serde(rename = "nodeId")]
+        node_id: String,
+        #[serde(rename = "paramId")]
+        param_id: String,
+        value: f64,
+    },
+    #[serde(rename = "render.wav")]
+    RenderWav {
+        #[serde(rename = "fromTick")]
+        from_tick: i64,
+        #[serde(rename = "toTick")]
+        to_tick: i64,
+        #[serde(default = "default_sample_rate", rename = "sampleRate")]
+        sample_rate: u32,
+        #[serde(default = "default_bit_depth", rename = "bitDepth")]
+        bit_depth: u8,
+        path: String,
+    },
+}
+
+fn default_sample_rate() -> u32 {
+    48_000
+}
+
+fn default_bit_depth() -> u8 {
+    24
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -54,6 +100,16 @@ pub struct JsonPatchOp {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<serde_json::Value>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginRef {
+    pub format: String,
+    pub uid: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vendor: Option<String>,
 }
 
 // ── Project model ─────────────────────────────────────────
@@ -66,6 +122,10 @@ pub struct Project {
     pub time_signature: [u8; 2],
     pub sample_rate: u32,
     pub tracks: Vec<TrackState>,
+    #[serde(default)]
+    pub buses: Vec<BusState>,
+    #[serde(default)]
+    pub master: MasterState,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -85,6 +145,12 @@ pub struct TrackState {
     pub mute: bool,
     #[serde(default)]
     pub solo: bool,
+    #[serde(default)]
+    pub inserts: Vec<ChainNodeSpec>,
+    #[serde(default)]
+    pub sends: Vec<SendSpec>,
+    #[serde(default)]
+    pub automation: Vec<AutomationSpec>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -120,6 +186,82 @@ pub struct PluginDescriptor {
     pub vendor: String,
     pub path: String,
     pub format: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ChainNodeSpec {
+    pub id: String,
+    #[serde(default = "default_chain_kind")]
+    pub kind: String,
+    pub plugin: PluginRef,
+    #[serde(default)]
+    pub bypass: bool,
+    #[serde(default)]
+    pub params: serde_json::Map<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_blob: Option<String>,
+}
+
+fn default_chain_kind() -> String {
+    "insert".to_string()
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SendSpec {
+    pub id: String,
+    pub dest_bus_id: String,
+    pub level: f32,
+    #[serde(default)]
+    pub pre: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BusState {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub inserts: Vec<ChainNodeSpec>,
+    #[serde(default)]
+    pub sends: Vec<SendSpec>,
+    #[serde(default)]
+    pub volume_db: f64,
+    #[serde(default)]
+    pub pan: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterState {
+    #[serde(default)]
+    pub inserts: Vec<ChainNodeSpec>,
+    #[serde(default)]
+    pub volume_db: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationSpec {
+    /// Empty string targets the track itself (e.g. volumeDb / pan).
+    #[serde(default)]
+    pub node_id: String,
+    pub param_id: String,
+    pub points: Vec<AutomationPointSpec>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationPointSpec {
+    pub tick: i64,
+    pub value: f64,
+    #[serde(default = "default_curve")]
+    pub curve: String,
+}
+
+fn default_curve() -> String {
+    "linear".to_string()
 }
 
 // ── Outgoing ─────────────────────────────────────────────
@@ -293,5 +435,78 @@ mod tests {
             }
             _ => panic!("expected midi.noteOn"),
         }
+    }
+
+    #[test]
+    fn parses_chain_add_node() {
+        let raw = r#"{"kind":"request","id":"c","command":{"type":"chain.addNode","trackId":"t1","position":0,"plugin":{"format":"builtin","uid":"gain","name":"Gain"}}}"#;
+        let msg: Message = serde_json::from_str(raw).unwrap();
+        let Message::Request { command, .. } = msg;
+        match command {
+            Command::ChainAddNode {
+                track_id,
+                position,
+                plugin,
+            } => {
+                assert_eq!(track_id, "t1");
+                assert_eq!(position, 0);
+                assert_eq!(plugin.format, "builtin");
+                assert_eq!(plugin.uid, "gain");
+            }
+            _ => panic!("expected chain.addNode"),
+        }
+    }
+
+    #[test]
+    fn parses_render_wav() {
+        let raw = r#"{"kind":"request","id":"r","command":{"type":"render.wav","fromTick":0,"toTick":1920,"sampleRate":48000,"bitDepth":24,"path":"out.wav"}}"#;
+        let msg: Message = serde_json::from_str(raw).unwrap();
+        let Message::Request { command, .. } = msg;
+        match command {
+            Command::RenderWav {
+                from_tick,
+                to_tick,
+                sample_rate,
+                bit_depth,
+                path,
+            } => {
+                assert_eq!(from_tick, 0);
+                assert_eq!(to_tick, 1920);
+                assert_eq!(sample_rate, 48000);
+                assert_eq!(bit_depth, 24);
+                assert_eq!(path, "out.wav");
+            }
+            _ => panic!("expected render.wav"),
+        }
+    }
+
+    #[test]
+    fn parses_project_hash() {
+        let raw = r#"{"kind":"request","id":"h","command":{"type":"project.hash"}}"#;
+        let msg: Message = serde_json::from_str(raw).unwrap();
+        let Message::Request { command, .. } = msg;
+        assert!(matches!(command, Command::ProjectHash));
+    }
+
+    #[test]
+    fn parses_project_with_buses_and_master() {
+        let raw = r#"{
+            "version":"1","bpm":120,"timeSignature":[4,4],"sampleRate":48000,
+            "tracks":[
+                {"id":"t1","name":"Lead","clips":[],
+                 "inserts":[{"id":"i1","kind":"insert","plugin":{"format":"builtin","uid":"gain","name":"Gain"},"params":{"gainDb":-6.0}}],
+                 "sends":[{"id":"s1","destBusId":"bus1","level":0.5,"pre":false}]
+                }
+            ],
+            "buses":[
+                {"id":"bus1","name":"Reverb","inserts":[],"sends":[],"volumeDb":0.0,"pan":0.0}
+            ],
+            "master":{"inserts":[],"volumeDb":-3.0}
+        }"#;
+        let p: Project = serde_json::from_str(raw).unwrap();
+        assert_eq!(p.tracks[0].inserts.len(), 1);
+        assert_eq!(p.tracks[0].sends.len(), 1);
+        assert_eq!(p.buses.len(), 1);
+        assert_eq!(p.master.volume_db, -3.0);
     }
 }

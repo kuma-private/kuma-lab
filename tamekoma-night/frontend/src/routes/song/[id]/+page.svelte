@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { onMount, onDestroy } from 'svelte';
-	import { createSongStore } from '$lib/stores/song.svelte';
+	import { songStore as store } from '$lib/stores/song.svelte';
 	import type { Song, MidiNote } from '$lib/types/song';
 	import FlowEditor from '$lib/components/flow/FlowEditor.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
@@ -11,7 +11,6 @@
 	import { planStore } from '$lib/stores/plan.svelte';
 	import { songToMidi, downloadMidi } from '$lib/midi-export';
 
-	const store = createSongStore();
 	const songId = page.params.id as string;
 
 	// Player state
@@ -65,6 +64,7 @@
 		attachEngineCallbacks(engine);
 		player = engine;
 		currentEngineKind = kind;
+		store.attachEngine(engine);
 	}
 
 	onMount(async () => {
@@ -77,6 +77,7 @@
 	});
 
 	onDestroy(() => {
+		store.attachEngine(null);
 		player?.dispose();
 		player = null;
 	});
@@ -101,6 +102,7 @@
 		if (!player || needed === currentEngineKind) return;
 		const prev = player;
 		player = null;
+		store.attachEngine(null);
 		prev.dispose();
 		void (async () => {
 			await buildEngine();

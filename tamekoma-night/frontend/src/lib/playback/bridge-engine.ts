@@ -77,49 +77,20 @@ export class BridgeEngine implements PlaybackEngine {
 		// Phase 2: master volume not yet exposed in protocol.
 	}
 
-	setTrackVolume(trackId: string, db: number): void {
-		void this.client
-			.send({
-				type: 'project.patch',
-				ops: [
-					{
-						op: 'replace',
-						path: `/tracks/${escapePathSegment(trackId)}/volumeDb`,
-						value: db
-					}
-				]
-			})
-			.catch((e) => console.warn('[bridge-engine] setTrackVolume failed', e));
+	// Phase 3: track-level state mutations are owned by songStore, which
+	// emits the project.patch ops. BridgeEngine no longer fires its own
+	// patch from these methods to avoid double-emission. The PlaybackEngine
+	// interface still requires the methods, so they exist as no-ops.
+	setTrackVolume(_trackId: string, _db: number): void {
+		/* no-op — songStore handles patch */
 	}
 
-	setTrackMute(trackId: string, muted: boolean): void {
-		void this.client
-			.send({
-				type: 'project.patch',
-				ops: [
-					{
-						op: 'replace',
-						path: `/tracks/${escapePathSegment(trackId)}/mute`,
-						value: muted
-					}
-				]
-			})
-			.catch((e) => console.warn('[bridge-engine] setTrackMute failed', e));
+	setTrackMute(_trackId: string, _muted: boolean): void {
+		/* no-op — songStore handles patch */
 	}
 
-	setTrackSolo(trackId: string, solo: boolean): void {
-		void this.client
-			.send({
-				type: 'project.patch',
-				ops: [
-					{
-						op: 'replace',
-						path: `/tracks/${escapePathSegment(trackId)}/solo`,
-						value: solo
-					}
-				]
-			})
-			.catch((e) => console.warn('[bridge-engine] setTrackSolo failed', e));
+	setTrackSolo(_trackId: string, _solo: boolean): void {
+		/* no-op — songStore handles patch */
 	}
 
 	getTrackNotes(trackId: string): MidiNote[] {
@@ -150,11 +121,6 @@ function computeTotalDuration(trackNotes: Map<string, MidiNote[]>, bpm: number):
 		}
 	}
 	return (maxTick / 480) * (60 / bpm);
-}
-
-function escapePathSegment(s: string): string {
-	// JSON Pointer escaping per RFC 6901: ~ → ~0, / → ~1
-	return s.replace(/~/g, '~0').replace(/\//g, '~1');
 }
 
 /**

@@ -2,6 +2,7 @@ pub mod handlers;
 pub mod session;
 pub mod ws_server;
 
+pub use session::SessionState;
 pub use ws_server::run_ws_server;
 
 pub const DEFAULT_BIND_ADDR: &str = "127.0.0.1:7890";

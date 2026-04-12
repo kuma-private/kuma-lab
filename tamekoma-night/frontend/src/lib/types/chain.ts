@@ -32,6 +32,7 @@ export interface Send {
 export type AutomationCurve = 'linear' | 'hold' | 'bezier';
 
 export interface AutomationPoint {
+	id: string;
 	tick: number;
 	value: number;
 	curve?: AutomationCurve;

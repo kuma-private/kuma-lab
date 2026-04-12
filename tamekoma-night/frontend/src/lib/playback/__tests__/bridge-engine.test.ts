@@ -196,7 +196,7 @@ describe('BridgeEngine', () => {
 		e.dispose();
 	});
 
-	it('setTrackVolume / setTrackMute / setTrackSolo send project.patch ops', async () => {
+	it('setTrackVolume / setTrackMute / setTrackSolo are no-ops (songStore owns patches in Phase 3)', async () => {
 		const e = new BridgeEngine();
 		await e.load(FAKE_SONG);
 		sentCommands.length = 0;
@@ -209,24 +209,7 @@ describe('BridgeEngine', () => {
 		await Promise.resolve();
 
 		const patches = sentCommands.filter((c) => c.type === 'project.patch');
-		expect(patches.length).toBe(3);
-
-		const ops = patches.flatMap((p) => (p.type === 'project.patch' ? p.ops : []));
-		expect(ops).toContainEqual({
-			op: 'replace',
-			path: '/tracks/track-piano/volumeDb',
-			value: -6
-		});
-		expect(ops).toContainEqual({
-			op: 'replace',
-			path: '/tracks/track-bass/mute',
-			value: true
-		});
-		expect(ops).toContainEqual({
-			op: 'replace',
-			path: '/tracks/track-piano/solo',
-			value: true
-		});
+		expect(patches.length).toBe(0);
 
 		e.dispose();
 	});
