@@ -8,7 +8,7 @@
 
 use crate::graph::{Bus, EffectNode, Graph, Send};
 use bridge_protocol::{
-    AutomationSpec, BusState, ChainNodeSpec, JsonPatchOp, Project, SendSpec,
+    AutomationPointSpec, AutomationSpec, BusState, ChainNodeSpec, JsonPatchOp, Project, SendSpec,
 };
 
 /// Apply a sequence of JSON Patch ops to the graph in order. The first op
@@ -671,21 +671,153 @@ fn apply_project_automation(
     op: &JsonPatchOp,
 ) -> anyhow::Result<()> {
     if rest.is_empty() {
-        return Err(anyhow::anyhow!("automation requires sub-path"));
+        // Whole-list replace: /tracks/{id}/automation
+        if op.op == "replace" {
+            let specs: Vec<AutomationSpec> =
+                serde_json::from_value(require_value(op)?.clone())?;
+            *list = specs;
+            return Ok(());
+        }
+        return Err(anyhow::anyhow!("automation root requires 'replace' op"));
     }
-    let head = rest[0].as_str();
-    if head == "-" && op.op == "add" {
+
+    // Append a new lane: /tracks/{id}/automation/-
+    if rest.len() == 1 && rest[0] == "-" && op.op == "add" {
         let spec: AutomationSpec = serde_json::from_value(require_value(op)?.clone())?;
         list.push(spec);
         return Ok(());
     }
-    if op.op == "replace" {
-        let specs: Vec<AutomationSpec> =
-            serde_json::from_value(require_value(op)?.clone())?;
-        *list = specs;
+
+    // The frontend addresses lanes by (nodeId, paramId) two-segment key, then
+    // optionally drills into points/{pointId}[/curve].
+    if rest.len() < 2 {
+        return Err(anyhow::anyhow!("automation lane requires nodeId/paramId"));
+    }
+    let node_id = rest[0].as_str();
+    let param_id = rest[1].as_str();
+
+    // /tracks/{id}/automation/{nodeId}/{paramId} — remove the entire lane
+    if rest.len() == 2 {
+        if op.op == "remove" {
+            let before = list.len();
+            list.retain(|a| !(a.node_id == node_id && a.param_id == param_id));
+            if list.len() == before {
+                return Err(anyhow::anyhow!(
+                    "unknown automation lane: {node_id}/{param_id}"
+                ));
+            }
+            return Ok(());
+        }
+        if op.op == "replace" {
+            let spec: AutomationSpec = serde_json::from_value(require_value(op)?.clone())?;
+            if let Some(existing) = list
+                .iter_mut()
+                .find(|a| a.node_id == node_id && a.param_id == param_id)
+            {
+                *existing = spec;
+            } else {
+                list.push(spec);
+            }
+            return Ok(());
+        }
+        return Err(anyhow::anyhow!(
+            "automation lane root supports remove or replace"
+        ));
+    }
+
+    // From here on we need an existing lane.
+    let lane = list
+        .iter_mut()
+        .find(|a| a.node_id == node_id && a.param_id == param_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown automation lane: {node_id}/{param_id}"))?;
+
+    if rest[2] != "points" {
+        return Err(anyhow::anyhow!(
+            "automation sub-key must be 'points', got '{}'",
+            rest[2]
+        ));
+    }
+
+    // /tracks/{id}/automation/{nodeId}/{paramId}/points/-
+    if rest.len() == 4 && rest[3] == "-" && op.op == "add" {
+        let point: AutomationPointSpec = serde_json::from_value(require_value(op)?.clone())?;
+        lane.points.push(point);
         return Ok(());
     }
-    Err(anyhow::anyhow!("unsupported automation sub-path"))
+
+    // Replace all points: /tracks/.../points
+    if rest.len() == 3 && op.op == "replace" {
+        let points: Vec<AutomationPointSpec> =
+            serde_json::from_value(require_value(op)?.clone())?;
+        lane.points = points;
+        return Ok(());
+    }
+
+    if rest.len() < 4 {
+        return Err(anyhow::anyhow!("automation points requires pointId or '-'"));
+    }
+    let point_id = rest[3].as_str();
+
+    // /tracks/.../points/{pointId} — remove or replace whole point
+    if rest.len() == 4 {
+        if op.op == "remove" {
+            let before = lane.points.len();
+            lane.points.retain(|p| p.id != point_id);
+            if lane.points.len() == before {
+                return Err(anyhow::anyhow!("unknown automation point: {point_id}"));
+            }
+            return Ok(());
+        }
+        if op.op == "replace" {
+            let new_point: AutomationPointSpec =
+                serde_json::from_value(require_value(op)?.clone())?;
+            let p = lane
+                .points
+                .iter_mut()
+                .find(|p| p.id == point_id)
+                .ok_or_else(|| anyhow::anyhow!("unknown automation point: {point_id}"))?;
+            *p = new_point;
+            return Ok(());
+        }
+        return Err(anyhow::anyhow!(
+            "automation point supports remove or replace"
+        ));
+    }
+
+    // /tracks/.../points/{pointId}/curve  (or /tick, /value)
+    if rest.len() == 5 && op.op == "replace" {
+        let p = lane
+            .points
+            .iter_mut()
+            .find(|p| p.id == point_id)
+            .ok_or_else(|| anyhow::anyhow!("unknown automation point: {point_id}"))?;
+        let value = require_value(op)?;
+        match rest[4].as_str() {
+            "curve" => {
+                let curve = value
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("expected string curve"))?;
+                p.curve = curve.to_string();
+            }
+            "tick" => {
+                p.tick = value
+                    .as_i64()
+                    .ok_or_else(|| anyhow::anyhow!("expected integer tick"))?;
+            }
+            "value" => {
+                p.value = value
+                    .as_f64()
+                    .ok_or_else(|| anyhow::anyhow!("expected number value"))?;
+            }
+            other => return Err(anyhow::anyhow!("unsupported point field: {other}")),
+        }
+        return Ok(());
+    }
+
+    Err(anyhow::anyhow!(
+        "unsupported automation sub-path with {} segments",
+        rest.len()
+    ))
 }
 
 fn apply_project_bus(
@@ -906,6 +1038,134 @@ mod tests {
         apply_patch_to_project(&mut p, &ops).unwrap();
         assert_eq!(p.tracks[0].inserts.len(), 1);
         assert_eq!(p.tracks[0].inserts[0].plugin.uid, "gain");
+    }
+
+    // ── Automation point patch round-trip (regression for QA P0-1) ──────
+
+    fn project_with_lane() -> Project {
+        let mut p = empty_project();
+        p.tracks[0].automation = vec![bridge_protocol::AutomationSpec {
+            node_id: "n1".into(),
+            param_id: "cutoff".into(),
+            points: vec![
+                bridge_protocol::AutomationPointSpec {
+                    id: "pt-a".into(),
+                    tick: 0,
+                    value: 0.0,
+                    curve: "linear".into(),
+                },
+                bridge_protocol::AutomationPointSpec {
+                    id: "pt-b".into(),
+                    tick: 480,
+                    value: 1.0,
+                    curve: "linear".into(),
+                },
+            ],
+        }];
+        p
+    }
+
+    #[test]
+    fn project_add_automation_point() {
+        let mut p = project_with_lane();
+        let op = JsonPatchOp {
+            op: "add".into(),
+            path: "/tracks/t1/automation/n1/cutoff/points/-".into(),
+            value: Some(json!({"id":"pt-c","tick":960,"value":0.5,"curve":"linear"})),
+        };
+        apply_patch_to_project(&mut p, &[op]).unwrap();
+        assert_eq!(p.tracks[0].automation[0].points.len(), 3);
+        assert_eq!(p.tracks[0].automation[0].points[2].id, "pt-c");
+    }
+
+    #[test]
+    fn project_remove_automation_point() {
+        let mut p = project_with_lane();
+        let op = JsonPatchOp {
+            op: "remove".into(),
+            path: "/tracks/t1/automation/n1/cutoff/points/pt-a".into(),
+            value: None,
+        };
+        apply_patch_to_project(&mut p, &[op]).unwrap();
+        assert_eq!(p.tracks[0].automation[0].points.len(), 1);
+        assert_eq!(p.tracks[0].automation[0].points[0].id, "pt-b");
+    }
+
+    #[test]
+    fn project_replace_automation_point_full() {
+        let mut p = project_with_lane();
+        let op = JsonPatchOp {
+            op: "replace".into(),
+            path: "/tracks/t1/automation/n1/cutoff/points/pt-a".into(),
+            value: Some(json!({"id":"pt-a","tick":120,"value":0.25,"curve":"hold"})),
+        };
+        apply_patch_to_project(&mut p, &[op]).unwrap();
+        assert_eq!(p.tracks[0].automation[0].points[0].tick, 120);
+        assert!((p.tracks[0].automation[0].points[0].value - 0.25).abs() < 1e-9);
+        assert_eq!(p.tracks[0].automation[0].points[0].curve, "hold");
+    }
+
+    #[test]
+    fn project_set_automation_curve_field() {
+        let mut p = project_with_lane();
+        let op = JsonPatchOp {
+            op: "replace".into(),
+            path: "/tracks/t1/automation/n1/cutoff/points/pt-a/curve".into(),
+            value: Some(json!("bezier")),
+        };
+        apply_patch_to_project(&mut p, &[op]).unwrap();
+        assert_eq!(p.tracks[0].automation[0].points[0].curve, "bezier");
+    }
+
+    #[test]
+    fn project_set_automation_tick_field() {
+        let mut p = project_with_lane();
+        let op = JsonPatchOp {
+            op: "replace".into(),
+            path: "/tracks/t1/automation/n1/cutoff/points/pt-b/tick".into(),
+            value: Some(json!(720)),
+        };
+        apply_patch_to_project(&mut p, &[op]).unwrap();
+        assert_eq!(p.tracks[0].automation[0].points[1].tick, 720);
+    }
+
+    #[test]
+    fn project_remove_automation_lane() {
+        let mut p = project_with_lane();
+        let op = JsonPatchOp {
+            op: "remove".into(),
+            path: "/tracks/t1/automation/n1/cutoff".into(),
+            value: None,
+        };
+        apply_patch_to_project(&mut p, &[op]).unwrap();
+        assert!(p.tracks[0].automation.is_empty());
+    }
+
+    #[test]
+    fn project_unknown_automation_lane_errors() {
+        let mut p = project_with_lane();
+        let op = JsonPatchOp {
+            op: "remove".into(),
+            path: "/tracks/t1/automation/nope/cutoff/points/pt-a".into(),
+            value: None,
+        };
+        assert!(apply_patch_to_project(&mut p, &[op]).is_err());
+    }
+
+    #[test]
+    fn project_add_automation_lane_via_dash() {
+        let mut p = empty_project();
+        let op = JsonPatchOp {
+            op: "add".into(),
+            path: "/tracks/t1/automation/-".into(),
+            value: Some(json!({
+                "nodeId":"n1","paramId":"resonance",
+                "points":[{"id":"x","tick":0,"value":0.5,"curve":"linear"}]
+            })),
+        };
+        apply_patch_to_project(&mut p, &[op]).unwrap();
+        assert_eq!(p.tracks[0].automation.len(), 1);
+        assert_eq!(p.tracks[0].automation[0].param_id, "resonance");
     }
 
     #[test]

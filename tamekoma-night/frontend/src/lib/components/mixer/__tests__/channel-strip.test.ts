@@ -177,6 +177,32 @@ describe('ChannelStrip → songStore — insert chain via PluginPicker', () => {
 	});
 });
 
+describe('ChannelStrip → songStore — instrument plugin', () => {
+	it('setTrackInstrument assigns a built-in synth to the track', () => {
+		songStore.setTrackInstrument('t-piano', makeBuiltinRef('supersaw'));
+		const t = songStore.currentSong?.tracks[0];
+		expect(t?.instrumentPlugin).toBeDefined();
+		expect(t?.instrumentPlugin?.format).toBe('builtin');
+		expect(t?.instrumentPlugin?.uid).toBe('supersaw');
+	});
+
+	it('setTrackInstrument(null) clears the instrument plugin', () => {
+		songStore.setTrackInstrument('t-piano', makeBuiltinRef('subbass'));
+		songStore.setTrackInstrument('t-piano', null);
+		expect(songStore.currentSong?.tracks[0].instrumentPlugin).toBeUndefined();
+	});
+
+	it('setTrackInstrument emits project.patch when bridge is connected', () => {
+		bridgeMock.state.value = 'connected';
+		songStore.setTrackInstrument('t-piano', makeBuiltinRef('drumkit'));
+		const patches = bridgeMock.sentCommands.filter((c) => c.type === 'project.patch');
+		expect(patches.length).toBeGreaterThan(0);
+		const lastOps = patches[patches.length - 1].ops ?? [];
+		expect(lastOps[0].op).toBe('replace');
+		expect(lastOps[0].path).toContain('/instrument');
+	});
+});
+
 describe('ChannelStrip → songStore — sends', () => {
 	it('addSend links a track to a bus', () => {
 		songStore.addBus('Reverb');

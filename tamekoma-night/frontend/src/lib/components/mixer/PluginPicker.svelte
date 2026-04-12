@@ -2,13 +2,19 @@
 	import { bridgeStore } from '$lib/stores/bridge.svelte';
 	import type { PluginCatalogEntry } from '$lib/bridge/protocol';
 	import type { PluginRef } from '$lib/types/chain';
+	import { BUILTIN_DESCRIPTORS, type BuiltinKind } from './plugin-descriptors';
 
 	let {
 		onPick,
-		onClose
+		onClose,
+		kindFilter
 	}: {
 		onPick: (plugin: PluginRef) => void;
 		onClose: () => void;
+		/** When set, only show built-ins of this kind. CLAP/VST3 plugins are
+		 *  treated as instruments in this view (we don't know their kind yet).
+		 */
+		kindFilter?: BuiltinKind;
 	} = $props();
 
 	type Filter = 'all' | 'builtin' | 'vst3' | 'clap';
@@ -20,6 +26,14 @@
 		const q = query.trim().toLowerCase();
 		return all.filter((p) => {
 			if (filter !== 'all' && p.format !== filter) return false;
+			if (kindFilter && p.format === 'builtin') {
+				const desc = BUILTIN_DESCRIPTORS[p.id];
+				if (!desc || desc.kind !== kindFilter) return false;
+			}
+			// CLAP/VST3 with kindFilter='effect' get filtered out (we don't
+			// know their kind, but the common case is treating external
+			// plugins as instruments).
+			if (kindFilter === 'effect' && p.format !== 'builtin') return false;
 			if (!q) return true;
 			return (
 				p.name.toLowerCase().includes(q) ||

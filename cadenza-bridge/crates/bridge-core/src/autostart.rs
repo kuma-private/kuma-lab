@@ -129,18 +129,19 @@ pub mod mac {
 pub mod win {
     use super::*;
 
+    /// Returns an explicit not-implemented error so the caller surfaces the
+    /// failure to the UI. CLAUDE.md forbids fallbacks — silent Ok(()) here
+    /// would let the frontend think autostart succeeded when it didn't.
     pub fn enable(_target: &Target) -> Result<()> {
-        // Windows stub: Phase 7 ships only the function signature. The
-        // real registry write lands with the Phase 9 Windows installer
-        // work. Returning an error here would be a fallback (forbidden
-        // by CLAUDE.md), so we return Ok(()) and log a note.
-        tracing::warn!("autostart::win::enable stubbed in Phase 7");
-        Ok(())
+        anyhow::bail!(
+            "autostart::win::enable not yet implemented — registry write lands in a future phase"
+        )
     }
 
     pub fn disable(_target: &Target) -> Result<()> {
-        tracing::warn!("autostart::win::disable stubbed in Phase 7");
-        Ok(())
+        anyhow::bail!(
+            "autostart::win::disable not yet implemented — registry write lands in a future phase"
+        )
     }
 
     pub fn is_enabled(_target: &Target) -> bool {

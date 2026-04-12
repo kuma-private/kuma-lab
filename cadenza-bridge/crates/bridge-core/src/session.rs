@@ -5,8 +5,9 @@ use std::sync::{Arc, Mutex};
 use bridge_audio::{AudioHandle, RtCommand, TelemetryReceiver};
 use bridge_clap::{scanner, ClapFactory, PluginCatalog};
 use bridge_plugin_host::{
-    apply_patch_to_project, hash_project, make_placeholder_editor, render_to_wav,
-    render::RenderResult, Graph, Instrument, SilentInstrument, PluginEditor,
+    apply_patch_to_project, hash_project, instruments::make_builtin_instrument,
+    make_placeholder_editor, render_to_wav, render::RenderResult, Graph, Instrument,
+    PluginEditor, SilentInstrument,
 };
 use bridge_protocol::{
     ChainNodeSpec, JsonPatchOp, PluginDescriptor, PluginRef, Project,
@@ -179,6 +180,8 @@ impl SessionState {
                 })
                 .unwrap_or_else(|| "clap".into());
             match format.as_str() {
+                "builtin" => make_builtin_instrument(id)
+                    .or_else(|| Some(Box::new(SilentInstrument) as Box<dyn Instrument>)),
                 "vst3" => vst3_factory.make_instrument(id),
                 "clap" => clap_factory.make_instrument(id),
                 _ => Some(Box::new(SilentInstrument) as Box<dyn Instrument>),

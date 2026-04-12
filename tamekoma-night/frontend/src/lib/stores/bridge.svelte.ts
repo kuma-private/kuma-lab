@@ -78,6 +78,7 @@ class BridgeStore {
 	 * side hard-codes the same set; keep ids in sync with bridge-plugin-host.
 	 */
 	readonly builtinCatalog: PluginCatalogEntry[] = [
+		// Effects
 		{ format: 'builtin', id: 'gain', name: 'Gain', vendor: 'Cadenza', path: 'builtin:gain' },
 		{ format: 'builtin', id: 'svf', name: 'Filter', vendor: 'Cadenza', path: 'builtin:svf' },
 		{
@@ -86,6 +87,50 @@ class BridgeStore {
 			name: 'Compressor',
 			vendor: 'Cadenza',
 			path: 'builtin:compressor'
+		},
+		{ format: 'builtin', id: 'delay', name: 'Delay', vendor: 'Cadenza', path: 'builtin:delay' },
+		{
+			format: 'builtin',
+			id: 'reverb',
+			name: 'Reverb',
+			vendor: 'Cadenza',
+			path: 'builtin:reverb'
+		},
+		{
+			format: 'builtin',
+			id: 'saturation',
+			name: 'Saturation',
+			vendor: 'Cadenza',
+			path: 'builtin:saturation'
+		},
+		// Instruments
+		{
+			format: 'builtin',
+			id: 'sine',
+			name: 'Sine Synth',
+			vendor: 'Cadenza',
+			path: 'builtin:sine'
+		},
+		{
+			format: 'builtin',
+			id: 'supersaw',
+			name: 'Super Saw',
+			vendor: 'Cadenza',
+			path: 'builtin:supersaw'
+		},
+		{
+			format: 'builtin',
+			id: 'subbass',
+			name: 'Sub Bass',
+			vendor: 'Cadenza',
+			path: 'builtin:subbass'
+		},
+		{
+			format: 'builtin',
+			id: 'drumkit',
+			name: 'Drum Kit',
+			vendor: 'Cadenza',
+			path: 'builtin:drumkit'
 		}
 	];
 

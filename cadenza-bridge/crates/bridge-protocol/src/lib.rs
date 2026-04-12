@@ -282,6 +282,10 @@ pub struct AutomationSpec {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationPointSpec {
+    /// Stable identifier so the frontend can address points by id in patches.
+    /// Empty string for legacy projects; new points always carry a UUID.
+    #[serde(default)]
+    pub id: String,
     pub tick: i64,
     pub value: f64,
     #[serde(default = "default_curve")]

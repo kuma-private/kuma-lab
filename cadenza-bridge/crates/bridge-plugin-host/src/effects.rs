@@ -287,6 +287,357 @@ impl InsertEffect for Compressor {
     }
 }
 
+// ── DelayEffect ───────────────────────────────────────────────────────────
+
+pub struct DelayEffect {
+    sample_rate: f64,
+    buffer_l: Vec<f32>,
+    buffer_r: Vec<f32>,
+    write_pos: usize,
+    time_ms: f64,
+    feedback: f64,
+    mix: f64,
+    ping_pong: bool,
+}
+
+impl DelayEffect {
+    pub fn new() -> Self {
+        let sr = 48_000.0;
+        let max_samples = (sr * 2.5) as usize; // up to 2.5 s
+        Self {
+            sample_rate: sr,
+            buffer_l: vec![0.0; max_samples],
+            buffer_r: vec![0.0; max_samples],
+            write_pos: 0,
+            time_ms: 350.0,
+            feedback: 0.4,
+            mix: 0.3,
+            ping_pong: false,
+        }
+    }
+    fn delay_samples(&self) -> usize {
+        ((self.time_ms * 0.001 * self.sample_rate) as usize)
+            .clamp(1, self.buffer_l.len() - 1)
+    }
+}
+
+impl Default for DelayEffect {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InsertEffect for DelayEffect {
+    fn process(&mut self, audio: &mut [f32], n_frames: usize, _automation: &AutomationFrame) {
+        let len = self.buffer_l.len();
+        let delay = self.delay_samples();
+        let fb = self.feedback as f32;
+        let mix = self.mix as f32;
+        for i in 0..n_frames {
+            let l_in = audio[i * 2];
+            let r_in = audio[i * 2 + 1];
+            let read = (self.write_pos + len - delay) % len;
+            let l_dly = self.buffer_l[read];
+            let r_dly = self.buffer_r[read];
+            // Write back input + feedback. Ping-pong cross-feeds channels.
+            if self.ping_pong {
+                self.buffer_l[self.write_pos] = r_in + r_dly * fb;
+                self.buffer_r[self.write_pos] = l_in + l_dly * fb;
+            } else {
+                self.buffer_l[self.write_pos] = l_in + l_dly * fb;
+                self.buffer_r[self.write_pos] = r_in + r_dly * fb;
+            }
+            audio[i * 2] = l_in * (1.0 - mix) + l_dly * mix;
+            audio[i * 2 + 1] = r_in * (1.0 - mix) + r_dly * mix;
+            self.write_pos = (self.write_pos + 1) % len;
+        }
+    }
+    fn set_param(&mut self, id: &str, value: f64) {
+        match id {
+            "timeMs" => self.time_ms = value.clamp(1.0, 2000.0),
+            "feedback" => self.feedback = value.clamp(0.0, 0.95),
+            "mix" => self.mix = value.clamp(0.0, 1.0),
+            "pingPong" => self.ping_pong = value > 0.5,
+            _ => {}
+        }
+    }
+    fn get_param(&self, id: &str) -> f64 {
+        match id {
+            "timeMs" => self.time_ms,
+            "feedback" => self.feedback,
+            "mix" => self.mix,
+            "pingPong" => {
+                if self.ping_pong {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            _ => 0.0,
+        }
+    }
+    fn param_ids(&self) -> &'static [&'static str] {
+        &["timeMs", "feedback", "mix", "pingPong"]
+    }
+    fn set_sample_rate(&mut self, sr: u32) {
+        self.sample_rate = sr as f64;
+        let max = (self.sample_rate * 2.5) as usize;
+        if self.buffer_l.len() != max {
+            self.buffer_l.clear();
+            self.buffer_r.clear();
+            self.buffer_l.resize(max, 0.0);
+            self.buffer_r.resize(max, 0.0);
+            self.write_pos = 0;
+        }
+    }
+    fn type_id(&self) -> &'static str {
+        "delay"
+    }
+}
+
+// ── ReverbEffect (Schroeder) ──────────────────────────────────────────────
+
+struct CombFilter {
+    buf: Vec<f32>,
+    pos: usize,
+    feedback: f32,
+    damping: f32,
+    z: f32,
+}
+
+impl CombFilter {
+    fn new(size: usize) -> Self {
+        Self {
+            buf: vec![0.0; size],
+            pos: 0,
+            feedback: 0.7,
+            damping: 0.5,
+            z: 0.0,
+        }
+    }
+    fn process(&mut self, x: f32) -> f32 {
+        let out = self.buf[self.pos];
+        self.z = out * (1.0 - self.damping) + self.z * self.damping;
+        self.buf[self.pos] = x + self.z * self.feedback;
+        self.pos = (self.pos + 1) % self.buf.len();
+        out
+    }
+}
+
+struct AllpassFilter {
+    buf: Vec<f32>,
+    pos: usize,
+    feedback: f32,
+}
+
+impl AllpassFilter {
+    fn new(size: usize) -> Self {
+        Self {
+            buf: vec![0.0; size],
+            pos: 0,
+            feedback: 0.5,
+        }
+    }
+    fn process(&mut self, x: f32) -> f32 {
+        let bufout = self.buf[self.pos];
+        let out = -x + bufout;
+        self.buf[self.pos] = x + bufout * self.feedback;
+        self.pos = (self.pos + 1) % self.buf.len();
+        out
+    }
+}
+
+pub struct ReverbEffect {
+    sample_rate: f64,
+    combs_l: [CombFilter; 4],
+    combs_r: [CombFilter; 4],
+    allpasses_l: [AllpassFilter; 2],
+    allpasses_r: [AllpassFilter; 2],
+    room_size: f64,
+    damping: f64,
+    mix: f64,
+    width: f64,
+}
+
+impl ReverbEffect {
+    pub fn new() -> Self {
+        // Tunings adapted from Freeverb (samples at 44.1 kHz reference rate).
+        let comb_sizes_l = [1116, 1188, 1277, 1356];
+        let comb_sizes_r = [1139, 1211, 1300, 1379];
+        let ap_sizes_l = [556, 441];
+        let ap_sizes_r = [579, 464];
+        Self {
+            sample_rate: 48_000.0,
+            combs_l: [
+                CombFilter::new(comb_sizes_l[0]),
+                CombFilter::new(comb_sizes_l[1]),
+                CombFilter::new(comb_sizes_l[2]),
+                CombFilter::new(comb_sizes_l[3]),
+            ],
+            combs_r: [
+                CombFilter::new(comb_sizes_r[0]),
+                CombFilter::new(comb_sizes_r[1]),
+                CombFilter::new(comb_sizes_r[2]),
+                CombFilter::new(comb_sizes_r[3]),
+            ],
+            allpasses_l: [
+                AllpassFilter::new(ap_sizes_l[0]),
+                AllpassFilter::new(ap_sizes_l[1]),
+            ],
+            allpasses_r: [
+                AllpassFilter::new(ap_sizes_r[0]),
+                AllpassFilter::new(ap_sizes_r[1]),
+            ],
+            room_size: 0.5,
+            damping: 0.5,
+            mix: 0.3,
+            width: 1.0,
+        }
+    }
+    fn refresh_coeffs(&mut self) {
+        let fb = (0.28 + 0.7 * self.room_size) as f32;
+        let damp = self.damping as f32;
+        for c in self.combs_l.iter_mut() {
+            c.feedback = fb;
+            c.damping = damp;
+        }
+        for c in self.combs_r.iter_mut() {
+            c.feedback = fb;
+            c.damping = damp;
+        }
+    }
+}
+
+impl Default for ReverbEffect {
+    fn default() -> Self {
+        let mut r = Self::new();
+        r.refresh_coeffs();
+        r
+    }
+}
+
+impl InsertEffect for ReverbEffect {
+    fn process(&mut self, audio: &mut [f32], n_frames: usize, _automation: &AutomationFrame) {
+        self.refresh_coeffs();
+        let mix = self.mix as f32;
+        let dry = 1.0 - mix;
+        let width = self.width.clamp(0.0, 1.0) as f32;
+        for i in 0..n_frames {
+            let l_in = audio[i * 2];
+            let r_in = audio[i * 2 + 1];
+            let mono = (l_in + r_in) * 0.5 * 0.015;
+            let mut wl = 0.0_f32;
+            let mut wr = 0.0_f32;
+            for c in self.combs_l.iter_mut() {
+                wl += c.process(mono);
+            }
+            for c in self.combs_r.iter_mut() {
+                wr += c.process(mono);
+            }
+            for ap in self.allpasses_l.iter_mut() {
+                wl = ap.process(wl);
+            }
+            for ap in self.allpasses_r.iter_mut() {
+                wr = ap.process(wr);
+            }
+            // Stereo width: blend mono/stereo
+            let mid = (wl + wr) * 0.5;
+            let side = (wl - wr) * 0.5 * width;
+            let wet_l = mid + side;
+            let wet_r = mid - side;
+            audio[i * 2] = l_in * dry + wet_l * mix;
+            audio[i * 2 + 1] = r_in * dry + wet_r * mix;
+        }
+    }
+    fn set_param(&mut self, id: &str, value: f64) {
+        match id {
+            "roomSize" => self.room_size = value.clamp(0.0, 1.0),
+            "damping" => self.damping = value.clamp(0.0, 1.0),
+            "mix" => self.mix = value.clamp(0.0, 1.0),
+            "width" => self.width = value.clamp(0.0, 1.0),
+            _ => {}
+        }
+    }
+    fn get_param(&self, id: &str) -> f64 {
+        match id {
+            "roomSize" => self.room_size,
+            "damping" => self.damping,
+            "mix" => self.mix,
+            "width" => self.width,
+            _ => 0.0,
+        }
+    }
+    fn param_ids(&self) -> &'static [&'static str] {
+        &["roomSize", "damping", "mix", "width"]
+    }
+    fn set_sample_rate(&mut self, sr: u32) {
+        self.sample_rate = sr as f64;
+    }
+    fn type_id(&self) -> &'static str {
+        "reverb"
+    }
+}
+
+// ── SaturationEffect ──────────────────────────────────────────────────────
+
+pub struct SaturationEffect {
+    drive_db: f64,
+    mix: f64,
+}
+
+impl SaturationEffect {
+    pub fn new() -> Self {
+        Self {
+            drive_db: 6.0,
+            mix: 1.0,
+        }
+    }
+}
+
+impl Default for SaturationEffect {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InsertEffect for SaturationEffect {
+    fn process(&mut self, audio: &mut [f32], n_frames: usize, _automation: &AutomationFrame) {
+        let drive = 10f32.powf(self.drive_db as f32 / 20.0);
+        let mix = self.mix as f32;
+        let dry = 1.0 - mix;
+        // Compensation: divide back so unity drive_db = 0 doesn't change loudness.
+        let comp = 1.0 / drive.max(1.0);
+        for i in 0..n_frames {
+            let l = audio[i * 2];
+            let r = audio[i * 2 + 1];
+            let wl = (l * drive).tanh() * comp;
+            let wr = (r * drive).tanh() * comp;
+            audio[i * 2] = l * dry + wl * mix;
+            audio[i * 2 + 1] = r * dry + wr * mix;
+        }
+    }
+    fn set_param(&mut self, id: &str, value: f64) {
+        match id {
+            "drive" => self.drive_db = value.clamp(0.0, 24.0),
+            "mix" => self.mix = value.clamp(0.0, 1.0),
+            _ => {}
+        }
+    }
+    fn get_param(&self, id: &str) -> f64 {
+        match id {
+            "drive" => self.drive_db,
+            "mix" => self.mix,
+            _ => 0.0,
+        }
+    }
+    fn param_ids(&self) -> &'static [&'static str] {
+        &["drive", "mix"]
+    }
+    fn type_id(&self) -> &'static str {
+        "saturation"
+    }
+}
+
 // ── Factory ───────────────────────────────────────────────────────────────
 
 /// Construct a built-in insert effect from its `uid`. Returns `None` if the
@@ -296,6 +647,9 @@ pub fn make_builtin(uid: &str) -> Option<Box<dyn InsertEffect>> {
         "gain" => Some(Box::new(GainEffect::new())),
         "svf" => Some(Box::new(StateVariableFilter::new())),
         "compressor" => Some(Box::new(Compressor::new())),
+        "delay" => Some(Box::new(DelayEffect::new())),
+        "reverb" => Some(Box::new(ReverbEffect::default())),
+        "saturation" => Some(Box::new(SaturationEffect::new())),
         _ => None,
     }
 }
@@ -370,6 +724,71 @@ mod tests {
         assert!(make_builtin("gain").is_some());
         assert!(make_builtin("svf").is_some());
         assert!(make_builtin("compressor").is_some());
+        assert!(make_builtin("delay").is_some());
+        assert!(make_builtin("reverb").is_some());
+        assert!(make_builtin("saturation").is_some());
         assert!(make_builtin("unknown").is_none());
+    }
+
+    fn fill_white_noise(buf: &mut [f32]) {
+        let mut x = 0x9e3779b9_u32;
+        for s in buf.iter_mut() {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            *s = ((x as f32) / (u32::MAX as f32)) * 0.5 - 0.25;
+        }
+    }
+
+    fn rms(buf: &[f32]) -> f32 {
+        if buf.is_empty() {
+            return 0.0;
+        }
+        (buf.iter().map(|s| s * s).sum::<f32>() / buf.len() as f32).sqrt()
+    }
+
+    #[test]
+    fn delay_effect_alters_signal() {
+        let mut d = DelayEffect::new();
+        d.set_sample_rate(48_000);
+        d.set_param("timeMs", 100.0);
+        d.set_param("feedback", 0.5);
+        d.set_param("mix", 0.5);
+        let mut input = vec![0.0_f32; 4096 * 2];
+        fill_white_noise(&mut input);
+        let original = input.clone();
+        d.process(&mut input, 4096, &af());
+        let diff: f32 = input.iter().zip(original.iter()).map(|(a, b)| (a - b).abs()).sum();
+        assert!(diff > 0.1, "delay should alter signal, diff={diff}");
+    }
+
+    #[test]
+    fn reverb_effect_alters_signal() {
+        let mut r = ReverbEffect::default();
+        r.set_sample_rate(48_000);
+        r.set_param("mix", 0.5);
+        r.set_param("roomSize", 0.7);
+        let mut input = vec![0.0_f32; 4096 * 2];
+        fill_white_noise(&mut input);
+        let original = input.clone();
+        r.process(&mut input, 4096, &af());
+        let diff: f32 = input.iter().zip(original.iter()).map(|(a, b)| (a - b).abs()).sum();
+        assert!(diff > 0.1, "reverb should alter signal, diff={diff}");
+    }
+
+    #[test]
+    fn saturation_effect_clips_loud_input() {
+        let mut s = SaturationEffect::new();
+        s.set_param("drive", 24.0);
+        s.set_param("mix", 1.0);
+        let mut buf = vec![5.0_f32; 256];
+        s.process(&mut buf, 128, &af());
+        // Tanh-saturated and compensated should be < 1.0 magnitude
+        for v in buf.iter() {
+            assert!(v.abs() < 1.0, "saturation should clip, got {v}");
+        }
+        // Output is non-zero (signal still passes)
+        let r = rms(&buf);
+        assert!(r > 0.01);
     }
 }

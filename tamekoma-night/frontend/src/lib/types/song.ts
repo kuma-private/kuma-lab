@@ -1,4 +1,4 @@
-import type { Automation, Bus, ChainNode, Master, Send } from './chain';
+import type { Automation, Bus, ChainNode, Master, PluginRef, Send } from './chain';
 
 export interface Song {
 	id: string;
@@ -54,6 +54,13 @@ export interface Track {
 	sends?: Send[];
 	pan?: number;
 	automation?: Automation[];
+	/**
+	 * Bridge instrument plugin (built-in or third-party). When set, the
+	 * Bridge routes this track's MIDI through the chosen plugin instead
+	 * of falling back to silence. Independent from the legacy `instrument`
+	 * string above which drives in-browser Tone.js playback.
+	 */
+	instrumentPlugin?: PluginRef;
 }
 
 export interface DirectiveBlock {

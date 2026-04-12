@@ -111,10 +111,13 @@ test.describe('Mixer add plugin', () => {
 		const strip = page.locator('[data-track-id="track-piano"]');
 		await expect(strip).toBeVisible();
 
-		// The first (and only) NodeSlot in the insert chain is an "add" slot.
-		// Click it to open the PluginPicker.
-		const addSlot = strip.getByRole('button', { name: 'プラグインを追加' }).first();
-		await addSlot.click();
+		// The strip has two "add" slots — one in the Instrument section
+		// (top) and one in the Inserts section. We want to add a Filter
+		// to the Insert chain, so target the Inserts section explicitly.
+		const insertAddSlot = strip
+			.locator('[data-section="inserts"]')
+			.getByRole('button', { name: 'プラグインを追加' });
+		await insertAddSlot.click();
 
 		const pickerDialog = page.getByRole('dialog', { name: 'プラグインを選択' });
 		await expect(pickerDialog).toBeVisible();

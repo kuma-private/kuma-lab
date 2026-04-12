@@ -55,7 +55,9 @@ function totalLengthTicks(notes: MidiNote[]): number {
  * BridgeProject payload that the Bridge can load. Each track is bundled into
  * a single MidiClip starting at tick 0.
  *
- * Phase 2: instrument is always null (silent). Plugin assignment lands in Phase 5.
+ * If a track has `instrumentPlugin` set, the Bridge will route MIDI through
+ * that plugin (built-in synth or third-party CLAP/VST3). Otherwise the
+ * instrument is `null` and the Bridge plays silence.
  */
 export function songToBridgeProject(
 	song: Song,
@@ -74,7 +76,12 @@ export function songToBridgeProject(
 		return {
 			id: t.id,
 			name: t.name,
-			instrument: null,
+			instrument: t.instrumentPlugin
+				? {
+						pluginFormat: t.instrumentPlugin.format,
+						pluginId: t.instrumentPlugin.uid
+				  }
+				: null,
 			clips: [clip],
 			volumeDb: t.volume ?? 0,
 			pan: t.pan ?? 0,

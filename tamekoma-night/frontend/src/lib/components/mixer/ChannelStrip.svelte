@@ -18,13 +18,28 @@
 		onRename?: (name: string) => void;
 	} = $props();
 
+	type PickerTarget = 'instrument' | 'insert';
+
 	let pickerOpen = $state(false);
+	let pickerTarget = $state<PickerTarget>('insert');
 	let pickerPosition = $state(0);
 	let popoverNode = $state<ChainNode | null>(null);
 	let addSendOpen = $state(false);
 
 	let chain = $derived(track.chain ?? []);
 	let sends = $derived(track.sends ?? []);
+	let instrumentPlugin = $derived(track.instrumentPlugin ?? null);
+	let instrumentNode = $derived<ChainNode | null>(
+		instrumentPlugin
+			? {
+					id: `${track.id}:instrument`,
+					kind: 'instrument',
+					plugin: instrumentPlugin,
+					bypass: false,
+					params: {}
+			  }
+			: null
+	);
 
 	function formatDb(db: number): string {
 		if (db <= -60) return '-inf';
@@ -32,13 +47,27 @@
 	}
 
 	function openPickerAt(position: number) {
+		pickerTarget = 'insert';
 		pickerPosition = position;
 		pickerOpen = true;
 	}
 
+	function openInstrumentPicker() {
+		pickerTarget = 'instrument';
+		pickerOpen = true;
+	}
+
 	function handlePick(plugin: PluginRef) {
-		songStore.addChainNode(track.id, pickerPosition, plugin);
+		if (pickerTarget === 'instrument') {
+			songStore.setTrackInstrument(track.id, plugin);
+		} else {
+			songStore.addChainNode(track.id, pickerPosition, plugin);
+		}
 		pickerOpen = false;
+	}
+
+	function handleClearInstrument() {
+		songStore.setTrackInstrument(track.id, null);
 	}
 
 	function handleBypass(nodeId: string, bypass: boolean) {
@@ -105,8 +134,23 @@
 		<input class="name-input" value={track.name} oninput={handleNameChange} aria-label="トラック名" />
 	</div>
 
+	<!-- Instrument slot -->
+	<div class="section instrument-section" data-section="instrument">
+		<div class="section-label">Instrument</div>
+		<div class="chain">
+			{#if instrumentNode}
+				<NodeSlot
+					node={instrumentNode}
+					onRemove={handleClearInstrument}
+				/>
+			{:else}
+				<NodeSlot node={null} onAdd={openInstrumentPicker} />
+			{/if}
+		</div>
+	</div>
+
 	<!-- Insert chain -->
-	<div class="section chain-section">
+	<div class="section chain-section" data-section="inserts">
 		<div class="section-label">Inserts</div>
 		<div class="chain">
 			{#each chain as node (node.id)}
@@ -220,7 +264,11 @@
 </div>
 
 {#if pickerOpen}
-	<PluginPicker onPick={handlePick} onClose={() => (pickerOpen = false)} />
+	<PluginPicker
+		onPick={handlePick}
+		onClose={() => (pickerOpen = false)}
+		kindFilter={pickerTarget === 'instrument' ? 'instrument' : 'effect'}
+	/>
 {/if}
 
 {#if popoverNode}

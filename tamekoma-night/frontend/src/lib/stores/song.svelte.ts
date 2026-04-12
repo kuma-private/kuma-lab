@@ -307,6 +307,36 @@ class SongStore {
 		);
 	};
 
+	// ── Track instrument plugin (Bridge built-in / 3rd-party) ──────────
+
+	setTrackInstrument = (trackId: string, plugin: PluginRef | null): void => {
+		this.mutate(
+			(draft) => {
+				const t = draft.tracks.find((x) => x.id === trackId);
+				if (!t) return;
+				if (plugin) {
+					t.instrumentPlugin = plugin;
+				} else {
+					delete t.instrumentPlugin;
+				}
+			},
+			[
+				{
+					op: plugin ? 'replace' : 'remove',
+					path: `/tracks/${escapeJsonPointer(trackId)}/instrument`,
+					...(plugin
+						? {
+								value: {
+									pluginFormat: plugin.format,
+									pluginId: plugin.uid
+								}
+						  }
+						: {})
+				} as JsonPatchOp
+			]
+		);
+	};
+
 	// ── Phase 3: chain operations ────────────────────────
 
 	addChainNode = (trackId: string, position: number, plugin: PluginRef): string => {
