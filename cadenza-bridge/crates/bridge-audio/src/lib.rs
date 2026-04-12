@@ -107,6 +107,7 @@ impl AudioHandle {
                     stream: None,
                     rt_cons: Some(rt_cons),
                     tel_prod: Some(tel_prod),
+                    headless: false,
                 };
                 while let Ok(cmd) = rx.recv() {
                     match cmd {
@@ -181,6 +182,11 @@ struct WorkerState {
     stream: Option<Stream>,
     rt_cons: Option<Consumer<RtCommand>>,
     tel_prod: Option<Producer<TelemetryEvent>>,
+    /// Set to true after the first failed device init so subsequent
+    /// `send_rt` calls don't keep trying. render_wav and other offline
+    /// paths still work because the graph state lives in the project
+    /// model on the network thread.
+    headless: bool,
 }
 
 impl WorkerState {
@@ -188,18 +194,35 @@ impl WorkerState {
         if self.stream.is_some() {
             return Ok(());
         }
+        if self.headless {
+            // Already gave up on this engine — don't keep retrying device init.
+            return Ok(());
+        }
         let rt_cons = self.rt_cons.take().ok_or_else(|| anyhow!("rt cons taken"))?;
         let tel_prod = self
             .tel_prod
             .take()
             .ok_or_else(|| anyhow!("tel prod taken"))?;
-        let stream = build_engine_stream(self.active.clone(), rt_cons, tel_prod)?;
-        stream.play().context("play stream")?;
-        self.stream = Some(stream);
-        info!("engine stream started");
-        Ok(())
+        match build_engine_stream(self.active.clone(), rt_cons, tel_prod) {
+            Ok(stream) => {
+                if let Err(e) = stream.play().context("play stream") {
+                    warn!("failed to start audio stream: {e}; running headless");
+                    self.headless = true;
+                    return Ok(());
+                }
+                self.stream = Some(stream);
+                info!("engine stream started");
+                Ok(())
+            }
+            Err(e) => {
+                // No audio device (CI runners, headless containers, etc).
+                // Mark headless so render_wav and other offline paths still work.
+                warn!("audio stream unavailable: {e}; running headless");
+                self.headless = true;
+                Ok(())
+            }
+        }
     }
-
 }
 
 // ── cpal stream factory ───────────────────────────────────
