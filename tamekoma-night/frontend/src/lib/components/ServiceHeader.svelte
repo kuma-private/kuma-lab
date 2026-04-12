@@ -3,6 +3,7 @@
 	import type { UserInfo } from '$lib/api';
 	import HelpModal from '$lib/components/HelpModal.svelte';
 	import DevPlanToggle from '$lib/components/dev/DevPlanToggle.svelte';
+	import { planStore } from '$lib/stores/plan.svelte';
 
 	let user = $state<UserInfo | null>(null);
 	let loaded = $state(false);
@@ -13,6 +14,7 @@
 		try {
 			const { getMe } = await import('$lib/api');
 			user = await getMe();
+			planStore.initFromAuth(user.tier);
 		} catch {
 			user = null;
 		}

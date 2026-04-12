@@ -7,6 +7,8 @@
   <ItemGroup>
     <Compile Include="Config.fs" />
     <Compile Include="Shared.fs" />
+    <Compile Include="User/Models.fs" />
+    <Compile Include="User/Repository.fs" />
     <Compile Include="Auth/GoogleAuth.fs" />
     <Compile Include="Auth/Handlers.fs" />
     <Compile Include="Thread/Models.fs" />
@@ -17,6 +19,9 @@
     <Compile Include="Song/Repository.fs" />
     <Compile Include="Song/Handlers.fs" />
     <Compile Include="Song/AiHandlers.fs" />
+    <Compile Include="Bridge/Handlers.fs" />
+    <Compile Include="Mixer/Handlers.fs" />
+    <Compile Include="Automation/Handlers.fs" />
     <Compile Include="Middleware/RateLimit.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

@@ -2,6 +2,8 @@ export interface UserInfo {
 	name: string;
 	email: string;
 	sub: string;
+	/** Subscription tier reported by backend. May be absent for older deployments; treat as 'free'. */
+	tier?: 'free' | 'premium';
 }
 
 const apiFetch = async (url: string, options?: RequestInit) => {
@@ -131,6 +133,79 @@ export const generateMidi = async (songId: string, data: GenerateMidiRequest): P
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(data)
+	});
+	return res.json();
+};
+
+// ── Cadenza Bridge: ticket issuance ────────────────────────
+import type { JsonPatchOp } from '$lib/bridge/protocol';
+
+export interface BridgeTicketResponse {
+	/** Short-lived JWT (default 10 min) that the Bridge can verify against the backend. */
+	ticket: string;
+	tier: 'free' | 'premium';
+	/** ISO 8601 expiry timestamp. */
+	expiresAt: string;
+}
+
+export const getBridgeTicket = async (): Promise<BridgeTicketResponse> => {
+	const res = await apiFetch('/api/bridge/ticket', { method: 'POST' });
+	return res.json();
+};
+
+// ── Mixer / Automation AI suggest ──────────────────────────
+
+export interface MixerSuggestRequest {
+	songId: string;
+	prompt: string;
+	/** Entire Mixer snapshot; typed loosely so the server sees exactly what the UI has. */
+	mixer: unknown;
+}
+
+export interface MixerSuggestResponse {
+	explanation: string;
+	ops: JsonPatchOp[];
+	sideEffects: string[];
+}
+
+export const suggestMixer = async (req: MixerSuggestRequest): Promise<MixerSuggestResponse> => {
+	const res = await apiFetch('/api/mixer/suggest', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(req)
+	});
+	return res.json();
+};
+
+export interface AutomationSuggestRequest {
+	trackId: string;
+	nodeId: string;
+	paramId: string;
+	startTick: number;
+	endTick: number;
+	prompt: string;
+	/** [bpm, beatsPerBar] */
+	bpmBpb: [number, number];
+}
+
+export interface AutomationSuggestPoint {
+	tick: number;
+	value: number;
+	curve: 'linear' | 'hold' | 'bezier';
+}
+
+export interface AutomationSuggestResponse {
+	explanation: string;
+	points: AutomationSuggestPoint[];
+}
+
+export const suggestAutomation = async (
+	req: AutomationSuggestRequest
+): Promise<AutomationSuggestResponse> => {
+	const res = await apiFetch('/api/automation/suggest', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(req)
 	});
 	return res.json();
 };

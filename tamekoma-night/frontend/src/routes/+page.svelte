@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { songStore } from '$lib/stores/song.svelte';
+	import { planStore } from '$lib/stores/plan.svelte';
 	import { getMe } from '$lib/api';
 	import type { UserInfo } from '$lib/api';
 
@@ -11,6 +12,7 @@
 	onMount(async () => {
 		try {
 			user = await getMe();
+			planStore.initFromAuth(user.tier);
 		} catch {
 			user = null;
 		}

@@ -10,6 +10,7 @@ open Microsoft.AspNetCore.Authentication.Google
 open Microsoft.AspNetCore.Http
 open Microsoft.IdentityModel.Tokens
 open TamekomaNight.Api
+open TamekomaNight.Api.User
 
 module AuthHandlers =
 
@@ -42,7 +43,11 @@ module AuthHandlers =
             do! ctx.ChallengeAsync(GoogleDefaults.AuthenticationScheme, properties)
         }
 
-    let callbackCompleteHandler (config: AppConfig) (ctx: HttpContext) : Task =
+    let callbackCompleteHandler
+        (config: AppConfig)
+        (userRepo: Repository.IUserRepository)
+        (ctx: HttpContext)
+        : Task =
         task {
             let user = ctx.User
 
@@ -60,6 +65,22 @@ module AuthHandlers =
                     )
                 )
 
+                // Ensure a users/{uid} document exists so /auth/me and the Bridge
+                // ticket endpoint can read the tier. Failure here must not block
+                // login — we just log and continue.
+                let uid =
+                    user.FindFirst(ClaimTypes.NameIdentifier)
+                    |> Option.ofObj
+                    |> Option.map (fun c -> c.Value)
+                    |> Option.defaultValue ""
+                if not (String.IsNullOrEmpty uid) then
+                    try
+                        let! _ = userRepo.GetOrCreate uid
+                        ()
+                    with ex ->
+                        Console.Error.WriteLine(
+                            sprintf "users.getOrCreate failed for uid=%s: %s" uid ex.Message)
+
                 let redirectUrl = if String.IsNullOrEmpty(config.FrontendUrl) then "/" else config.FrontendUrl
                 ctx.Response.Redirect(redirectUrl)
             else
@@ -73,7 +94,12 @@ module AuthHandlers =
             ctx.Response.StatusCode <- 204
         }
 
-    let meHandler (devMode: bool) (ctx: HttpContext) : Task =
+    let meHandler
+        (devMode: bool)
+        (config: AppConfig)
+        (userRepo: Repository.IUserRepository)
+        (ctx: HttpContext)
+        : Task =
         task {
             let user = ctx.User
 
@@ -96,9 +122,32 @@ module AuthHandlers =
                     |> Option.map (fun c -> c.Value)
                     |> Option.defaultValue ""
 
-                do! ctx.Response.WriteAsJsonAsync({| name = name; email = email; sub = sub |})
+                // Best-effort tier lookup. If Firestore is unreachable we default to "free"
+                // rather than erroring the auth endpoint.
+                let! tier =
+                    task {
+                        if String.IsNullOrEmpty sub then
+                            return "free"
+                        else
+                            try
+                                let! t = Repository.resolveTier config userRepo sub
+                                return t
+                            with ex ->
+                                Console.Error.WriteLine(
+                                    sprintf "users.resolveTier failed for uid=%s: %s" sub ex.Message)
+                                return "free"
+                    }
+
+                do! ctx.Response.WriteAsJsonAsync(
+                        {| name = name; email = email; sub = sub; tier = tier |})
             elif devMode then
-                do! ctx.Response.WriteAsJsonAsync({| name = "Dev User"; email = "dev@test.com"; sub = "dev-user" |})
+                let tier =
+                    if Config.isDevPremiumUid config "dev-user" then "premium" else "free"
+                do! ctx.Response.WriteAsJsonAsync(
+                        {| name = "Dev User"
+                           email = "dev@test.com"
+                           sub = "dev-user"
+                           tier = tier |})
             else
                 ctx.Response.StatusCode <- 401
                 do! ctx.Response.WriteAsync("Unauthorized")

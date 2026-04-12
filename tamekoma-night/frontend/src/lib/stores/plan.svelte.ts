@@ -1,4 +1,7 @@
-// Plan store — user tier (free/premium). Defaults to 'free' in Phase 1.
+// Plan store — user tier (free/premium).
+// Phase 4 wires this to the backend /auth/me tier field.
+// The dev localStorage override still takes precedence so QA can flip plans
+// without hitting Stripe / Firestore.
 
 export type Plan = 'free' | 'premium';
 
@@ -25,6 +28,17 @@ class PlanStore {
 
 	setTier(tier: Plan): void {
 		this.tier = tier;
+	}
+
+	/**
+	 * Apply the tier reported by /auth/me. Ignored if the dev override is set,
+	 * so local QA of the Premium UI keeps working regardless of backend state.
+	 */
+	initFromAuth(tier: Plan | undefined): void {
+		if (readOverride()) return;
+		if (tier === 'free' || tier === 'premium') {
+			this.tier = tier;
+		}
 	}
 }
 

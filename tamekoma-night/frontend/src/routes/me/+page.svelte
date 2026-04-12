@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { getMe, getSongs } from '$lib/api';
+	import { planStore } from '$lib/stores/plan.svelte';
 	import type { UserInfo } from '$lib/api';
 	import type { SongListItem } from '$lib/types/song';
 
@@ -46,6 +47,7 @@
 			const [u, s] = await Promise.all([getMe(), getSongs()]);
 			user = u;
 			songs = s;
+			planStore.initFromAuth(u.tier);
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 			if (error === 'LOGIN_REQUIRED') {
