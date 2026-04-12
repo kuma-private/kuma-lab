@@ -199,11 +199,10 @@ pub fn is_autostart_enabled(target: &Target) -> bool {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
 
-    #[cfg(target_os = "macos")]
     #[test]
     fn mac_enable_writes_plist_and_disable_removes_it() {
         let tmp = std::env::temp_dir().join(format!(
@@ -232,7 +231,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    #[cfg(target_os = "macos")]
     #[test]
     fn mac_plist_roundtrips_exe_path() {
         use std::path::Path;
