@@ -53,6 +53,11 @@ fn extract_plugin_format(value: &serde_json::Value) -> Option<String> {
     if let Some(f) = value.get("format").and_then(|v| v.as_str()) {
         return Some(f.to_string());
     }
+    // InstrumentRef shape (setTrackInstrument on /tracks/{id}/instrument):
+    // { "pluginFormat": "clap", "pluginId": "..." }
+    if let Some(f) = value.get("pluginFormat").and_then(|v| v.as_str()) {
+        return Some(f.to_string());
+    }
     // Chain node shape: { "plugin": { "format": "vst3", ... }, ... }
     if let Some(plugin) = value.get("plugin") {
         if let Some(f) = plugin.get("format").and_then(|v| v.as_str()) {
@@ -61,10 +66,16 @@ fn extract_plugin_format(value: &serde_json::Value) -> Option<String> {
     }
     // Track state shape (project.load via patch): { "instrument": { ... } }
     if let Some(inst) = value.get("instrument") {
+        // project.load-style nested: { instrument: { plugin: { format } } }
         if let Some(plugin) = inst.get("plugin") {
             if let Some(f) = plugin.get("format").and_then(|v| v.as_str()) {
                 return Some(f.to_string());
             }
+        }
+        // InstrumentRef nested inside a track spec:
+        // { instrument: { pluginFormat, pluginId } }
+        if let Some(f) = inst.get("pluginFormat").and_then(|v| v.as_str()) {
+            return Some(f.to_string());
         }
     }
     None
@@ -362,6 +373,23 @@ mod tests {
         assert_eq!(extract_plugin_format(&v), None);
         let v2 = serde_json::json!({"id":"x","level":0.4});
         assert_eq!(extract_plugin_format(&v2), None);
+    }
+
+    #[test]
+    fn extract_plugin_format_recognizes_instrument_ref_shape() {
+        // setTrackInstrument emits this shape on /tracks/{id}/instrument
+        let v = serde_json::json!({"pluginFormat":"clap","pluginId":"my.clap.synth"});
+        assert_eq!(extract_plugin_format(&v), Some("clap".to_string()));
+    }
+
+    #[test]
+    fn extract_plugin_format_recognizes_nested_instrument_ref_shape() {
+        // Track spec with an InstrumentRef nested under `instrument`.
+        let v = serde_json::json!({
+            "id":"t1","name":"Lead","clips":[],
+            "instrument":{"pluginFormat":"vst3","pluginId":"my.vst3.synth"}
+        });
+        assert_eq!(extract_plugin_format(&v), Some("vst3".to_string()));
     }
 
     #[test]
