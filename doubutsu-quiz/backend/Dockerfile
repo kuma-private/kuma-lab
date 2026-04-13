@@ -18,6 +18,7 @@ RUN dotnet publish src/DoubutsuQuiz.Api/DoubutsuQuiz.Api.fsproj -c Release -o /a
 FROM mcr.microsoft.com/dotnet/aspnet:9.0
 WORKDIR /app
 COPY --from=backend /app .
+COPY --from=backend /src/data ./data
 COPY --from=frontend /frontend/build ./wwwroot
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080

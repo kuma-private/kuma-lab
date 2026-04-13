@@ -1,0 +1,31 @@
+# Python tools
+tools/irasutoya-index/.venv/
+tools/irasutoya-index/cache/
+tools/irasutoya-index/output/
+tools/**/__pycache__/
+tools/**/*.pyc
+
+# Node
+frontend/node_modules/
+frontend/build/
+frontend/.svelte-kit/
+frontend/.vite/
+
+# .NET
+backend/**/bin/
+backend/**/obj/
+
+# Git
+.git/
+.gitignore
+
+# Dev tooling
+.env
+.env.*
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+# Tests
+e2e/test-results/
