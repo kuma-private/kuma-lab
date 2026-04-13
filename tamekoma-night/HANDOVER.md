@@ -68,6 +68,22 @@ f774991 test(e2e): chain remove/bypass + automation range replace + curve flake 
    - api.ts の `UpdateSongData` 型に optional `buses?` / `master?` を追加 + saveSong で渡す
    - vitest unit test + e2e (song-save-roundtrip.spec.ts) で locked in
 
+3. **Local applyPatch /tracks/{id}/volumeDb mismatch** (commit 831a242)
+   - AI mixer chat batches that write `/tracks/{id}/volumeDb` were no-op locally because
+     the JS Track field is named `volume`. Local applyOpInPlace gained a TRACK_FIELD_ALIAS
+     map so the wire camelCase translates to the JS field at apply time.
+   - The bridge gets the original wire path unchanged, so both sides stay aligned.
+
+4. **Bus / master volumeDb + inserts wire-path divergence** (commit 0227471)
+   - `setBusVolume` was emitting `/buses/{id}/volume` and the master-chain test patched
+     `/master/volume` + `/master/chain/-`. The bridge schema only accepts the wire forms
+     (`volumeDb`, `inserts`), so the bridge silently rejected these patches whenever a
+     project was loaded — UI moved, audio didn't.
+   - Fix: switch `setBusVolume` to `/buses/{id}/volumeDb` and broaden the local alias
+     map so `{volumeDb, inserts}` translates to JS `{volume, chain}` for tracks, buses,
+     and master alike. 4 vitest unit cases + 1 e2e
+     (`mixer-applypatch-bus-master-wire.spec.ts`) lock it in.
+
 ## 累積成果
 
 ### コードベース
@@ -82,13 +98,13 @@ f774991 test(e2e): chain remove/bypass + automation range replace + curve flake 
 |---|---|---|
 | Rust unit (incl. polish-round + Phase 8.5 + handlers gating) | 119 | ✅ |
 | Rust integration (phase 0/2/3/7/8/8.5/builtin_instruments) | 13 | ✅ |
-| Frontend Vitest (incl. saveSong regression) | 147 | ✅ |
-| Frontend Playwright e2e (full stack, real bridge spawned) | 35 | ✅ |
+| Frontend Vitest (incl. bus/master alias regression) | 151 | ✅ |
+| Frontend Playwright e2e (full stack, real bridge spawned) | 51 | ✅ |
 | Backend smoke scripts | 41 (15+26) | ✅ |
-| **Total** | **355** | **✅** |
+| **Total** | **375** | **✅** |
 
-E2E loop testing: **340/340 across 10 stability runs** of the 34-test suite
-(curve-cycle flake fixed in cef3bd4). Each full-suite run ~15s.
+E2E loop testing: **240/240 across 5 stability runs** of the 51-test suite,
+plus 138/138 across earlier 3x sweeps. Each full-suite run ~20s.
 
 ### Deployable artifacts (verified locally)
 
