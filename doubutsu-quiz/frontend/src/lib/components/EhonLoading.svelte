@@ -10,6 +10,7 @@
 	});
 
 	let mode = $derived(ehon.mode ?? 'cosmos');
+	let storyKind = $derived(ehon.active ? 'えほん' : 'なぜなぜ');
 
 	const tips: readonly string[] = [
 		'えほんの かみさまは ときどき おしゃべりが ながい よ',
@@ -49,7 +50,7 @@
 						<span>&#x1F4D6;</span>
 						<span>&#x2728;</span>
 					</div>
-					<p class="text">えほんを つくってるよ{dots}</p>
+					<p class="text">{storyKind}を つくってるよ{dots}</p>
 					<p class="sub">ちょっと まっててね</p>
 				</div>
 			</div>
@@ -109,23 +110,27 @@
 		background:
 			repeating-linear-gradient(
 				90deg,
-				#b23a48 0px,
-				#b23a48 14px,
-				#8a1c2d 14px,
-				#8a1c2d 28px
-			);
-		box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.35);
+				rgba(248, 226, 178, 0.55) 0px,
+				rgba(248, 226, 178, 0.55) 14px,
+				rgba(225, 195, 140, 0.55) 14px,
+				rgba(225, 195, 140, 0.55) 28px
+			),
+			linear-gradient(180deg, rgba(255, 248, 232, 0.4) 0%, rgba(245, 220, 175, 0.4) 100%);
+		box-shadow: inset 0 0 18px rgba(120, 72, 24, 0.18);
+		pointer-events: none;
 	}
 
 	.curtain.left {
 		left: 0;
 		animation: curtainOpenLeft 2.2s ease-in-out infinite alternate;
 		transform-origin: left center;
+		border-right: 1px solid rgba(120, 72, 24, 0.15);
 	}
 	.curtain.right {
 		right: 0;
 		animation: curtainOpenRight 2.2s ease-in-out infinite alternate;
 		transform-origin: right center;
+		border-left: 1px solid rgba(120, 72, 24, 0.15);
 	}
 
 	.center {
@@ -155,42 +160,42 @@
 	.text {
 		margin-top: 14px;
 		font-family: 'Klee One', 'Hiragino Mincho ProN', serif;
-		font-weight: 700;
-		font-size: 1.3rem;
+		font-weight: 800;
+		font-size: 1.45rem;
 		color: #3d2b1f;
 		letter-spacing: 0.08em;
+		text-shadow: 0 1px 0 #fff8e8, 0 0 12px rgba(255, 248, 232, 0.7);
 	}
 
 	.sub {
-		margin-top: 6px;
-		font-size: 0.9rem;
+		margin-top: 8px;
+		font-size: 1rem;
+		font-weight: 700;
 		color: #6b3e1f;
-		opacity: 0.85;
+		opacity: 0.9;
+		text-shadow: 0 1px 0 #fff8e8;
 	}
 
 	.loading-wrap[data-mode='chaos'] .text {
-		background: linear-gradient(135deg, #ff4f7b 0%, #8a2be2 100%);
-		-webkit-background-clip: text;
-		background-clip: text;
-		color: transparent;
-		-webkit-text-fill-color: transparent;
+		color: #6a1b9a;
+		text-shadow: 0 1px 0 #fff8e8, 0 0 14px rgba(255, 248, 232, 0.8);
 	}
 
 	@keyframes curtainOpenLeft {
-		0% {
-			transform: scaleX(1);
-		}
-		100% {
+		0%, 100% {
 			transform: scaleX(0.35);
+		}
+		50% {
+			transform: scaleX(0.55);
 		}
 	}
 
 	@keyframes curtainOpenRight {
-		0% {
-			transform: scaleX(1);
-		}
-		100% {
+		0%, 100% {
 			transform: scaleX(0.35);
+		}
+		50% {
+			transform: scaleX(0.55);
 		}
 	}
 
