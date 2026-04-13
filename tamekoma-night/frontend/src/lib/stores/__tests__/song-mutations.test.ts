@@ -514,3 +514,38 @@ describe('songStore — applyPatch', () => {
 		expect(bridgeMock.sendMock).not.toHaveBeenCalled();
 	});
 });
+
+// ── saveSong PUT payload (regression for buses/master save bug) ──
+
+describe('songStore — saveSong includes Bridge fields in PUT', () => {
+	it('PUT payload contains buses + master after Mixer mutations', async () => {
+		const api = await import('$lib/api');
+		const updateSong = vi.mocked(api.updateSong);
+		updateSong.mockImplementation(async (_id, data) => {
+			// Echo back so the store can rehydrate without exploding.
+			return {
+				...songStore.currentSong!,
+				...data
+			} as Song;
+		});
+
+		// Add a bus + send via the store.
+		const busId = songStore.addBus('Reverb');
+		songStore.addSend('track-piano', busId, 0.4);
+
+		await songStore.saveSong();
+
+		expect(updateSong).toHaveBeenCalledTimes(1);
+		const [, payload] = updateSong.mock.calls[0];
+		expect(payload).toMatchObject({
+			title: 'Test',
+			tracks: expect.any(Array)
+		});
+		// Critical regression check: buses and master must be sent.
+		expect(payload).toHaveProperty('buses');
+		expect(payload.buses?.length).toBe(1);
+		expect(payload.buses?.[0].name).toBe('Reverb');
+		expect(payload).toHaveProperty('master');
+		expect(payload.master).toBeDefined();
+	});
+});
