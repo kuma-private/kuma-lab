@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { nazenaze } from '$lib/stores/nazenaze.svelte';
 	import type { EhonMode } from '$lib/types';
-	import EhonPage from './EhonPage.svelte';
+	import NazenazePage from './NazenazePage.svelte';
 
 	// Map nazenaze mode → ehon visual mode for reusing EhonPage styling.
 	// true → cosmos (calm), false → chaos (playful, untrustworthy vibe).
@@ -41,7 +41,11 @@
 			<div class="frame-inner">
 				{#key nazenaze.currentPage}
 					<div class="slide">
-						<EhonPage page={nazenaze.story.pages[nazenaze.currentPage]} mode={visualMode} />
+						<NazenazePage
+							page={nazenaze.story.pages[nazenaze.currentPage]}
+							mode={visualMode}
+							backgroundImageDataUrl={nazenaze.story.backgroundImageDataUrl}
+						/>
 					</div>
 				{/key}
 			</div>

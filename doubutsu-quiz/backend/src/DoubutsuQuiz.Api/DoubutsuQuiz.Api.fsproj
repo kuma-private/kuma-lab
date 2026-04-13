@@ -19,6 +19,7 @@
     <Compile Include="Ehon/StoryGenerator.fs" />
     <Compile Include="Ehon/Handlers.fs" />
     <Compile Include="Nazenaze/Generator.fs" />
+    <Compile Include="Nazenaze/ImageGen.fs" />
     <Compile Include="Nazenaze/Handlers.fs" />
     <Compile Include="Middleware/RateLimit.fs" />
     <Compile Include="Program.fs" />
@@ -27,6 +28,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.69.0" />
   </ItemGroup>
 
 </Project>

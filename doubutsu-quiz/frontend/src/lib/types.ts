@@ -61,6 +61,7 @@ export interface NazenazeStory {
 	title: string;
 	mode: NazenazeMode;
 	aspectRatio: string;
+	backgroundImageDataUrl?: string;
 	pages: EhonPage[];
 }
 

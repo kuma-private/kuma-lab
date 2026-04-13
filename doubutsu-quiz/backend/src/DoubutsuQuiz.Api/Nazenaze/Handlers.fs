@@ -111,6 +111,25 @@ module NazenazeHandlers =
                         ctx.Response.StatusCode <- 502
                         do! ctx.Response.WriteAsJsonAsync({| error = sprintf "Story generation failed: %s" err |})
                     | Ok story ->
+                        let modeStr =
+                            match mode with
+                            | Generator.TrueMode -> "true"
+                            | Generator.FalseMode -> "false"
+
+                        // Vertex AI Imagen 背景生成 (失敗してもストーリーは返す)
+                        let imagenSw = Stopwatch.StartNew()
+                        let! bgResult =
+                            ImageGen.generateBackground httpClient modeStr body.question story.Title
+                            |> Async.StartAsTask
+                        imagenSw.Stop()
+
+                        let backgroundImageDataUrl =
+                            match bgResult with
+                            | Ok url -> url
+                            | Error err ->
+                                printfn "[nazenaze-imagen-fail] %s" err
+                                ""
+
                         let dtoSw = Stopwatch.StartNew()
                         let entriesById = Dictionary<string, IrasutoyaIndex.Entry>()
                         for e in samples do
@@ -120,6 +139,7 @@ module NazenazeHandlers =
                             {| title = story.Title
                                mode = story.Mode
                                aspectRatio = "3:4"
+                               backgroundImageDataUrl = backgroundImageDataUrl
                                pages = story.Pages |> Array.map (pageToDto entriesById) |}
                         dtoSw.Stop()
 
@@ -129,12 +149,13 @@ module NazenazeHandlers =
                         totalSw.Stop()
 
                         printfn
-                            "[nazenaze-timing] mode=%s pages=%d samples=%d sample=%dms claude=%dms dto=%dms serialize=%dms total=%dms"
-                            (match mode with Generator.TrueMode -> "true" | Generator.FalseMode -> "false")
+                            "[nazenaze-timing] mode=%s pages=%d samples=%d sample=%dms claude=%dms imagen=%dms dto=%dms serialize=%dms total=%dms"
+                            modeStr
                             pageCount
                             samples.Length
                             sampleSw.ElapsedMilliseconds
                             claudeSw.ElapsedMilliseconds
+                            imagenSw.ElapsedMilliseconds
                             dtoSw.ElapsedMilliseconds
                             serializeSw.ElapsedMilliseconds
                             totalSw.ElapsedMilliseconds
