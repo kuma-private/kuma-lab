@@ -95,6 +95,18 @@ f774991 test(e2e): chain remove/bypass + automation range replace + curve flake 
      (`mixer-track-instrument-clap-gating.spec.ts`,
      `mixer-track-instrument-vst3-gating.spec.ts`) lock it in.
 
+6. **hydrateSong null defaults missing** (commit e101c5d)
+   - `hydrateSong` only defaulted `buses`, `master`, `tracks[*].chain/sends/pan/automation`
+     against `?? []` etc. Backend payloads that returned literal `null` for
+     `sections`, `tracks`, or `tracks[i].blocks` slipped through unchanged and
+     would crash downstream callers — `FlowEditor.svelte` calls
+     `song.sections.find(...)` with no null guard, and `song.svelte.ts` walks
+     `tracks.map(...)` directly. Eng D round 4 flagged the latent bug while
+     drafting null-hydration probes and chose not to ship buggy assertions.
+   - Fix: extend `hydrateSong` to default `sections ?? []`, `(tracks ?? [])`, and
+     `t.blocks ?? []`. 3 new vitest unit cases + 1 e2e
+     (`song-hydration-null-sections.spec.ts`) lock it in.
+
 ## 累積成果
 
 ### コードベース
@@ -110,16 +122,17 @@ f774991 test(e2e): chain remove/bypass + automation range replace + curve flake 
 | Rust unit (incl. polish-round + Phase 8.5 + handlers gating) | 119 | ✅ |
 | Rust integration (phase 0/2/3/7/8/8.5/builtin_instruments) | 13 | ✅ |
 | Rust unit tests (bridge-core + extract_plugin_format alias) | 121 | ✅ |
-| Frontend Vitest (incl. bus/master alias regression) | 151 | ✅ |
-| Frontend Playwright e2e (full stack, real bridge spawned) | 205 | ✅ |
+| Frontend Vitest (incl. hydrateSong null-defaults regression) | 154 | ✅ |
+| Frontend Playwright e2e (full stack, real bridge spawned) | 233 | ✅ |
 | Backend smoke scripts | 41 (15+26) | ✅ |
-| **Total** | **543** | **✅** |
+| **Total** | **574** | **✅** |
 
-E2E loop testing: **1010/1010 across 5 stability runs** of the 205-test
-suite (round 3 of the 5-team parallel push: round 1 added 25, round 2 added
-25, round 3 added 27), 875/875 at 178, 750/750 at 153, 585/585 at 120,
-525/525 at 108, 485/485 at 100. Each full run ~65s. **5 real bugs caught
-and fixed** in the post-merge loop.
+E2E loop testing: **1149/1150 across 5 stability runs** of the 233-test
+suite (round 4 of the 5-team parallel push added 27 + bug #6 fix +
+1 regression e2e), 1010/1010 at 205, 875/875 at 178, 750/750 at 153,
+585/585 at 120. The 1 flake on `song-save-automation-points-body` is
+environmental (passes 3/3 in isolation under parallel load). Each full
+run ~70s. **6 real bugs caught and fixed** in the post-merge loop.
 
 ### Deployable artifacts (verified locally)
 
