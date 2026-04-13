@@ -118,6 +118,11 @@ test.describe('Automation AI curve', () => {
 			.poll(async () => (await readBridgeStore(page)).state, { timeout: 8_000 })
 			.toBe('connected');
 
+		// Wait for the song to fully load before mutating the store.
+		await expect
+			.poll(async () => (await readCurrentSong(page))?.id, { timeout: 5_000 })
+			.toBe(SONG_ID);
+
 		// Seed a Filter insert on the lead track so the Automation tab has a
 		// parameter to automate.
 		const nodeId = await callSongStore<string>(page, 'addChainNode', [
@@ -126,6 +131,19 @@ test.describe('Automation AI curve', () => {
 			{ format: 'builtin', uid: 'svf', name: 'Filter', vendor: 'Cadenza' }
 		]);
 		expect(nodeId).toBeTruthy();
+
+		// Wait for the chain node to actually land in the store before
+		// clicking through the UI — otherwise the param picker can render
+		// before the node exists, causing intermittent flakes.
+		await expect
+			.poll(
+				async () => {
+					const snap = await readCurrentSong(page);
+					return snap?.tracks.find((t) => t.id === 'track-lead')?.chain?.length ?? 0;
+				},
+				{ timeout: 3_000 }
+			)
+			.toBeGreaterThanOrEqual(1);
 
 		const automationTab = page.getByRole('tab', { name: 'Automation' });
 		await expect(automationTab).toBeVisible();
