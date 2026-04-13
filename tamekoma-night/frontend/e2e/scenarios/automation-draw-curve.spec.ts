@@ -101,6 +101,11 @@ test.describe('Automation draw curve', () => {
 			.poll(async () => (await readBridgeStore(page)).state, { timeout: 8_000 })
 			.toBe('connected');
 
+		// Wait for the song to fully load before mutating the store.
+		await expect
+			.poll(async () => (await readCurrentSong(page))?.id, { timeout: 5_000 })
+			.toBe(SONG_ID);
+
 		// Seed a Filter insert on the lead track via the store API so the
 		// Automation tab has something automatable.
 		const nodeId = await callSongStore<string>(page, 'addChainNode', [
@@ -109,6 +114,17 @@ test.describe('Automation draw curve', () => {
 			{ format: 'builtin', uid: 'svf', name: 'Filter', vendor: 'Cadenza' }
 		]);
 		expect(nodeId).toBeTruthy();
+
+		// Wait for the chain node to land so the picker has the Cutoff row.
+		await expect
+			.poll(
+				async () => {
+					const snap = await readCurrentSong(page);
+					return snap?.tracks.find((t) => t.id === 'track-lead')?.chain?.length ?? 0;
+				},
+				{ timeout: 3_000 }
+			)
+			.toBeGreaterThanOrEqual(1);
 
 		const automationTab = page.getByRole('tab', { name: 'Automation' });
 		await expect(automationTab).toBeVisible();
