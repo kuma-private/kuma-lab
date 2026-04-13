@@ -8,7 +8,7 @@
 // payload when all optional slots are occupied simultaneously.
 
 import { test, expect } from '../fixtures/full-stack';
-import { callSongStore, readBridgeStore } from '../fixtures/window-stores';
+import { callSongStore, readBridgeStore, readCurrentSong } from '../fixtures/window-stores';
 import type { Song, SongListItem } from '../../src/lib/types/song';
 
 const SONG_ID = 'song-save-mega-body';
@@ -130,6 +130,9 @@ test.describe('Song save mega body roundtrip', () => {
 		await expect
 			.poll(async () => (await readBridgeStore(page)).state, { timeout: 8_000 })
 			.toBe('connected');
+		await expect
+			.poll(async () => (await readCurrentSong(page))?.id, { timeout: 5_000 })
+			.toBe(SONG_ID);
 
 		// Drive the mixer through every optional slot.
 		const nodeId = await callSongStore<string>(page, 'addChainNode', [

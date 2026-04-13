@@ -6,7 +6,7 @@
 // the Bridge protocol's wire field was mistyped).
 
 import { test, expect } from '../fixtures/full-stack';
-import { callSongStore, readBridgeStore } from '../fixtures/window-stores';
+import { callSongStore, readBridgeStore, readCurrentSong } from '../fixtures/window-stores';
 import type { Song, SongListItem } from '../../src/lib/types/song';
 
 const SONG_ID = 'song-save-chain-bypass';
@@ -115,6 +115,9 @@ test.describe('Song save — chain bypass in PUT body', () => {
 		await expect
 			.poll(async () => (await readBridgeStore(page)).state, { timeout: 8_000 })
 			.toBe('connected');
+		await expect
+			.poll(async () => (await readCurrentSong(page))?.id, { timeout: 5_000 })
+			.toBe(SONG_ID);
 
 		// Add two chain nodes so we can prove bypass is per-node.
 		const nodeA = await callSongStore<string>(page, 'addChainNode', [

@@ -13,7 +13,7 @@
 // we can cleanly differentiate the saved value from the original.
 
 import { test, expect } from '../fixtures/full-stack';
-import { callSongStore, readBridgeStore } from '../fixtures/window-stores';
+import { callSongStore, readBridgeStore, readCurrentSong } from '../fixtures/window-stores';
 import type { Song, SongListItem } from '../../src/lib/types/song';
 
 const SONG_ID = 'song-save-updates-list-entry';
@@ -125,6 +125,9 @@ test.describe('saveSong updates the matching songs[] list entry', () => {
 		await expect
 			.poll(async () => (await readBridgeStore(page)).state, { timeout: 8_000 })
 			.toBe('connected');
+		await expect
+			.poll(async () => (await readCurrentSong(page))?.id, { timeout: 5_000 })
+			.toBe(SONG_ID);
 
 		// Populate songs[] and confirm the starting state.
 		await callSongStore(page, 'loadSongs', []);

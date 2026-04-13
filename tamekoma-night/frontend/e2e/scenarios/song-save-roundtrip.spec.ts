@@ -6,7 +6,7 @@
 // /api/songs/{id} PUT.
 
 import { test, expect } from '../fixtures/full-stack';
-import { callSongStore, readBridgeStore } from '../fixtures/window-stores';
+import { callSongStore, readBridgeStore, readCurrentSong } from '../fixtures/window-stores';
 import type { Song, SongListItem } from '../../src/lib/types/song';
 
 const SONG_ID = 'song-save-roundtrip';
@@ -115,6 +115,9 @@ test.describe('Song save round-trip', () => {
 		await expect
 			.poll(async () => (await readBridgeStore(page)).state, { timeout: 8_000 })
 			.toBe('connected');
+		await expect
+			.poll(async () => (await readCurrentSong(page))?.id, { timeout: 5_000 })
+			.toBe(SONG_ID);
 
 		// Build out a mixer state.
 		const nodeId = await callSongStore<string>(page, 'addChainNode', [

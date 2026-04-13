@@ -57,7 +57,28 @@
 		engine.onChordChange = (chord) => { currentChord = chord; };
 	}
 
+	// Wait until bridgeStore.state has settled out of the transient
+	// 'idle'/'connecting' phase, so that the initial chooseEngineKind() call
+	// sees the real outcome of the handshake. Without this wait, a Premium
+	// user's onMount races the WebSocket handshake and locks in the Tone
+	// fallback engine — the $effect rebuild path that's supposed to fix
+	// this up doesn't observably fire under Svelte 5 reactivity in e2e.
+	async function waitForBridgeSettled(timeoutMs = 4000): Promise<void> {
+		const settled = (s: string) => s === 'connected' || s === 'disconnected';
+		if (settled(bridgeStore.state)) return;
+		const start = Date.now();
+		while (Date.now() - start < timeoutMs) {
+			if (settled(bridgeStore.state)) return;
+			await new Promise((r) => setTimeout(r, 50));
+		}
+	}
+
 	async function buildEngine() {
+		// Only Premium users care about the Bridge engine; Free users always get
+		// Tone, so there's no point waiting on the handshake for them.
+		if (planStore.tier === 'premium') {
+			await waitForBridgeSettled();
+		}
 		const desired = { plan: planStore.tier, bridgeConnected: bridgeStore.state === 'connected' };
 		const kind = chooseEngineKind(desired);
 		const engine = await createEngine(desired);
