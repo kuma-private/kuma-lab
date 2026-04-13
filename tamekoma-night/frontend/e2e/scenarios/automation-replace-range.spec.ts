@@ -1,25 +1,22 @@
-// Automation curve cycle scenario.
-//
-// Verifies that the curve type cycles linear → hold → bezier → linear via
-// songStore.setAutomationPointCurve, and that each change emits a JSON
-// patch the bridge accepts.
+// AI curve "Apply" path: replaceAutomationRange replaces points within
+// [startTick, endTick) and preserves outside points.
 
 import { test, expect } from '../fixtures/full-stack';
 import { callSongStore, readBridgeStore, readCurrentSong } from '../fixtures/window-stores';
 import type { Song, SongListItem } from '../../src/lib/types/song';
 
-const SONG_ID = 'song-curve-cycle';
+const SONG_ID = 'song-automation-replace-range';
 
 function makeSong(): Song {
 	const now = new Date().toISOString();
 	return {
 		id: SONG_ID,
-		title: 'Curve Cycle',
+		title: 'Replace Range',
 		bpm: 120,
 		timeSignature: '4/4',
 		key: 'C',
-		chordProgression: '| C | F | G | C |',
-		sections: [{ id: 'sec1', name: 'A', startBar: 1, endBar: 4 }],
+		chordProgression: '| C |',
+		sections: [{ id: 'sec1', name: 'A', startBar: 1, endBar: 1 }],
 		tracks: [
 			{
 				id: 'track-lead',
@@ -43,7 +40,7 @@ function makeSong(): Song {
 	};
 }
 
-test.describe('Automation curve cycle', () => {
+test.describe('Automation replace range', () => {
 	test.beforeEach(async ({ page }) => {
 		const song = makeSong();
 		const listItem: SongListItem = {
@@ -88,61 +85,66 @@ test.describe('Automation curve cycle', () => {
 		);
 	});
 
-	test('cycles point curve linear → hold → bezier → linear', async ({ page, bridge }) => {
+	test('replaces points in range, preserves outside-of-range points', async ({
+		page,
+		bridge
+	}) => {
 		expect(bridge.url).toBeTruthy();
 		await page.goto(`/song/${SONG_ID}`);
-
 		await expect
 			.poll(async () => (await readBridgeStore(page)).state, { timeout: 8_000 })
 			.toBe('connected');
+		await expect
+			.poll(async () => (await readCurrentSong(page))?.id, { timeout: 5_000 })
+			.toBe(SONG_ID);
 
-		// Add a Filter chain node + an automation point on cutoff.
+		// Set up: chain node + 4 points spanning ticks 0/240/480/720.
 		const nodeId = await callSongStore<string>(page, 'addChainNode', [
 			'track-lead',
 			0,
 			{ format: 'builtin', uid: 'svf', name: 'Filter', vendor: 'Cadenza' }
 		]);
-		expect(nodeId).toBeTruthy();
-
-		const pointId = await callSongStore<string>(page, 'addAutomationPoint', [
-			'track-lead',
-			nodeId,
-			'cutoff',
-			0,
-			0.5,
-			'linear'
-		]);
-		expect(pointId).toBeTruthy();
-
-		// Cycle the curve through hold then bezier then back to linear.
-		// Use expect.poll for each transition so the synchronous mutation has
-		// time to propagate through structuredClone + reactivity.
-		const cycle: Array<'hold' | 'bezier' | 'linear'> = ['hold', 'bezier', 'linear'];
-		for (const next of cycle) {
-			await callSongStore(page, 'setAutomationPointCurve', [
+		await callSongStore(page, 'addAutomationLane', ['track-lead', nodeId, 'cutoff']);
+		for (const tick of [0, 240, 480, 720]) {
+			await callSongStore(page, 'addAutomationPoint', [
 				'track-lead',
 				nodeId,
 				'cutoff',
-				pointId,
-				next
+				tick,
+				0.25,
+				'linear'
 			]);
-			await expect
-				.poll(
-					async () => {
-						const snap = await readCurrentSong(page);
-						const lane = snap?.tracks
-							.find((t) => t.id === 'track-lead')
-							?.automation?.find((a) => a.nodeId === nodeId && a.paramId === 'cutoff');
-						const point = lane?.points.find((p) => p.id === pointId) as
-							| { curve?: string }
-							| undefined;
-						return point?.curve;
-					},
-					{ timeout: 3_000 }
-				)
-				.toBe(next);
 		}
 
-		await page.screenshot({ path: 'e2e/screenshots/automation-curve-cycle.png', fullPage: true });
+		// Replace the range [240, 600) with 2 new points.
+		await callSongStore(page, 'replaceAutomationRange', [
+			'track-lead',
+			nodeId,
+			'cutoff',
+			240,
+			600,
+			[
+				{ id: 'new-1', tick: 240, value: 0.9, curve: 'linear' },
+				{ id: 'new-2', tick: 480, value: 0.1, curve: 'linear' }
+			]
+		]);
+
+		const snap = await readCurrentSong(page);
+		const lane = snap?.tracks
+			.find((t) => t.id === 'track-lead')
+			?.automation?.find((a) => a.nodeId === nodeId && a.paramId === 'cutoff');
+		const ticks = (lane?.points ?? []).map((p) => p.tick).sort((a, b) => a - b);
+
+		// Original 0 and 720 stay; original 240 and 480 replaced; new 240 and 480 added.
+		// 600 is exclusive so 720 is preserved. 0 is preserved (outside range).
+		expect(ticks).toEqual([0, 240, 480, 720]);
+		// Verify the values: 0 and 720 should still be 0.25, 240 and 480 should be 0.9 / 0.1.
+		const byTick = new Map(
+			(lane?.points ?? []).map((p) => [p.tick, p as { value: number }])
+		);
+		expect(byTick.get(0)?.value).toBe(0.25);
+		expect(byTick.get(720)?.value).toBe(0.25);
+		expect(byTick.get(240)?.value).toBe(0.9);
+		expect(byTick.get(480)?.value).toBe(0.1);
 	});
 });

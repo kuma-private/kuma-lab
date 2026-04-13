@@ -1,25 +1,21 @@
-// Automation curve cycle scenario.
-//
-// Verifies that the curve type cycles linear → hold → bezier → linear via
-// songStore.setAutomationPointCurve, and that each change emits a JSON
-// patch the bridge accepts.
+// Mixer chain node remove + bypass scenarios.
 
 import { test, expect } from '../fixtures/full-stack';
 import { callSongStore, readBridgeStore, readCurrentSong } from '../fixtures/window-stores';
 import type { Song, SongListItem } from '../../src/lib/types/song';
 
-const SONG_ID = 'song-curve-cycle';
+const SONG_ID = 'song-mixer-chain-remove';
 
 function makeSong(): Song {
 	const now = new Date().toISOString();
 	return {
 		id: SONG_ID,
-		title: 'Curve Cycle',
+		title: 'Chain Remove',
 		bpm: 120,
 		timeSignature: '4/4',
 		key: 'C',
-		chordProgression: '| C | F | G | C |',
-		sections: [{ id: 'sec1', name: 'A', startBar: 1, endBar: 4 }],
+		chordProgression: '| C |',
+		sections: [{ id: 'sec1', name: 'A', startBar: 1, endBar: 1 }],
 		tracks: [
 			{
 				id: 'track-lead',
@@ -43,7 +39,7 @@ function makeSong(): Song {
 	};
 }
 
-test.describe('Automation curve cycle', () => {
+test.describe('Mixer chain remove + bypass', () => {
 	test.beforeEach(async ({ page }) => {
 		const song = makeSong();
 		const listItem: SongListItem = {
@@ -88,61 +84,66 @@ test.describe('Automation curve cycle', () => {
 		);
 	});
 
-	test('cycles point curve linear → hold → bezier → linear', async ({ page, bridge }) => {
+	test('add → bypass → setParam → remove cycle for an insert', async ({
+		page,
+		bridge
+	}) => {
 		expect(bridge.url).toBeTruthy();
 		await page.goto(`/song/${SONG_ID}`);
-
 		await expect
 			.poll(async () => (await readBridgeStore(page)).state, { timeout: 8_000 })
 			.toBe('connected');
+		await expect
+			.poll(async () => (await readCurrentSong(page))?.id, { timeout: 5_000 })
+			.toBe(SONG_ID);
 
-		// Add a Filter chain node + an automation point on cutoff.
+		// Add a built-in compressor.
 		const nodeId = await callSongStore<string>(page, 'addChainNode', [
 			'track-lead',
 			0,
-			{ format: 'builtin', uid: 'svf', name: 'Filter', vendor: 'Cadenza' }
+			{ format: 'builtin', uid: 'compressor', name: 'Compressor', vendor: 'Cadenza' }
 		]);
 		expect(nodeId).toBeTruthy();
 
-		const pointId = await callSongStore<string>(page, 'addAutomationPoint', [
+		// Toggle bypass on.
+		await callSongStore(page, 'setChainBypass', ['track-lead', nodeId, true]);
+		// Set a param.
+		await callSongStore(page, 'setChainParam', [
 			'track-lead',
 			nodeId,
-			'cutoff',
-			0,
-			0.5,
-			'linear'
+			'thresholdDb',
+			-12
 		]);
-		expect(pointId).toBeTruthy();
 
-		// Cycle the curve through hold then bezier then back to linear.
-		// Use expect.poll for each transition so the synchronous mutation has
-		// time to propagate through structuredClone + reactivity.
-		const cycle: Array<'hold' | 'bezier' | 'linear'> = ['hold', 'bezier', 'linear'];
-		for (const next of cycle) {
-			await callSongStore(page, 'setAutomationPointCurve', [
-				'track-lead',
-				nodeId,
-				'cutoff',
-				pointId,
-				next
-			]);
-			await expect
-				.poll(
-					async () => {
-						const snap = await readCurrentSong(page);
-						const lane = snap?.tracks
-							.find((t) => t.id === 'track-lead')
-							?.automation?.find((a) => a.nodeId === nodeId && a.paramId === 'cutoff');
-						const point = lane?.points.find((p) => p.id === pointId) as
-							| { curve?: string }
-							| undefined;
-						return point?.curve;
-					},
-					{ timeout: 3_000 }
-				)
-				.toBe(next);
-		}
+		// Verify state.
+		await expect
+			.poll(
+				async () => {
+					const snap = await readCurrentSong(page);
+					const t = snap?.tracks.find((x) => x.id === 'track-lead');
+					const node = t?.chain?.find((n) => n.id === nodeId) as
+						| { bypass?: boolean; params?: Record<string, number> }
+						| undefined;
+					return {
+						bypass: node?.bypass ?? null,
+						threshold: node?.params?.thresholdDb ?? null
+					};
+				},
+				{ timeout: 3_000 }
+			)
+			.toMatchObject({ bypass: true, threshold: -12 });
 
-		await page.screenshot({ path: 'e2e/screenshots/automation-curve-cycle.png', fullPage: true });
+		// Remove the node.
+		await callSongStore(page, 'removeChainNode', ['track-lead', nodeId]);
+		await expect
+			.poll(
+				async () => {
+					const snap = await readCurrentSong(page);
+					const t = snap?.tracks.find((x) => x.id === 'track-lead');
+					return t?.chain?.length ?? 0;
+				},
+				{ timeout: 3_000 }
+			)
+			.toBe(0);
 	});
 });
