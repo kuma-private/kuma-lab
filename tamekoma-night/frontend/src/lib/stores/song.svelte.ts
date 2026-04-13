@@ -710,7 +710,7 @@ class SongStore {
 			[
 				{
 					op: 'replace',
-					path: `/buses/${escapeJsonPointer(busId)}/volume`,
+					path: `/buses/${escapeJsonPointer(busId)}/volumeDb`,
 					value: volumeDb
 				}
 			]
@@ -745,30 +745,40 @@ class SongStore {
 // ── Local-only patch applier (RFC 6902 subset) ──────────
 
 /**
- * Wire field name → JS Track field name. The bridge protocol uses
- * camelCase 'volumeDb' but the JS Track type stores it as 'volume'.
- * (Other fields like mute/solo/pan match between wire and JS.)
+ * Wire field name → JS field name. The bridge protocol uses camelCase
+ * 'volumeDb' / 'inserts' but the JS Track/Bus/Master types store them as
+ * 'volume' / 'chain'. (Other fields like mute/solo/pan match between wire
+ * and JS.)
+ *
+ * Aliasing is positional: it kicks in only at the field slot that follows
+ * a tracks/buses/<id> or master/ prefix, so we don't accidentally rewrite a
+ * deeper segment that happens to share a name.
  */
-const TRACK_FIELD_ALIAS: Record<string, string> = {
-	volumeDb: 'volume'
+const WIRE_TO_JS_FIELD: Record<string, string> = {
+	volumeDb: 'volume',
+	inserts: 'chain'
 };
 
-function aliasSegment(segments: string[], i: number): string {
-	const seg = segments[i];
-	// Only translate when we're addressing a direct field of a track.
-	// segments shape: ['tracks', '<id>', '<field>'] → i === 2
-	if (i === 2 && segments[0] === 'tracks' && TRACK_FIELD_ALIAS[seg]) {
-		return TRACK_FIELD_ALIAS[seg];
+function aliasPath(segments: string[]): string[] {
+	if (segments.length === 0) return segments;
+	const out = segments.slice();
+	const root = out[0];
+	let fieldIdx = -1;
+	if (root === 'tracks' && out.length >= 3) fieldIdx = 2;
+	else if (root === 'buses' && out.length >= 3) fieldIdx = 2;
+	else if (root === 'master' && out.length >= 2) fieldIdx = 1;
+	if (fieldIdx >= 0) {
+		const aliased = WIRE_TO_JS_FIELD[out[fieldIdx]];
+		if (aliased) out[fieldIdx] = aliased;
 	}
-	return seg;
+	return out;
 }
 
 function applyOpInPlace(song: Song, op: JsonPatchOp): void {
-	const segments = parsePointer(op.path);
-	if (segments.length === 0) return;
-	// Apply field alias on the last segment if applicable.
-	const aliasedLast = aliasSegment(segments, segments.length - 1);
-	const last = aliasedLast;
+	const rawSegments = parsePointer(op.path);
+	if (rawSegments.length === 0) return;
+	const segments = aliasPath(rawSegments);
+	const last = segments[segments.length - 1];
 	const parentResult = resolveContainer(song, segments.slice(0, -1));
 	if (parentResult == null) return;
 	const parent = parentResult.parent;

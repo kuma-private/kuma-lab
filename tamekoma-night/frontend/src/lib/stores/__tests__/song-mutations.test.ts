@@ -404,7 +404,7 @@ describe('songStore — bus mutations', () => {
 
 		expect(songStore.currentSong!.buses![0].volume).toBe(-3);
 		expect(lastPatchOps()).toEqual([
-			{ op: 'replace', path: `/buses/${busId}/volume`, value: -3 }
+			{ op: 'replace', path: `/buses/${busId}/volumeDb`, value: -3 }
 		]);
 	});
 
@@ -451,9 +451,9 @@ describe('songStore — applyPatch', () => {
 		];
 		songStore.applyPatch(ops);
 
-		// volumeDb is a special-case field name that does NOT exist on Track
-		// (the Track's local field is 'volume'). But the local applier writes
-		// it onto the track object regardless — verify mute landed.
+		// volumeDb is the wire field; the local Track field is 'volume'. The
+		// local applier aliases volumeDb → volume so both sides stay in sync.
+		expect(songStore.currentSong!.tracks[0].volume).toBe(-10);
 		expect(songStore.currentSong!.tracks[0].mute).toBe(true);
 		expect(bridgeMock.sentCommands[0]).toEqual({ type: 'project.patch', ops });
 	});
@@ -512,6 +512,74 @@ describe('songStore — applyPatch', () => {
 		]);
 		expect(songStore.currentSong!.tracks[0].mute).toBe(true);
 		expect(bridgeMock.sendMock).not.toHaveBeenCalled();
+	});
+
+	it('aliases /buses/{id}/volumeDb → bus.volume locally', () => {
+		bridgeMock.state.value = 'connected';
+		const busId = songStore.addBus('Reverb');
+		bridgeMock.sentCommands.length = 0;
+
+		songStore.applyPatch([
+			{ op: 'replace', path: `/buses/${busId}/volumeDb`, value: -7 }
+		]);
+
+		const bus = songStore.currentSong!.buses!.find((b) => b.id === busId);
+		expect(bus?.volume).toBe(-7);
+	});
+
+	it('aliases /master/volumeDb → master.volume locally', () => {
+		bridgeMock.state.value = 'connected';
+		bridgeMock.sentCommands.length = 0;
+
+		songStore.applyPatch([{ op: 'replace', path: '/master/volumeDb', value: 0.7 }]);
+
+		expect(songStore.currentSong!.master?.volume).toBe(0.7);
+	});
+
+	it('aliases /master/inserts/- → master.chain locally', () => {
+		bridgeMock.state.value = 'connected';
+		bridgeMock.sentCommands.length = 0;
+
+		songStore.applyPatch([
+			{
+				op: 'add',
+				path: '/master/inserts/-',
+				value: {
+					id: 'm-sat',
+					kind: 'insert',
+					plugin: { format: 'builtin', uid: 'saturation', name: 'Saturation' },
+					bypass: false,
+					params: {}
+				}
+			}
+		]);
+
+		expect(songStore.currentSong!.master?.chain?.length).toBe(1);
+		expect(songStore.currentSong!.master?.chain?.[0]?.id).toBe('m-sat');
+	});
+
+	it('aliases /buses/{id}/inserts/- → bus.chain locally', () => {
+		bridgeMock.state.value = 'connected';
+		const busId = songStore.addBus('Delay');
+		bridgeMock.sentCommands.length = 0;
+
+		songStore.applyPatch([
+			{
+				op: 'add',
+				path: `/buses/${busId}/inserts/-`,
+				value: {
+					id: 'b-eq',
+					kind: 'insert',
+					plugin: { format: 'builtin', uid: 'eq', name: 'EQ' },
+					bypass: false,
+					params: {}
+				}
+			}
+		]);
+
+		const bus = songStore.currentSong!.buses!.find((b) => b.id === busId);
+		expect(bus?.chain?.length).toBe(1);
+		expect(bus?.chain?.[0]?.id).toBe('b-eq');
 	});
 });
 

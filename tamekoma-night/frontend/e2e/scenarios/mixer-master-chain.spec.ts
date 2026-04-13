@@ -98,17 +98,19 @@ test.describe('Mixer master chain via applyPatch', () => {
 			.poll(async () => (await readCurrentSong(page))?.id, { timeout: 5_000 })
 			.toBe(SONG_ID);
 
-		// Replace master volume.
+		// Replace master volume — wire format uses volumeDb, the local applier
+		// aliases it to master.volume so both sides stay in sync.
 		await callSongStore(page, 'applyPatch', [
-			[{ op: 'replace', path: '/master/volume', value: 0.85 }]
+			[{ op: 'replace', path: '/master/volumeDb', value: 0.85 }]
 		]);
 
-		// Add a master saturation insert via the frontend `chain` field.
+		// Add a master saturation insert. Wire format uses 'inserts'; the local
+		// applier aliases it to master.chain.
 		await callSongStore(page, 'applyPatch', [
 			[
 				{
 					op: 'add',
-					path: '/master/chain/-',
+					path: '/master/inserts/-',
 					value: {
 						id: 'm1',
 						kind: 'insert',
