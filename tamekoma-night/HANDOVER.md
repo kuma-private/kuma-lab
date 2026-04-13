@@ -134,6 +134,28 @@ Total deployable: ~17 MB across 3 components.
 | P8.5 | (no issue) | Real CLAP plugin loading via clap-sys FFI | ✅ |
 | P9 | #78 | Distribution: signing scripts + Stripe scaffolding + DEPLOY.md | ✅ |
 
+## Known issue (post-merge investigation)
+
+**Engine factory races bridge handshake on song page mount.** When the song
+page (`/song/[id]/+page.svelte`) mounts, `buildEngine()` runs in `onMount`
+and locks in a Tone-based `PlaybackEngine` because `bridgeStore.state` is
+still `connecting` at that moment. There is a `$effect` block intended to
+rebuild the engine when state flips, but in the e2e harness that rebuild
+never observably fires — `songStore.engine.kind` stays `'tone'` even after
+`bridgeStore.state === 'connected'` and `planStore.tier === 'premium'`.
+
+Symptom: a Premium user opening a song page before the bridge has finished
+its handshake silently stays on Tone playback for the rest of the session
+unless they reload after the bridge connects.
+
+Impact in current tests: zero — none of the e2e scenarios actually exercise
+audio playback, and Mixer/Automation mutations live in `songStore`
+independent of the engine kind.
+
+Investigation done so far is captured in commits afc6e2d and 36e22af. A
+direct fix likely needs `buildEngine()` to await the bridge handshake (or
+defer engine selection to a `$derived`).
+
 ## 技術的負債 / Phase 9.5+ で対応
 
 1. **VST3 SDK の配布形態**
