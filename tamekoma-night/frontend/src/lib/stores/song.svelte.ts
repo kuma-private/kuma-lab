@@ -744,10 +744,31 @@ class SongStore {
 
 // ── Local-only patch applier (RFC 6902 subset) ──────────
 
+/**
+ * Wire field name → JS Track field name. The bridge protocol uses
+ * camelCase 'volumeDb' but the JS Track type stores it as 'volume'.
+ * (Other fields like mute/solo/pan match between wire and JS.)
+ */
+const TRACK_FIELD_ALIAS: Record<string, string> = {
+	volumeDb: 'volume'
+};
+
+function aliasSegment(segments: string[], i: number): string {
+	const seg = segments[i];
+	// Only translate when we're addressing a direct field of a track.
+	// segments shape: ['tracks', '<id>', '<field>'] → i === 2
+	if (i === 2 && segments[0] === 'tracks' && TRACK_FIELD_ALIAS[seg]) {
+		return TRACK_FIELD_ALIAS[seg];
+	}
+	return seg;
+}
+
 function applyOpInPlace(song: Song, op: JsonPatchOp): void {
 	const segments = parsePointer(op.path);
 	if (segments.length === 0) return;
-	const last = segments[segments.length - 1];
+	// Apply field alias on the last segment if applicable.
+	const aliasedLast = aliasSegment(segments, segments.length - 1);
+	const last = aliasedLast;
 	const parentResult = resolveContainer(song, segments.slice(0, -1));
 	if (parentResult == null) return;
 	const parent = parentResult.parent;
