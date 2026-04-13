@@ -99,12 +99,12 @@ f774991 test(e2e): chain remove/bypass + automation range replace + curve flake 
 | Rust unit (incl. polish-round + Phase 8.5 + handlers gating) | 119 | ✅ |
 | Rust integration (phase 0/2/3/7/8/8.5/builtin_instruments) | 13 | ✅ |
 | Frontend Vitest (incl. bus/master alias regression) | 151 | ✅ |
-| Frontend Playwright e2e (full stack, real bridge spawned) | 51 | ✅ |
+| Frontend Playwright e2e (full stack, real bridge spawned) | 79 | ✅ |
 | Backend smoke scripts | 41 (15+26) | ✅ |
-| **Total** | **375** | **✅** |
+| **Total** | **403** | **✅** |
 
-E2E loop testing: **240/240 across 5 stability runs** of the 51-test suite,
-plus 138/138 across earlier 3x sweeps. Each full-suite run ~20s.
+E2E loop testing: **375/375 across 5 stability runs** of the 79-test suite,
+plus earlier 5x sweeps at 51, 60, 70 tests. Each full-suite run ~25s.
 
 ### Deployable artifacts (verified locally)
 
