@@ -96,6 +96,13 @@ test.describe('Automation curve cycle', () => {
 			.poll(async () => (await readBridgeStore(page)).state, { timeout: 8_000 })
 			.toBe('connected');
 
+		// Wait for the song to fully load before mutating it. Without this,
+		// addChainNode can fire while the store still holds the previous
+		// suite's currentSong, which makes the lookup miss.
+		await expect
+			.poll(async () => (await readCurrentSong(page))?.id, { timeout: 5_000 })
+			.toBe(SONG_ID);
+
 		// Add a Filter chain node + an automation point on cutoff.
 		const nodeId = await callSongStore<string>(page, 'addChainNode', [
 			'track-lead',
@@ -113,6 +120,22 @@ test.describe('Automation curve cycle', () => {
 			'linear'
 		]);
 		expect(pointId).toBeTruthy();
+
+		// Make sure the point is actually committed to the store before
+		// we start cycling its curve. Polls for both the lane and the
+		// point so structuredClone propagation has time to settle.
+		await expect
+			.poll(
+				async () => {
+					const snap = await readCurrentSong(page);
+					const lane = snap?.tracks
+						.find((t) => t.id === 'track-lead')
+						?.automation?.find((a) => a.nodeId === nodeId && a.paramId === 'cutoff');
+					return lane?.points.find((p) => p.id === pointId)?.curve ?? null;
+				},
+				{ timeout: 3_000 }
+			)
+			.toBe('linear');
 
 		// Cycle the curve through hold then bezier then back to linear.
 		// Use expect.poll for each transition so the synchronous mutation has
