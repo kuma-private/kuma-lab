@@ -20,16 +20,16 @@ module ImageGen =
             return! scoped.UnderlyingCredential.GetAccessTokenForRequestAsync()
         }
 
-    let private buildPrompt (mode: string) (_question: string) (title: string) : string =
+    let private buildPrompt (mode: string) (scenePrompt: string) : string =
         let style =
             if mode = "false" then
-                "whimsical pastel watercolor illustration, dreamy and slightly silly, soft brush strokes, gentle colors"
+                "whimsical pastel watercolor children's picture book illustration, dreamy and slightly silly, soft brush strokes, gentle colors"
             else
-                "calm pastel watercolor illustration, soft brush strokes, gentle warm colors, picture book style"
-        // 質問テキストは渡さず、タイトルだけにして安全フィルタを避ける
+                "calm pastel watercolor children's picture book illustration, soft brush strokes, gentle warm colors"
+        // scenePrompt は Claude が考えた英語シーン描写 (1 文)。それを style modifier で wrap する
         sprintf
-            "An empty environment scene related to: %s. %s. Wide panoramic view, no characters, no people, no text, no letters, just the setting and atmosphere."
-            title style
+            "%s. %s. Wide panoramic view, no characters, no people, no text, no letters, atmospheric and gentle."
+            scenePrompt style
 
     /// Generate a single background PNG via Vertex AI Imagen.
     /// Returns Ok dataUrl ("data:image/png;base64,...") or Error message.
@@ -37,13 +37,12 @@ module ImageGen =
     let generateBackground
         (httpClient: HttpClient)
         (mode: string)
-        (question: string)
-        (title: string)
+        (scenePrompt: string)
         : Async<Result<string, string>> =
         async {
             try
                 let! token = getAccessToken () |> Async.AwaitTask
-                let prompt = buildPrompt mode question title
+                let prompt = buildPrompt mode scenePrompt
 
                 let url =
                     sprintf

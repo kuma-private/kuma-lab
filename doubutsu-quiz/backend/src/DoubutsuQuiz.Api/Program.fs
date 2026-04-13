@@ -148,6 +148,9 @@ module Program =
         app.MapPost("/api/nazenaze/generate", Func<HttpContext, Task>(requireLogin (withRateLimit NazenazeHandlers.generateHandler)))
         |> ignore
 
+        app.MapPost("/api/nazenaze/generate-stream", Func<HttpContext, Task>(requireLogin (withRateLimit NazenazeHandlers.generateStreamHandler)))
+        |> ignore
+
         app.MapPost("/api/voice", Func<HttpContext, Task>(requireLogin QuizHandlers.voiceHandler))
         |> ignore
 

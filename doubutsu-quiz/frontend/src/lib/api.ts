@@ -5,7 +5,9 @@ import type {
 	EhonPage,
 	EhonMode,
 	NazenazeStory,
-	NazenazeGenerateRequest
+	NazenazeGenerateRequest,
+	NazenazeMode,
+	NazenazePage
 } from './types';
 
 export async function generateNazenaze(req: NazenazeGenerateRequest): Promise<NazenazeStory> {
@@ -153,6 +155,120 @@ export async function generateEhonStream(
 
 	if (!sawDone && !sawError) {
 		// Stream ended without explicit done — still mark complete.
+		cb.onDone();
+	}
+}
+
+export interface NazenazeStreamCallbacks {
+	onTitle: (
+		title: string,
+		totalPages: number,
+		aspectRatio: string,
+		mode: NazenazeMode
+	) => void;
+	onPage: (page: NazenazePage) => void;
+	onBackground: (backgroundImageDataUrl: string) => void;
+	onDone: () => void;
+	onError: (err: string) => void;
+}
+
+/**
+ * Phase B+ real-streaming client for nazenaze. The backend runs Claude with
+ * stream=true, launches Imagen in parallel once the title/imagePrompt parses,
+ * and flushes title / page / background / done events over SSE.
+ */
+export async function generateNazenazeStream(
+	req: NazenazeGenerateRequest,
+	cb: NazenazeStreamCallbacks
+): Promise<void> {
+	let resp: Response;
+	try {
+		resp = await fetch('/api/nazenaze/generate-stream', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			credentials: 'include',
+			body: JSON.stringify(req)
+		});
+	} catch (e) {
+		cb.onError(e instanceof Error ? e.message : 'network error');
+		return;
+	}
+
+	if (resp.status === 401) {
+		cb.onError('LOGIN_REQUIRED');
+		return;
+	}
+	if (!resp.ok) {
+		cb.onError(`HTTP ${resp.status}`);
+		return;
+	}
+	if (!resp.body) {
+		cb.onError('no body');
+		return;
+	}
+
+	const reader = resp.body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
+	let sawError = false;
+	let sawDone = false;
+
+	const handleChunk = (chunk: string) => {
+		const lines = chunk.split('\n');
+		let eventName = 'message';
+		let data = '';
+		for (const line of lines) {
+			if (line.startsWith('event:')) eventName = line.slice(6).trim();
+			else if (line.startsWith('data:')) data += line.slice(5).trim();
+		}
+		if (!data) return;
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(data);
+		} catch (e) {
+			console.warn('[nazenaze-sse] parse error', e, data);
+			return;
+		}
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const p = parsed as any;
+		if (eventName === 'title') {
+			cb.onTitle(
+				p.title ?? '',
+				p.totalPages ?? 0,
+				p.aspectRatio ?? '3:4',
+				(p.mode ?? 'true') as NazenazeMode
+			);
+		} else if (eventName === 'page') {
+			cb.onPage(p as NazenazePage);
+		} else if (eventName === 'background') {
+			cb.onBackground((p.backgroundImageDataUrl as string) ?? '');
+		} else if (eventName === 'done') {
+			sawDone = true;
+			cb.onDone();
+		} else if (eventName === 'error') {
+			sawError = true;
+			cb.onError((p.error as string) ?? 'unknown');
+		}
+	};
+
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+			const chunks = buffer.split('\n\n');
+			buffer = chunks.pop() ?? '';
+			for (const chunk of chunks) {
+				if (chunk.length > 0) handleChunk(chunk);
+			}
+		}
+		if (buffer.length > 0) handleChunk(buffer);
+	} catch (e) {
+		cb.onError(e instanceof Error ? e.message : 'stream read error');
+		return;
+	}
+
+	if (!sawDone && !sawError) {
 		cb.onDone();
 	}
 }
