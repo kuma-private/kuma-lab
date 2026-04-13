@@ -36,7 +36,7 @@ export default defineConfig({
 			// planStore reports premium tier without hitting /auth/me.
 			name: 'premium',
 			testMatch:
-				/scenarios\/(bridge-handshake|mixer-|automation-|builtin-|render-|premium-).*\.spec\.ts$/,
+				/scenarios\/(bridge-|mixer-|automation-|builtin-|render-|premium-).*\.spec\.ts$/,
 			use: {
 				...devices['Desktop Chrome'],
 				storageState: './e2e/.auth/premium.json'
