@@ -9,10 +9,12 @@ import type { Song, Section, Track, DirectiveBlock } from '$lib/types/song';
 export function hydrateSong(song: Song): Song {
 	return {
 		...song,
+		sections: song.sections ?? [],
 		buses: song.buses ?? [],
 		master: song.master ?? { chain: [], volume: 1 },
-		tracks: song.tracks.map((t) => ({
+		tracks: (song.tracks ?? []).map((t) => ({
 			...t,
+			blocks: t.blocks ?? [],
 			chain: t.chain ?? [],
 			sends: t.sends ?? [],
 			pan: t.pan ?? 0,

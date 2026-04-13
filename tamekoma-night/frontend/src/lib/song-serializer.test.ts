@@ -69,6 +69,28 @@ describe('hydrateSong', () => {
 		hydrateSong(s);
 		expect(JSON.stringify(s)).toBe(before);
 	});
+
+	it('defaults sections to [] when null/undefined', () => {
+		const s = baseSong();
+		// Simulate a backend payload that omits sections entirely.
+		(s as { sections?: unknown }).sections = null;
+		const h = hydrateSong(s);
+		expect(h.sections).toEqual([]);
+	});
+
+	it('defaults tracks[*].blocks to [] when null/undefined', () => {
+		const s = baseSong();
+		(s.tracks[0] as { blocks?: unknown }).blocks = null;
+		const h = hydrateSong(s);
+		expect(h.tracks[0].blocks).toEqual([]);
+	});
+
+	it('handles tracks: null on the root by treating it as []', () => {
+		const s = baseSong();
+		(s as { tracks?: unknown }).tracks = null;
+		const h = hydrateSong(s);
+		expect(h.tracks).toEqual([]);
+	});
 });
 
 describe('serialize / deserialize round-trip (legacy fields only)', () => {
