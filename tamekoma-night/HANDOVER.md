@@ -84,6 +84,17 @@ f774991 test(e2e): chain remove/bypass + automation range replace + curve flake 
      and master alike. 4 vitest unit cases + 1 e2e
      (`mixer-applypatch-bus-master-wire.spec.ts`) lock it in.
 
+5. **🚨 Security: setTrackInstrument CLAP/VST3 gate bypass** (commit 0f1afa1)
+   - `extract_plugin_format` in bridge-core recognized `{format,...}`,
+     `{plugin:{format}}`, and `{instrument:{plugin:{format}}}` shapes but **not** the
+     `InstrumentRef` shape `{pluginFormat, pluginId}` that `setTrackInstrument`
+     actually emits on `/tracks/{id}/instrument`. Result: a free user could set a
+     CLAP/VST3 plugin as a track instrument and bypass the premium gate.
+   - Fix: teach `extract_plugin_format` the `InstrumentRef` shape at both top level
+     and nested under an `instrument` key. 2 new Rust unit tests + 2 e2e scenarios
+     (`mixer-track-instrument-clap-gating.spec.ts`,
+     `mixer-track-instrument-vst3-gating.spec.ts`) lock it in.
+
 ## 累積成果
 
 ### コードベース
@@ -98,14 +109,15 @@ f774991 test(e2e): chain remove/bypass + automation range replace + curve flake 
 |---|---|---|
 | Rust unit (incl. polish-round + Phase 8.5 + handlers gating) | 119 | ✅ |
 | Rust integration (phase 0/2/3/7/8/8.5/builtin_instruments) | 13 | ✅ |
+| Rust unit tests (bridge-core + extract_plugin_format alias) | 121 | ✅ |
 | Frontend Vitest (incl. bus/master alias regression) | 151 | ✅ |
-| Frontend Playwright e2e (full stack, real bridge spawned) | 100 | ✅ |
+| Frontend Playwright e2e (full stack, real bridge spawned) | 111 | ✅ |
 | Backend smoke scripts | 41 (15+26) | ✅ |
-| **Total** | **424** | **✅** |
+| **Total** | **437** | **✅** |
 
-E2E loop testing: **485/485 across 5 stability runs** of the 100-test suite
-(milestone), plus earlier 5x sweeps at 51, 60, 70, 78 tests. Each full-suite
-run ~30s.
+E2E loop testing: **525/525 across 5 stability runs** of the 108-test suite,
+**485/485** at 100 tests, plus earlier sweeps at 51/60/70/78/84/90. Each full
+run ~30s. 5 real bugs caught and fixed in the loop.
 
 ### Deployable artifacts (verified locally)
 
