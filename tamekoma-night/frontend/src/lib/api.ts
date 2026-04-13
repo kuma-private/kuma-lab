@@ -23,6 +23,7 @@ export const getMe = async (): Promise<UserInfo> => {
 
 // Song API
 import type { Song, SongListItem, Section, Track } from '$lib/types/song';
+import type { Bus, Master } from '$lib/types/chain';
 
 export interface UpdateSongData {
 	title: string;
@@ -32,6 +33,9 @@ export interface UpdateSongData {
 	chordProgression: string;
 	sections: Section[];
 	tracks: Track[];
+	// Optional Bridge fields (Phase 1+); persisted via /api/songs/{id} PUT.
+	buses?: Bus[];
+	master?: Master;
 }
 
 export const getSongs = async (): Promise<SongListItem[]> => {

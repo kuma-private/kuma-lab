@@ -78,7 +78,11 @@ class SongStore {
 				key: this.currentSong.key,
 				chordProgression: this.currentSong.chordProgression,
 				sections: this.currentSong.sections,
-				tracks: this.currentSong.tracks
+				tracks: this.currentSong.tracks,
+				// Include the optional Bridge fields so chain/automation/sends
+				// added through the Mixer survive a save round-trip.
+				buses: this.currentSong.buses,
+				master: this.currentSong.master
 			});
 			this.currentSong = hydrateSong(saved);
 			this.songs = this.songs.map((s) =>
