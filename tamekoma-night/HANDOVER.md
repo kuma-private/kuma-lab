@@ -1,12 +1,12 @@
-# Handover — Cadenza Bridge Epic 完了 (#68)
+# Handover — Cadenza Bridge Epic 完了 (#68) + Post-merge polish
 
 ## 概要
 
-`feature/cadenza-bridge-epic` ブランチで Cadenza Bridge エピック (#68) の全 Phase (P0-P9 + P8.5) をマージ可能な状態まで完了させた。Web DAW 化のための Rust 製ネイティブ Bridge + Frontend Mixer/Automation タブ + Backend API + 配布パッケージング + E2E テストインフラ全部入り。
+`feature/cadenza-bridge-epic` ブランチで Cadenza Bridge エピック (#68) の全 Phase (P0-P9 + P8.5) を完了 → PR #80 として main にマージ済 (commit `d07e795`)。マージ後も継続して E2E テスト追加 + 発見した security bug + save bug の修正を続行中。
 
 ## ブランチ
 
-`feature/cadenza-bridge-epic` (origin/main から分岐)
+`main` (PR #80 マージ済み)。post-merge の作業は main に直接 commit + push。
 
 ## コミット履歴
 
@@ -29,6 +29,45 @@ a7c2a56 docs: Cadenza Bridge architecture (Epic #68)
 
 14 commits、累積 ~22000 LOC、約 8 時間で全 Phase 完了。
 
+## Post-merge polish (main へ直接 commit)
+
+```
+edc799f test(e2e): home → song page navigation flow
+6685e44 test(e2e): mute/solo isolation + 100-point automation perf smoke
+9a14d4c test(bridge-core): unit tests for extract_plugin_format security helper
+c54cbbc test(song-store): unit regression for saveSong including buses + master
+e9b9a9e test(e2e): automation 24-point stress (1 point per beat, 4 bars)
+a9bd471 test(e2e): chain clear-all stress (6 add then 6 remove reverse order)
+fd7fab2 test(e2e): automation lane lifecycle (idempotent add + remove + re-add)
+5caf812 test(e2e): mixer tab gating — premium+connected shows Mixer/Automation
+80a26a4 test(e2e): automation move point + legacy song hydration
+3cc6789 fix(song-store): include buses + master in saveSong PUT payload   ← BUG FIX
+d7585c9 test(e2e): multi-lane automation + plugin picker built-in catalog
+3b1e9a4 test(e2e): chain insertion order + multi-bus routing scenarios
+cef3bd4 test(e2e): harden automation-curve-cycle against song-not-loaded race
+b1ffd04 test(e2e): master chain via applyPatch + bridge disconnect/reconnect
+c8d2fe1 test(e2e): mixer multi-track chain isolation
+f774991 test(e2e): chain remove/bypass + automation range replace + curve flake fix
+3aafce9 test(e2e): mixer volume/pan + automation AI error scenarios
+0064b62 test(e2e): bridge update badge visibility scenario
+8eabf14 fix(bridge-core): gate project.patch ops on plugin format (premium bypass)   ← SECURITY FIX
+```
+
+### Post-merge で発見・修正した bug
+
+1. **🚨 Security: project.patch premium bypass** (commit 8eabf14)
+   - `extract_plugin_format` ヘルパーで JSON Patch ops の plugin format を抽出して `require_premium!` を適用
+   - 元々 `chain.addNode` だけが gated だったが、`addChainNode` mutation は実は `project.patch` op を送るため bypass されていた
+   - QA レビューでも P1 として指摘されていた
+   - 修正により Free user は VST3/CLAP プラグインを追加できなくなった (built-in は free)
+   - 単体テスト 5 つ + e2e (premium-gating-error.spec.ts) で locked in
+
+2. **Save bug: buses/master not persisted** (commit 3cc6789)
+   - `songStore.saveSong` が PUT body を組む際に `buses`/`master` を含めていなかった
+   - ユーザーが Reverb bus を作って save → reload で消える状態
+   - api.ts の `UpdateSongData` 型に optional `buses?` / `master?` を追加 + saveSong で渡す
+   - vitest unit test + e2e (song-save-roundtrip.spec.ts) で locked in
+
 ## 累積成果
 
 ### コードベース
@@ -37,16 +76,19 @@ a7c2a56 docs: Cadenza Bridge architecture (Epic #68)
 - **Frontend** (`tamekoma-night/frontend/`): ~7500 new LOC, **143 unit tests** + **8 e2e tests** passing (svelte-check 0 errors)
 - **Backend** (`tamekoma-night/backend/`): ~1200 new LOC, **0 build errors/warnings**
 
-### Tests
+### Tests (post-merge)
 
 | Suite | Count | Status |
 |---|---|---|
-| Rust unit | 89 | ✅ |
-| Rust integration (phase 0/2/3/7/8) | 16 | ✅ |
-| Frontend Vitest | 143 | ✅ |
-| Frontend Playwright (full stack) | 8 | ✅ |
+| Rust unit (incl. polish-round + Phase 8.5 + handlers gating) | 119 | ✅ |
+| Rust integration (phase 0/2/3/7/8/8.5/builtin_instruments) | 13 | ✅ |
+| Frontend Vitest (incl. saveSong regression) | 147 | ✅ |
+| Frontend Playwright e2e (full stack, real bridge spawned) | 35 | ✅ |
 | Backend smoke scripts | 41 (15+26) | ✅ |
-| **Total** | **297** | **✅** |
+| **Total** | **355** | **✅** |
+
+E2E loop testing: **340/340 across 10 stability runs** of the 34-test suite
+(curve-cycle flake fixed in cef3bd4). Each full-suite run ~15s.
 
 ### Deployable artifacts (verified locally)
 
