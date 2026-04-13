@@ -18,6 +18,8 @@
     <Compile Include="Ehon/SamplePicker.fs" />
     <Compile Include="Ehon/StoryGenerator.fs" />
     <Compile Include="Ehon/Handlers.fs" />
+    <Compile Include="Nazenaze/Generator.fs" />
+    <Compile Include="Nazenaze/Handlers.fs" />
     <Compile Include="Middleware/RateLimit.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

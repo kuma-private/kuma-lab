@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { quiz } from '$lib/stores/quiz.svelte';
 	import { ehon } from '$lib/stores/ehon.svelte';
+	import { nazenaze } from '$lib/stores/nazenaze.svelte';
 	import GenreSelect from '$lib/components/GenreSelect.svelte';
 	import QuizScreen from '$lib/components/QuizScreen.svelte';
 	import CompleteScreen from '$lib/components/CompleteScreen.svelte';
@@ -8,6 +9,8 @@
 	import EhonInput from '$lib/components/EhonInput.svelte';
 	import EhonLoading from '$lib/components/EhonLoading.svelte';
 	import EhonViewer from '$lib/components/EhonViewer.svelte';
+	import NazenazeInput from '$lib/components/NazenazeInput.svelte';
+	import NazenazeViewer from '$lib/components/NazenazeViewer.svelte';
 
 	let loadingDots = $state('');
 
@@ -22,7 +25,7 @@
 
 	$effect(() => {
 		const theme = quiz.genre;
-		if (theme && !ehon.active) {
+		if (theme && !ehon.active && !nazenaze.active) {
 			document.body.setAttribute('data-theme', theme);
 		} else {
 			document.body.removeAttribute('data-theme');
@@ -39,8 +42,22 @@
 	});
 </script>
 
-<main class:ehon-main={ehon.active}>
-	{#if ehon.active}
+<main class:ehon-main={ehon.active || nazenaze.active}>
+	{#if nazenaze.active}
+		{#if nazenaze.phase === 'input'}
+			<NazenazeInput />
+		{:else if nazenaze.phase === 'loading'}
+			<EhonLoading />
+		{:else if nazenaze.phase === 'viewer'}
+			<NazenazeViewer />
+		{:else if nazenaze.phase === 'error'}
+			<div class="ehon-error">
+				<p>{nazenaze.errorMessage}</p>
+				<button onclick={() => nazenaze.reset()}>もういちど</button>
+				<button onclick={() => nazenaze.exit()}>ほーむへ</button>
+			</div>
+		{/if}
+	{:else if ehon.active}
 		{#if ehon.phase === 'mode-select'}
 			<EhonModeSelect />
 		{:else if ehon.phase === 'cosmos-input'}

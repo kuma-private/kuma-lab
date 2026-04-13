@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { quiz } from '../stores/quiz.svelte';
 	import { ehon } from '../stores/ehon.svelte';
+	import { nazenaze } from '../stores/nazenaze.svelte';
 	import { onMount } from 'svelte';
 
 	let entered = $state(false);
@@ -45,6 +46,12 @@
 				<span class="genre-icon bounce" style="animation-delay: 0.8s">&#x1F4D6;</span>
 				<span class="genre-label">えほん</span>
 				<span class="genre-sub">じぶんだけの おはなし</span>
+			</button>
+
+			<button class="genre-btn nazenaze" onclick={() => nazenaze.start()}>
+				<span class="genre-icon bounce" style="animation-delay: 1s">&#x2753;</span>
+				<span class="genre-label">なぜなぜ</span>
+				<span class="genre-sub">しつもんに かみしばいで こたえる</span>
 			</button>
 		</div>
 
@@ -162,6 +169,25 @@
 			radial-gradient(circle at 80% 30%, #fff 0 1.5px, transparent 2.5px),
 			radial-gradient(circle at 55% 60%, #fff 0 1px, transparent 2px);
 		opacity: 0.75;
+		pointer-events: none;
+	}
+
+	.nazenaze {
+		background:
+			radial-gradient(ellipse at 30% 20%, #fff8e1 0%, transparent 55%),
+			linear-gradient(145deg, #fde68a 0%, #fca5a5 50%, #fdba74 100%);
+		position: relative;
+	}
+
+	.nazenaze::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background:
+			radial-gradient(circle at 25% 70%, #fff 0 1.5px, transparent 2.5px),
+			radial-gradient(circle at 75% 25%, #fff 0 1.5px, transparent 2.5px),
+			radial-gradient(circle at 60% 60%, #fff 0 1px, transparent 2px);
+		opacity: 0.7;
 		pointer-events: none;
 	}
 

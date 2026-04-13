@@ -53,3 +53,22 @@ export interface EhonGenerateRequest {
 	theme?: string;
 	protagonistImageDataUrl?: string;
 }
+
+// Nazenaze (why-why kamishibai) types
+export type NazenazeMode = 'true' | 'false';
+
+export interface NazenazeStory {
+	title: string;
+	mode: NazenazeMode;
+	aspectRatio: string;
+	pages: EhonPage[];
+}
+
+export type NazenazePage = EhonPage;
+export type NazenazeElement = EhonElement;
+
+export interface NazenazeGenerateRequest {
+	mode: NazenazeMode;
+	question: string;
+	pageCount: number;
+}

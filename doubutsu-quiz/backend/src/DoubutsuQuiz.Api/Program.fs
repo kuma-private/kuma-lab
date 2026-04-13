@@ -10,6 +10,7 @@ open Microsoft.Extensions.DependencyInjection
 open DoubutsuQuiz.Api.Auth
 open DoubutsuQuiz.Api.Quiz
 open DoubutsuQuiz.Api.Ehon
+open DoubutsuQuiz.Api.Nazenaze
 open DoubutsuQuiz.Api.Middleware
 
 module Program =
@@ -142,6 +143,9 @@ module Program =
         |> ignore
 
         app.MapPost("/api/ehon/voice", Func<HttpContext, Task>(requireLogin (withRateLimit EhonHandlers.voiceHandler)))
+        |> ignore
+
+        app.MapPost("/api/nazenaze/generate", Func<HttpContext, Task>(requireLogin (withRateLimit NazenazeHandlers.generateHandler)))
         |> ignore
 
         app.MapPost("/api/voice", Func<HttpContext, Task>(requireLogin QuizHandlers.voiceHandler))

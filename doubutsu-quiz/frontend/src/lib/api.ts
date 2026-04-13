@@ -1,4 +1,32 @@
-import type { QuizItem, EhonStory, EhonGenerateRequest, EhonPage, EhonMode } from './types';
+import type {
+	QuizItem,
+	EhonStory,
+	EhonGenerateRequest,
+	EhonPage,
+	EhonMode,
+	NazenazeStory,
+	NazenazeGenerateRequest
+} from './types';
+
+export async function generateNazenaze(req: NazenazeGenerateRequest): Promise<NazenazeStory> {
+	const res = await fetch('/api/nazenaze/generate', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		credentials: 'include',
+		body: JSON.stringify(req)
+	});
+
+	if (res.status === 401) {
+		throw new Error('LOGIN_REQUIRED');
+	}
+
+	if (!res.ok) {
+		const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+		throw new Error(data.error || `Nazenaze generate failed: ${res.status}`);
+	}
+
+	return res.json();
+}
 
 export async function generateEhon(req: EhonGenerateRequest): Promise<EhonStory> {
 	const res = await fetch('/api/ehon/generate', {
