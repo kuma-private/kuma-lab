@@ -17,33 +17,46 @@ module QuizHandlers =
     type VoiceRequest =
         { text: string }
 
+    type private ScrapedItem =
+        { Name: string
+          ImageUrl: string }
+
+    let private genreToCategory (genre: string) : string option =
+        match genre with
+        | "doubutsu" -> Some "動物"
+        | "yasai" -> Some "野菜"
+        | "norimono" -> Some "乗り物"
+        | _ -> None
+
+    let private toScrapedItems (entries: IrasutoyaIndex.Entry list) : ScrapedItem list =
+        entries
+        |> List.choose (fun e ->
+            if isNull e.ImageUrls || e.ImageUrls.Length = 0 then None
+            else Some { Name = e.Title; ImageUrl = e.ImageUrls.[0] })
+
     let generateHandler (ctx: HttpContext) : Task =
         task {
             let config = ctx.RequestServices.GetRequiredService<AppConfig>()
             let httpClientFactory = ctx.RequestServices.GetRequiredService<IHttpClientFactory>()
             let httpClient = httpClientFactory.CreateClient("Anthropic")
+            let index = ctx.RequestServices.GetRequiredService<IrasutoyaIndex.Index>()
 
             let! body = ctx.Request.ReadFromJsonAsync<QuizRequest>()
 
-            let genre =
-                match body.genre with
-                | "doubutsu" | "yasai" | "norimono" -> body.genre
-                | _ ->
-                    ctx.Response.StatusCode <- 400
-                    "invalid"
+            match genreToCategory body.genre with
+            | None ->
+                ctx.Response.StatusCode <- 400
+                do! ctx.Response.WriteAsJsonAsync(
+                        {| error = "Invalid genre. Use 'doubutsu', 'yasai', or 'norimono'." |})
+            | Some category ->
+                let entries = IrasutoyaIndex.randomFromCategory index (Some category) 10
+                let scrapedItems = toScrapedItems entries
 
-            if genre = "invalid" then
-                do! ctx.Response.WriteAsJsonAsync({| error = "Invalid genre. Use 'doubutsu' or 'yasai'." |})
-            else
-                let! scrapeResult =
-                    IrasutoyaScraper.fetchAndShuffle httpClient genre 10
-                    |> Async.StartAsTask
-
-                match scrapeResult with
-                | Error err ->
+                if List.isEmpty scrapedItems then
                     ctx.Response.StatusCode <- 502
-                    do! ctx.Response.WriteAsJsonAsync({| error = $"Scrape failed: {err}" |})
-                | Ok scrapedItems ->
+                    do! ctx.Response.WriteAsJsonAsync(
+                            {| error = sprintf "No entries for category %s" category |})
+                else
                     let names = scrapedItems |> List.map (fun i -> i.Name)
 
                     let! soundResult =

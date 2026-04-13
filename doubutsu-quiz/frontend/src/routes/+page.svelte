@@ -1,8 +1,13 @@
 <script lang="ts">
 	import { quiz } from '$lib/stores/quiz.svelte';
+	import { ehon } from '$lib/stores/ehon.svelte';
 	import GenreSelect from '$lib/components/GenreSelect.svelte';
 	import QuizScreen from '$lib/components/QuizScreen.svelte';
 	import CompleteScreen from '$lib/components/CompleteScreen.svelte';
+	import EhonModeSelect from '$lib/components/EhonModeSelect.svelte';
+	import EhonInput from '$lib/components/EhonInput.svelte';
+	import EhonLoading from '$lib/components/EhonLoading.svelte';
+	import EhonViewer from '$lib/components/EhonViewer.svelte';
 
 	let loadingDots = $state('');
 
@@ -17,16 +22,41 @@
 
 	$effect(() => {
 		const theme = quiz.genre;
-		if (theme) {
+		if (theme && !ehon.active) {
 			document.body.setAttribute('data-theme', theme);
 		} else {
 			document.body.removeAttribute('data-theme');
 		}
 	});
+
+	$effect(() => {
+		if (ehon.active) {
+			const m = ehon.story?.mode ?? ehon.mode ?? 'cosmos';
+			document.body.setAttribute('data-ehon-mode', m);
+		} else {
+			document.body.removeAttribute('data-ehon-mode');
+		}
+	});
 </script>
 
-<main>
-	{#if quiz.phase === 'select'}
+<main class:ehon-main={ehon.active}>
+	{#if ehon.active}
+		{#if ehon.phase === 'mode-select'}
+			<EhonModeSelect />
+		{:else if ehon.phase === 'cosmos-input'}
+			<EhonInput />
+		{:else if ehon.phase === 'loading'}
+			<EhonLoading />
+		{:else if ehon.phase === 'viewer'}
+			<EhonViewer />
+		{:else if ehon.phase === 'error'}
+			<div class="ehon-error">
+				<p>{ehon.errorMessage}</p>
+				<button onclick={() => ehon.reset()}>もういちど</button>
+				<button onclick={() => ehon.exit()}>ほーむへ</button>
+			</div>
+		{/if}
+	{:else if quiz.phase === 'select'}
 		<GenreSelect />
 	{:else if quiz.phase === 'loading'}
 		<div class="loading">
@@ -59,6 +89,10 @@
 		padding: 20px;
 	}
 
+	main.ehon-main {
+		padding: 30px 20px 60px;
+	}
+
 	.loading {
 		display: flex;
 		flex-direction: column;
@@ -87,5 +121,31 @@
 		font-size: 0.9rem;
 		font-weight: 400;
 		color: var(--text-light);
+	}
+
+	.ehon-error {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 18px;
+		padding: 40px 24px;
+		background: rgba(255, 255, 255, 0.95);
+		border: 1.5px solid rgba(90, 50, 20, 0.3);
+		border-radius: 20px;
+		max-width: 90vw;
+	}
+
+	.ehon-error p {
+		color: #b91c1c;
+		font-weight: 700;
+		text-align: center;
+	}
+
+	.ehon-error button {
+		padding: 10px 24px;
+		border-radius: 999px;
+		background: linear-gradient(135deg, #ffcf6b, #e8890a);
+		color: #3d2b1f;
+		font-weight: 800;
 	}
 </style>

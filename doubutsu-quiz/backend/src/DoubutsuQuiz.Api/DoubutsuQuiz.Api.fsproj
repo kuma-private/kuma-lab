@@ -9,11 +9,15 @@
     <Compile Include="Auth/GoogleAuth.fs" />
     <Compile Include="Auth/Handlers.fs" />
     <Compile Include="Quiz/Prompt.fs" />
-    <Compile Include="Quiz/IrasutoyaScraper.fs" />
+    <Compile Include="Quiz/IrasutoyaIndex.fs" />
     <Compile Include="Quiz/AnthropicClient.fs" />
     <Compile Include="Quiz/Parser.fs" />
     <Compile Include="Quiz/VoicevoxClient.fs" />
     <Compile Include="Quiz/Handlers.fs" />
+    <Compile Include="Quiz/IrasutoyaHandlers.fs" />
+    <Compile Include="Ehon/SamplePicker.fs" />
+    <Compile Include="Ehon/StoryGenerator.fs" />
+    <Compile Include="Ehon/Handlers.fs" />
     <Compile Include="Middleware/RateLimit.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

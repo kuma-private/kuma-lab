@@ -1,6 +1,7 @@
 namespace DoubutsuQuiz.Api
 
 open System
+open System.IO
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
@@ -8,6 +9,7 @@ open Microsoft.AspNetCore.HttpOverrides
 open Microsoft.Extensions.DependencyInjection
 open DoubutsuQuiz.Api.Auth
 open DoubutsuQuiz.Api.Quiz
+open DoubutsuQuiz.Api.Ehon
 open DoubutsuQuiz.Api.Middleware
 
 module Program =
@@ -38,13 +40,39 @@ module Program =
                 do! ctx.Response.WriteAsJsonAsync({| error = "Rate limit exceeded"; retryAfterSeconds = retryAfter |})
         }
 
+    let private resolveIrasutoyaIndexPath () : string =
+        let envPath = Environment.GetEnvironmentVariable("IRASUTOYA_INDEX_PATH")
+        if not (String.IsNullOrWhiteSpace envPath) then envPath
+        else
+            let candidates =
+                [ Path.Combine(Directory.GetCurrentDirectory(), "data", "irasutoya_index.json")
+                  Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "data", "irasutoya_index.json")
+                  Path.Combine(AppContext.BaseDirectory, "data", "irasutoya_index.json")
+                  Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "data", "irasutoya_index.json") ]
+            match candidates |> List.tryFind File.Exists with
+            | Some p -> Path.GetFullPath p
+            | None ->
+                failwithf
+                    "irasutoya_index.json not found. Searched: %s"
+                    (String.concat "; " (candidates |> List.map Path.GetFullPath))
+
     [<EntryPoint>]
     let main args =
         let config = Config.load ()
 
+        let indexPath = resolveIrasutoyaIndexPath ()
+        printfn "[irasutoya] loading index from: %s" indexPath
+        let irasutoyaIndex = IrasutoyaIndex.load indexPath
+        printfn
+            "[irasutoya] loaded %d entries, %d categories in %d ms"
+            irasutoyaIndex.TotalEntries
+            irasutoyaIndex.ByCategory.Count
+            irasutoyaIndex.LoadMs
+
         let builder = WebApplication.CreateBuilder(args)
 
         builder.Services.AddSingleton<AppConfig>(config) |> ignore
+        builder.Services.AddSingleton<IrasutoyaIndex.Index>(irasutoyaIndex) |> ignore
 
         builder.Services.AddCors(fun options ->
             options.AddDefaultPolicy(fun policy ->
@@ -107,7 +135,47 @@ module Program =
         app.MapPost("/api/quiz/images", Func<HttpContext, Task>(requireLogin (withRateLimit QuizHandlers.generateHandler)))
         |> ignore
 
+        app.MapPost("/api/ehon/generate", Func<HttpContext, Task>(requireLogin (withRateLimit EhonHandlers.generateHandler)))
+        |> ignore
+
+        app.MapPost("/api/ehon/generate-stream", Func<HttpContext, Task>(requireLogin (withRateLimit EhonHandlers.generateStreamHandler)))
+        |> ignore
+
+        app.MapPost("/api/ehon/voice", Func<HttpContext, Task>(requireLogin (withRateLimit EhonHandlers.voiceHandler)))
+        |> ignore
+
         app.MapPost("/api/voice", Func<HttpContext, Task>(requireLogin QuizHandlers.voiceHandler))
+        |> ignore
+
+        app.MapGet(
+            "/api/irasutoya/stats",
+            Func<HttpContext, Task>(requireLogin (withRateLimit IrasutoyaHandlers.statsHandler)))
+        |> ignore
+
+        app.MapGet(
+            "/api/irasutoya/categories",
+            Func<HttpContext, Task>(requireLogin (withRateLimit IrasutoyaHandlers.categoriesHandler)))
+        |> ignore
+
+        app.MapGet(
+            "/api/irasutoya/search",
+            Func<HttpContext, Task>(requireLogin (withRateLimit IrasutoyaHandlers.searchHandler)))
+        |> ignore
+
+        app.MapGet(
+            "/api/irasutoya/by-category",
+            Func<HttpContext, Task>(requireLogin (withRateLimit IrasutoyaHandlers.byCategoryHandler)))
+        |> ignore
+
+        app.MapGet(
+            "/api/irasutoya/random",
+            Func<HttpContext, Task>(requireLogin (withRateLimit IrasutoyaHandlers.randomHandler)))
+        |> ignore
+
+        app.MapGet(
+            "/api/irasutoya/entry/{id}",
+            Func<HttpContext, string, Task>(fun ctx id ->
+                requireLogin (withRateLimit (IrasutoyaHandlers.entryHandler id)) ctx))
         |> ignore
 
         app.MapFallbackToFile("index.html") |> ignore

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { quiz } from '../stores/quiz.svelte';
+	import { ehon } from '../stores/ehon.svelte';
 	import { onMount } from 'svelte';
 
 	let entered = $state(false);
@@ -35,6 +36,15 @@
 				<span class="genre-icon bounce" style="animation-delay: 0.6s">&#x1F697;</span>
 				<span class="genre-label">のりもの</span>
 				<span class="genre-sub">くるま、でんしゃ...</span>
+			</button>
+
+			<button class="genre-btn ehon" onclick={() => ehon.start()}>
+				<span class="ehon-stars" aria-hidden="true">
+					<span>&#x2728;</span><span>&#x2B50;</span><span>&#x2728;</span>
+				</span>
+				<span class="genre-icon bounce" style="animation-delay: 0.8s">&#x1F4D6;</span>
+				<span class="genre-label">えほん</span>
+				<span class="genre-sub">じぶんだけの おはなし</span>
 			</button>
 		</div>
 
@@ -134,6 +144,35 @@
 
 	.norimono {
 		background: linear-gradient(145deg, #BBDEFB, #64B5F6);
+	}
+
+	.ehon {
+		background:
+			radial-gradient(ellipse at 30% 20%, #fff8e1 0%, transparent 55%),
+			linear-gradient(145deg, #fde4f7 0%, #e9d5ff 45%, #c4e8ff 100%);
+		position: relative;
+	}
+
+	.ehon::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background:
+			radial-gradient(circle at 20% 80%, #fff 0 1.5px, transparent 2.5px),
+			radial-gradient(circle at 80% 30%, #fff 0 1.5px, transparent 2.5px),
+			radial-gradient(circle at 55% 60%, #fff 0 1px, transparent 2px);
+		opacity: 0.75;
+		pointer-events: none;
+	}
+
+	.ehon-stars {
+		position: absolute;
+		top: 10px;
+		left: 12px;
+		display: flex;
+		gap: 4px;
+		font-size: 0.9rem;
+		animation: wiggle 2.4s ease-in-out infinite;
 	}
 
 	.genre-icon {
