@@ -322,6 +322,48 @@ mod tests {
         assert_eq!(json["error"]["code"], "parse_error");
     }
 
+    // ── extract_plugin_format unit tests (premium-bypass regression) ──
+
+    #[test]
+    fn extract_plugin_format_recognizes_direct_ref() {
+        let v = serde_json::json!({"format":"vst3","uid":"x","name":"X"});
+        assert_eq!(extract_plugin_format(&v), Some("vst3".to_string()));
+    }
+
+    #[test]
+    fn extract_plugin_format_recognizes_chain_node_payload() {
+        let v = serde_json::json!({
+            "id":"n1","kind":"insert","bypass":false,"params":{},
+            "plugin":{"format":"clap","uid":"surge","name":"Surge"}
+        });
+        assert_eq!(extract_plugin_format(&v), Some("clap".to_string()));
+    }
+
+    #[test]
+    fn extract_plugin_format_recognizes_track_state_instrument() {
+        let v = serde_json::json!({
+            "id":"t1","name":"Lead","clips":[],
+            "instrument":{"plugin":{"format":"vst3","uid":"v","name":"V"}}
+        });
+        assert_eq!(extract_plugin_format(&v), Some("vst3".to_string()));
+    }
+
+    #[test]
+    fn extract_plugin_format_returns_none_for_builtin() {
+        let v = serde_json::json!({
+            "id":"n2","plugin":{"format":"builtin","uid":"gain","name":"Gain"}
+        });
+        assert_eq!(extract_plugin_format(&v), Some("builtin".to_string()));
+    }
+
+    #[test]
+    fn extract_plugin_format_returns_none_for_unrelated_value() {
+        let v = serde_json::json!(-3.5);
+        assert_eq!(extract_plugin_format(&v), None);
+        let v2 = serde_json::json!({"id":"x","level":0.4});
+        assert_eq!(extract_plugin_format(&v2), None);
+    }
+
     #[test]
     fn plugins_scan_emits_event() {
         let state = SessionState::new();
