@@ -21,16 +21,16 @@
   let isRange = $derived(endBarNumber != null && endBarNumber > barNumber);
   let rangeLabel = $derived(isRange ? `小節 ${barNumber}\u2013${endBarNumber}` : `小節 ${barNumber}`);
 
-  let input = $state(initialChords);
+  // Initialise with an empty default so svelte-check doesn't flag the
+  // prop reference as `state_referenced_locally`. The $effect below picks
+  // up initialChords on mount (before first paint via $effect.pre) and
+  // re-syncs it whenever the parent hands us a different bar range.
+  let input = $state('');
   let selectedRoot = $state<string | null>(null);
   let sharpFlat = $state<'' | '#' | 'b'>('');
   let flashedNote = $state<string | null>(null);
 
-  // Re-sync the text input when the parent hands us a different bar range.
-  // Without this, `input` would stay frozen at the first initialChords value
-  // seen at mount, and re-opening the dialog for a different bar would show
-  // stale contents. (Svelte 5 `state_referenced_locally` warning fix.)
-  $effect(() => {
+  $effect.pre(() => {
     input = initialChords;
   });
 

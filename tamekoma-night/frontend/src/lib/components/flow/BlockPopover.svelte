@@ -72,17 +72,22 @@
   }: Props = $props();
 
   // --- State ---
-  // NOTE: several of the variables below are seeded from the `block` prop
-  // at mount. Under Svelte 5, `let x = $state(block.foo)` captures the
-  // value at creation time and does NOT re-sync when the prop changes —
-  // that causes every slider / directive / preview field to show stale
-  // values whenever the parent swaps blocks without unmounting us. The
-  // `$effect` block further down re-initialises all of them whenever the
-  // block identity or its directives change. Fixes the family of
-  // `state_referenced_locally` warnings called out by svelte-check.
-  let parsed = $state(parseDirectives(block.directives));
-  let directives: ParsedDirectives = $state(parsed.directives);
-  let rawText = $state(directivesToText(directives));
+  // All block-derived state starts at neutral defaults so svelte-check
+  // doesn't flag the reads at script-top (state_referenced_locally). The
+  // `$effect.pre` block below populates everything from `block` before
+  // the first DOM update AND re-populates when the parent swaps to a
+  // different block.id — so there is no flash of empty state on mount
+  // and no stale values on block switch. Transient UI-only state
+  // (aiPrompt, aiLoading, aiError, rawOpen, detailOpen) is deliberately
+  // NOT reset, so a user's in-progress AI query + view preferences
+  // persist across block switches.
+  const EMPTY_PARSED: ReturnType<typeof parseDirectives> = {
+    directives: {} as ParsedDirectives,
+    errors: []
+  };
+  let parsed = $state<ReturnType<typeof parseDirectives>>(EMPTY_PARSED);
+  let directives = $state<ParsedDirectives>({} as ParsedDirectives);
+  let rawText = $state('');
   let rawOpen = $state(false);
   let parseErrors: string[] = $state([]);
   let aiPrompt = $state('');
@@ -92,26 +97,21 @@
   let tipInterval: ReturnType<typeof setInterval> | null = null;
 
   // --- AI MIDI generation state ---
-  let expressionSlider = $state(block.generatedMidi?.expression ?? 50);
-  let feelSlider = $state(block.generatedMidi?.feel ?? 50);
-  let generatedMidiData = $state<GeneratedMidiData | undefined>(block.generatedMidi);
+  let expressionSlider = $state(50);
+  let feelSlider = $state(50);
+  let generatedMidiData = $state<GeneratedMidiData | undefined>(undefined);
   let detailOpen = $state(false);
 
   // --- Free mode / melody ---
   let isFreeMode = $derived(directives.mode === 'free');
-  let melodyText = $state(directives.melody ? extractMelodyText(block.directives) : '');
+  let melodyText = $state('');
 
   // --- Slider state (continuous values) ---
-  let voicingSlider = $state(voicingNameToValue(directives.voicing));
-  let velocitySlider = $state(velocityNameToValue(typeof directives.velocity === 'string' ? directives.velocity : 'mf'));
+  let voicingSlider = $state(50);
+  let velocitySlider = $state(60);
 
-  // Track the block identity we last initialised from so the sync effect
-  // only fires on actual block changes — not on every re-render where
-  // block is still the same reference. Transient UI-only state (aiPrompt,
-  // aiLoading, aiError, rawOpen, detailOpen) is deliberately NOT reset,
-  // so a user's in-progress AI query and view preferences persist.
   let lastInitBlockId = $state<string | null>(null);
-  $effect(() => {
+  $effect.pre(() => {
     const id = block.id;
     const directivesText = block.directives;
     const generated = block.generatedMidi;

@@ -13,8 +13,14 @@
     onSongChange: (song: Song) => void;
   } = $props();
 
-  // Serialize song to text on mount / when song changes externally
-  let text = $state(serializeSong(song));
+  // Initialise with neutral defaults so svelte-check doesn't flag reads of
+  // the `song` prop at script-top. `$effect.pre` below populates both
+  // `text` and `previewSong` before the first DOM update, so there is no
+  // flash of empty state on mount; it also re-syncs them whenever `song`
+  // updates externally (parent reload, AI arrange result, cross-tab
+  // commit). The `internalEdit` guard prevents fighting the textarea
+  // -> deserialize -> onSongChange path.
+  let text = $state('');
   let parseErrors = $state<{ line: number; message: string }[]>([]);
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -22,24 +28,9 @@
   // to avoid re-serializing when we just deserialized
   let internalEdit = false;
 
-  // Preview state — kept in a $state bag so edits can mutate it locally
-  // before `onSongChange` commits, but synced against the prop below so
-  // external song updates don't get masked by the stale initial snapshot.
-  let previewSong = $state<Partial<Song>>({
-    title: song.title,
-    bpm: song.bpm,
-    key: song.key,
-    timeSignature: song.timeSignature,
-    chordProgression: song.chordProgression,
-    sections: song.sections,
-    tracks: song.tracks,
-  });
+  let previewSong = $state<Partial<Song>>({});
 
-  // Re-sync local state on external song updates (e.g. parent reload, AI
-  // arrange result, other tab commits). Skip when the last change came
-  // from our own textarea — that path is already deserialized back into
-  // `song` via `onSongChange`. Fixes Svelte 5 `state_referenced_locally`.
-  $effect(() => {
+  $effect.pre(() => {
     if (internalEdit) return;
     text = serializeSong(song);
     previewSong = {
