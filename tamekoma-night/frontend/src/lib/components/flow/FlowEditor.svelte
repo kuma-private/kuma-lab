@@ -169,7 +169,10 @@
   // --- Helpers ---
 
   function emit() {
-    onSongChange(structuredClone(song));
+    // song is a $state proxy from songStore; structuredClone on a Proxy
+    // throws DataCloneError. $state.snapshot unwraps the proxy tree into a
+    // plain deep copy that the parent can adopt directly.
+    onSongChange($state.snapshot(song) as Song);
   }
 
   // Section name change
