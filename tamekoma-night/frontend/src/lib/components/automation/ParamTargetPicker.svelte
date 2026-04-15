@@ -163,6 +163,7 @@
 		flex-direction: column;
 		gap: 3px;
 		min-height: 120px;
+		flex: 1 1 auto;
 	}
 	.row {
 		display: grid;
