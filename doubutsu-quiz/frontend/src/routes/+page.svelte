@@ -2,6 +2,7 @@
 	import { quiz } from '$lib/stores/quiz.svelte';
 	import { ehon } from '$lib/stores/ehon.svelte';
 	import { nazenaze } from '$lib/stores/nazenaze.svelte';
+	import { tower } from '$lib/stores/tower.svelte';
 	import GenreSelect from '$lib/components/GenreSelect.svelte';
 	import QuizScreen from '$lib/components/QuizScreen.svelte';
 	import CompleteScreen from '$lib/components/CompleteScreen.svelte';
@@ -11,6 +12,9 @@
 	import EhonViewer from '$lib/components/EhonViewer.svelte';
 	import NazenazeInput from '$lib/components/NazenazeInput.svelte';
 	import NazenazeViewer from '$lib/components/NazenazeViewer.svelte';
+	import TowerInput from '$lib/components/TowerInput.svelte';
+	import TowerGame from '$lib/components/TowerGame.svelte';
+	import TowerGameOver from '$lib/components/TowerGameOver.svelte';
 
 	let loadingDots = $state('');
 
@@ -42,8 +46,20 @@
 	});
 </script>
 
-<main class:ehon-main={ehon.active || nazenaze.active}>
-	{#if nazenaze.active}
+<main class:ehon-main={ehon.active || nazenaze.active || tower.active}>
+	{#if tower.active}
+		{#if tower.phase === 'input'}
+			<TowerInput />
+		{:else if tower.phase === 'loading'}
+			<div class="tower-loading">
+				<p>じゅんびちゅう...</p>
+			</div>
+		{:else if tower.phase === 'playing'}
+			<TowerGame />
+		{:else if tower.phase === 'gameover'}
+			<TowerGameOver />
+		{/if}
+	{:else if nazenaze.active}
 		{#if nazenaze.phase === 'input'}
 			<NazenazeInput />
 		{:else if nazenaze.phase === 'loading'}

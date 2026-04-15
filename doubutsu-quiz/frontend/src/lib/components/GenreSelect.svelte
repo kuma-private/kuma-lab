@@ -2,6 +2,7 @@
 	import { quiz } from '../stores/quiz.svelte';
 	import { ehon } from '../stores/ehon.svelte';
 	import { nazenaze } from '../stores/nazenaze.svelte';
+	import { tower } from '../stores/tower.svelte';
 	import { onMount } from 'svelte';
 
 	let entered = $state(false);
@@ -52,6 +53,12 @@
 				<span class="genre-icon bounce" style="animation-delay: 1s">&#x2753;</span>
 				<span class="genre-label">なぜなぜ</span>
 				<span class="genre-sub">しつもんに かみしばいで こたえる</span>
+			</button>
+
+			<button class="genre-btn tower" onclick={() => tower.open()}>
+				<span class="genre-icon bounce" style="animation-delay: 1.2s">&#x1F418;</span>
+				<span class="genre-label">タワー</span>
+				<span class="genre-sub">どうぶつを つみあげる</span>
 			</button>
 		</div>
 
@@ -170,6 +177,10 @@
 			radial-gradient(circle at 55% 60%, #fff 0 1px, transparent 2px);
 		opacity: 0.75;
 		pointer-events: none;
+	}
+
+	.tower {
+		background: linear-gradient(145deg, #c5cae9, #7986cb);
 	}
 
 	.nazenaze {

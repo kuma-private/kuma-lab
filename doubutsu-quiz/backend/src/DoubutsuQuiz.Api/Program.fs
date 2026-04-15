@@ -11,6 +11,7 @@ open DoubutsuQuiz.Api.Auth
 open DoubutsuQuiz.Api.Quiz
 open DoubutsuQuiz.Api.Ehon
 open DoubutsuQuiz.Api.Nazenaze
+open DoubutsuQuiz.Api.Tower
 open DoubutsuQuiz.Api.Middleware
 
 module Program =
@@ -89,6 +90,7 @@ module Program =
 
         builder.Services.AddHttpClient("Anthropic") |> ignore
         builder.Services.AddHttpClient("Voicevox") |> ignore
+        builder.Services.AddHttpClient("ImageProxy") |> ignore
 
         builder.Services.AddAuthorization() |> ignore
 
@@ -183,6 +185,9 @@ module Program =
             "/api/irasutoya/entry/{id}",
             Func<HttpContext, string, Task>(fun ctx id ->
                 requireLogin (withRateLimit (IrasutoyaHandlers.entryHandler id)) ctx))
+        |> ignore
+
+        app.MapGet("/api/image-proxy", Func<HttpContext, Task>(requireLogin ImageProxy.handler))
         |> ignore
 
         app.MapFallbackToFile("index.html") |> ignore

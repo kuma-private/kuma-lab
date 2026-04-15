@@ -273,6 +273,30 @@ export async function generateNazenazeStream(
 	}
 }
 
+interface IrasutoyaRandomResponse {
+	items: Array<{
+		id: string;
+		title: string;
+		imageUrls: string[];
+	}>;
+	count: number;
+}
+
+export async function fetchRandomAnimals(
+	count: number
+): Promise<Array<{ id: string; title: string; imageUrl: string }>> {
+	const res = await fetch(`/api/irasutoya/random?count=${count}`, {
+		credentials: 'include'
+	});
+	if (!res.ok) {
+		throw new Error(`irasutoya random failed: ${res.status}`);
+	}
+	const data: IrasutoyaRandomResponse = await res.json();
+	return data.items
+		.filter((i) => i.imageUrls.length > 0)
+		.map((i) => ({ id: i.id, title: i.title, imageUrl: i.imageUrls[0] }));
+}
+
 export async function fetchQuizImages(genre: string): Promise<QuizItem[]> {
 	const res = await fetch('/api/quiz/images', {
 		method: 'POST',

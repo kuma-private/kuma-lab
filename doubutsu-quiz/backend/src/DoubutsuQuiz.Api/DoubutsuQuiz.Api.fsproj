@@ -23,6 +23,7 @@
     <Compile Include="Nazenaze/KeywordExtractor.fs" />
     <Compile Include="Nazenaze/Streaming.fs" />
     <Compile Include="Nazenaze/Handlers.fs" />
+    <Compile Include="Tower/ImageProxy.fs" />
     <Compile Include="Middleware/RateLimit.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
