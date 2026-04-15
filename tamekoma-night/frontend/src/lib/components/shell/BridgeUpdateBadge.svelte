@@ -36,6 +36,14 @@
 	}
 </script>
 
+<svelte:window
+	onkeydown={(e) => {
+		if (modalOpen && e.key === 'Escape') {
+			modalOpen = false;
+		}
+	}}
+/>
+
 {#if updateAvailable && handshake}
 	<button
 		type="button"
@@ -54,7 +62,6 @@
 		class="modal-backdrop"
 		role="presentation"
 		onclick={() => (modalOpen = false)}
-		onkeydown={(e) => e.key === 'Escape' && (modalOpen = false)}
 	>
 		<div
 			class="modal"
