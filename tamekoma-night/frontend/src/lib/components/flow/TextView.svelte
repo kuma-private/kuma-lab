@@ -22,7 +22,9 @@
   // to avoid re-serializing when we just deserialized
   let internalEdit = false;
 
-  // Preview state
+  // Preview state — kept in a $state bag so edits can mutate it locally
+  // before `onSongChange` commits, but synced against the prop below so
+  // external song updates don't get masked by the stale initial snapshot.
   let previewSong = $state<Partial<Song>>({
     title: song.title,
     bpm: song.bpm,
@@ -31,6 +33,24 @@
     chordProgression: song.chordProgression,
     sections: song.sections,
     tracks: song.tracks,
+  });
+
+  // Re-sync local state on external song updates (e.g. parent reload, AI
+  // arrange result, other tab commits). Skip when the last change came
+  // from our own textarea — that path is already deserialized back into
+  // `song` via `onSongChange`. Fixes Svelte 5 `state_referenced_locally`.
+  $effect(() => {
+    if (internalEdit) return;
+    text = serializeSong(song);
+    previewSong = {
+      title: song.title,
+      bpm: song.bpm,
+      key: song.key,
+      timeSignature: song.timeSignature,
+      chordProgression: song.chordProgression,
+      sections: song.sections,
+      tracks: song.tracks,
+    };
   });
 
   // Derived: parsed chord bars for preview
