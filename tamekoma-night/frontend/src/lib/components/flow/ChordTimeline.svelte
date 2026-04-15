@@ -38,6 +38,18 @@
     return barNum >= highlightRange.startBar && barNum <= highlightRange.endBar;
   }
 
+  // Shared AbortController so component unmount (or any future reason to
+  // abort) cancels the drag listeners in one call. Previously each drag
+  // installed fresh mousemove/mouseup listeners and only removed them in
+  // its own mouseup handler — if the component unmounted mid-drag (rare
+  // but possible on route navigation), the listeners leaked.
+  let dragAbort: AbortController | null = null;
+
+  $effect(() => () => {
+    dragAbort?.abort();
+    dragAbort = null;
+  });
+
   function handleMouseDown(barNum: number, e: MouseEvent) {
     // Only primary button
     if (e.button !== 0) return;
@@ -45,6 +57,13 @@
     isSelecting = true;
     dragStartBar = barNum;
     dragCurrentBar = barNum;
+
+    // Abort any previous in-flight drag listeners (defensive — handleMouseUp
+    // below should have cleaned them up, but if the mouseup was swallowed we
+    // don't want to double-subscribe).
+    dragAbort?.abort();
+    dragAbort = new AbortController();
+    const { signal } = dragAbort;
 
     const handleMouseMove = (me: MouseEvent) => {
       if (!isSelecting) return;
@@ -59,8 +78,8 @@
     };
 
     const handleMouseUp = () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      dragAbort?.abort();
+      dragAbort = null;
       if (!isSelecting || dragStartBar === null || dragCurrentBar === null) {
         isSelecting = false;
         dragStartBar = null;
@@ -82,8 +101,8 @@
       }
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mousemove', handleMouseMove, { signal });
+    window.addEventListener('mouseup', handleMouseUp, { signal });
   }
 
   let parsed = $derived(resolveRepeats(parseProgression(chords).bars));
