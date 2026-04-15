@@ -126,8 +126,13 @@
 		store.attachEngine(null);
 		prev.dispose();
 		void (async () => {
-			await buildEngine();
-			if (store.currentSong) await loadSongIntoPlayer();
+			try {
+				await buildEngine();
+				if (store.currentSong) await loadSongIntoPlayer();
+			} catch (err) {
+				console.error('[song-page] engine rebuild failed', err);
+				showToast('再生エンジンの切り替えに失敗しました', 'error');
+			}
 		})();
 	});
 
