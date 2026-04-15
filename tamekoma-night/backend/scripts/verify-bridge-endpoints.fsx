@@ -57,7 +57,8 @@ let config : AppConfig =
       FrontendUrl = ""
       FirestoreProjectId = ""
       AnthropicApiKey = ""
-      DevPremiumUids = [ "alice"; "bob" ] }
+      DevPremiumUids = [ "alice"; "bob" ]
+      AllowedOrigins = [ "http://localhost:52730" ] }
 
 printfn "== Bridge endpoints smoke test =="
 printfn ""

@@ -90,17 +90,43 @@ module Program =
 
         let builder = WebApplication.CreateBuilder(args)
 
-        builder.Services.AddHttpClient("Anthropic") |> ignore
+        // Anthropic HTTP client — explicit timeout so a hung Claude request
+        // can't pin a worker thread indefinitely. 60s is long enough for the
+        // largest legitimate generation (~30s p99 in observed traffic) and
+        // short enough to free the worker if the upstream truly stalls.
+        builder.Services
+            .AddHttpClient("Anthropic", fun (client: System.Net.Http.HttpClient) ->
+                client.Timeout <- TimeSpan.FromSeconds(60.0))
+        |> ignore
         builder.Services.AddSingleton<AppConfig>(config) |> ignore
 
+        // CORS — explicit allow-list pulled from AppConfig.AllowedOrigins.
+        // We intentionally DO NOT use SetIsOriginAllowed(_ -> true) anymore:
+        // because the API issues credentialed cookie-bearing responses, an
+        // any-origin policy with .AllowCredentials() would let any malicious
+        // site read or replay user sessions. AppConfig.AllowedOrigins ships
+        // safe localhost defaults in DEV_MODE; production must set
+        // ALLOWED_ORIGINS explicitly (e.g. "https://cadenza.fm").
         builder.Services.AddCors(fun options ->
             options.AddDefaultPolicy(fun policy ->
-                policy
-                    .SetIsOriginAllowed(fun _ -> true)
-                    .AllowAnyHeader()
-                    .AllowAnyMethod()
-                    .AllowCredentials()
-                |> ignore))
+                let origins =
+                    config.AllowedOrigins
+                    |> List.toArray
+                if origins.Length = 0 then
+                    // No origins configured: keep CORS effectively closed
+                    // rather than silently opening it up. A misconfigured
+                    // production deployment should fail loudly at the first
+                    // CORS preflight, not invite credential leakage.
+                    policy.WithOrigins([||])
+                          .DisallowCredentials()
+                    |> ignore
+                else
+                    policy
+                        .WithOrigins(origins)
+                        .AllowAnyHeader()
+                        .AllowAnyMethod()
+                        .AllowCredentials()
+                    |> ignore))
         |> ignore
 
         GoogleAuth.configureServices config builder.Services |> ignore
