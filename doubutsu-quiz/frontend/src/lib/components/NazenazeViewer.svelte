@@ -41,11 +41,17 @@
 			<div class="frame-inner">
 				{#key nazenaze.currentPage}
 					<div class="slide">
-						<NazenazePage
-							page={nazenaze.story.pages[nazenaze.currentPage]}
-							mode={visualMode}
-							backgroundImageDataUrl={nazenaze.story.backgroundImageDataUrl}
-						/>
+						{#if nazenaze.story.pages[nazenaze.currentPage]}
+							<NazenazePage
+								page={nazenaze.story.pages[nazenaze.currentPage]}
+								mode={visualMode}
+								backgroundImageDataUrl={nazenaze.story.backgroundImageDataUrl}
+							/>
+						{:else}
+							<div class="page-pending" aria-live="polite">
+								<span class="page-pending-text">ページを かいてるよ・・・</span>
+							</div>
+						{/if}
 					</div>
 				{/key}
 			</div>
@@ -197,6 +203,26 @@
 		width: 100%;
 		height: 100%;
 		animation: slideIn 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+
+	.page-pending {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: linear-gradient(180deg, #fcf5e8 0%, #f5e7c6 100%);
+	}
+
+	.page-pending-text {
+		font-family: 'Klee One', 'Hiragino Mincho ProN', serif;
+		font-size: 1rem;
+		color: #6b4a2b;
+		letter-spacing: 0.08em;
+		padding: 10px 18px;
+		background: rgba(255, 252, 238, 0.9);
+		border: 1px solid rgba(107, 62, 31, 0.3);
+		border-radius: 999px;
 	}
 
 	@keyframes slideIn {
