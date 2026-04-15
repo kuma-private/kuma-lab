@@ -59,6 +59,17 @@
 
 	let audioLoading = $state(false);
 	let audioInitialized = $state(false);
+	let audioLoadingTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// Release any pending audio-loading timeout on component unmount so a
+	// play attempt that unmounts mid-warmup doesn't fire audioLoading=false
+	// against a destroyed state cell.
+	$effect(() => () => {
+		if (audioLoadingTimer) {
+			clearTimeout(audioLoadingTimer);
+			audioLoadingTimer = null;
+		}
+	});
 
 	const handlePlayPause = () => {
 		if (playerState === 'playing') {
@@ -66,7 +77,12 @@
 		} else {
 			if (!audioInitialized) {
 				audioLoading = true;
-				setTimeout(() => { audioLoading = false; audioInitialized = true; }, 2000);
+				if (audioLoadingTimer) clearTimeout(audioLoadingTimer);
+				audioLoadingTimer = setTimeout(() => {
+					audioLoading = false;
+					audioInitialized = true;
+					audioLoadingTimer = null;
+				}, 2000);
 			}
 			onplay?.();
 		}
