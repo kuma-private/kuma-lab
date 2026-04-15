@@ -83,6 +83,12 @@
 
   // Resize handling
   let resizingBlock = $state<{ id: string; startX: number; origEnd: number } | null>(null);
+  let resizeAbort: AbortController | null = null;
+
+  $effect(() => () => {
+    resizeAbort?.abort();
+    resizeAbort = null;
+  });
 
   function handleResizeStart(blockId: string, e: MouseEvent) {
     e.stopPropagation();
@@ -90,6 +96,10 @@
     const block = track.blocks.find(b => b.id === blockId);
     if (!block) return;
     resizingBlock = { id: blockId, startX: e.clientX, origEnd: block.endBar };
+
+    resizeAbort?.abort();
+    resizeAbort = new AbortController();
+    const { signal } = resizeAbort;
 
     const handleMove = (me: MouseEvent) => {
       if (!resizingBlock) return;
@@ -103,16 +113,21 @@
 
     const handleUp = () => {
       resizingBlock = null;
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
+      resizeAbort?.abort();
+      resizeAbort = null;
     };
 
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
+    window.addEventListener('mousemove', handleMove, { signal });
+    window.addEventListener('mouseup', handleUp, { signal });
   }
 </script>
 
-<svelte:window onclick={closeContextMenu} />
+<svelte:window
+  onclick={closeContextMenu}
+  onkeydown={(e) => {
+    if (contextMenu && e.key === 'Escape') closeContextMenu();
+  }}
+/>
 
 <div
   class="track-grid"
