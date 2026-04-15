@@ -125,10 +125,23 @@
 		// but we do not add points via keyboard here.
 	}
 
+	// Shared AbortController for drag listeners so component unmount
+	// (route navigation / tab switch / HMR) cancels any in-flight drag
+	// and prevents mousemove/mouseup handlers from outliving the lane.
+	let dragAbort: AbortController | null = null;
+
+	$effect(() => () => {
+		dragAbort?.abort();
+		dragAbort = null;
+	});
+
 	function handlePointMouseDown(e: MouseEvent, pointId: string) {
 		if (e.button !== 0) return;
 		e.stopPropagation();
 		draggingId = pointId;
+		dragAbort?.abort();
+		dragAbort = new AbortController();
+		const { signal } = dragAbort;
 		const onMove = (ev: MouseEvent) => {
 			if (!draggingId) return;
 			const { x, y } = svgCoords(ev);
@@ -138,11 +151,11 @@
 		};
 		const onUp = () => {
 			draggingId = null;
-			window.removeEventListener('mousemove', onMove);
-			window.removeEventListener('mouseup', onUp);
+			dragAbort?.abort();
+			dragAbort = null;
 		};
-		window.addEventListener('mousemove', onMove);
-		window.addEventListener('mouseup', onUp);
+		window.addEventListener('mousemove', onMove, { signal });
+		window.addEventListener('mouseup', onUp, { signal });
 	}
 
 	function handlePointContextMenu(e: MouseEvent, pointId: string) {
