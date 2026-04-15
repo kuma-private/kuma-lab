@@ -103,7 +103,14 @@ module Handlers =
                         TokenValidationParameters(
                             ValidateIssuerSigningKey = true,
                             IssuerSigningKey = key,
-                            ValidateIssuer = false,
+                            // Issuer must match the value the ticket-mint path
+                            // sets on the JWT (bridgeTicketIssuer). Without
+                            // this an attacker could forge a ticket with a
+                            // *different* issuer string but the same signing
+                            // key and have it accept here, since we share the
+                            // signing key with the auth JWT path.
+                            ValidateIssuer = true,
+                            ValidIssuer = bridgeTicketIssuer,
                             ValidateAudience = true,
                             ValidAudience = bridgeTicketAudience,
                             ValidateLifetime = true,

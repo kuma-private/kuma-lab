@@ -104,11 +104,16 @@ printfn "3. signTicket round-trip"
 let validateTicket (cfg: AppConfig) (ticket: string) =
     let handler = JwtSecurityTokenHandler()
     let key = SymmetricSecurityKey(Encoding.UTF8.GetBytes(cfg.JwtSigningKey))
+    // Mirror the production verifyTicketHandler in Bridge/Handlers.fs:
+    // ValidateIssuer must be true so a JWT signed with the same key but a
+    // different `iss` claim cannot impersonate a Bridge ticket. Production
+    // changed in this commit; this smoke test must enforce the new contract.
     let parameters =
         TokenValidationParameters(
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = key,
-            ValidateIssuer = false,
+            ValidateIssuer = true,
+            ValidIssuer = "tamekoma-night",
             ValidateAudience = true,
             ValidAudience = "cadenza-bridge",
             ValidateLifetime = true,
@@ -161,7 +166,7 @@ printfn ""
 // 6. Ticket with the wrong audience is rejected
 // ---------------------------------------------------------------
 printfn "6. Wrong audience"
-let signRaw (aud: string) (lifetime: TimeSpan) =
+let signRaw (iss: string) (aud: string) (lifetime: TimeSpan) =
     let handler = JwtSecurityTokenHandler()
     let key = SymmetricSecurityKey(Encoding.UTF8.GetBytes(config.JwtSigningKey))
     let creds = SigningCredentials(key, SecurityAlgorithms.HmacSha256)
@@ -172,16 +177,22 @@ let signRaw (aud: string) (lifetime: TimeSpan) =
         |]
     let jwt =
         JwtSecurityToken(
-            issuer = "tamekoma-night",
+            issuer = iss,
             audience = aud,
             claims = claims,
             expires = DateTime.UtcNow + lifetime,
             signingCredentials = creds)
     handler.WriteToken(jwt)
 
-let wrongAud = signRaw "other-service" (TimeSpan.FromMinutes 10.0)
+let wrongAud = signRaw "tamekoma-night" "other-service" (TimeSpan.FromMinutes 10.0)
 let wrongAudResult = validateTicket config wrongAud
 assertTrue "wrong audience IsValid = false" (not wrongAudResult.IsValid)
+
+// 6b. Wrong issuer rejection (regression for the hardened verifyTicketHandler)
+printfn "6b. Wrong issuer"
+let wrongIss = signRaw "evil-service" "cadenza-bridge" (TimeSpan.FromMinutes 10.0)
+let wrongIssResult = validateTicket config wrongIss
+assertTrue "wrong issuer IsValid = false" (not wrongIssResult.IsValid)
 
 printfn ""
 
@@ -189,7 +200,7 @@ printfn ""
 // 7. Expired ticket is rejected
 // ---------------------------------------------------------------
 printfn "7. Expired ticket"
-let expiredTicket = signRaw "cadenza-bridge" (TimeSpan.FromSeconds -120.0)
+let expiredTicket = signRaw "tamekoma-night" "cadenza-bridge" (TimeSpan.FromSeconds -120.0)
 let expiredResult = validateTicket config expiredTicket
 assertTrue "expired IsValid = false" (not expiredResult.IsValid)
 
