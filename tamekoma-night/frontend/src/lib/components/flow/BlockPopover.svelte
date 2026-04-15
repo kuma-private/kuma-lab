@@ -72,6 +72,14 @@
   }: Props = $props();
 
   // --- State ---
+  // NOTE: several of the variables below are seeded from the `block` prop
+  // at mount. Under Svelte 5, `let x = $state(block.foo)` captures the
+  // value at creation time and does NOT re-sync when the prop changes —
+  // that causes every slider / directive / preview field to show stale
+  // values whenever the parent swaps blocks without unmounting us. The
+  // `$effect` block further down re-initialises all of them whenever the
+  // block identity or its directives change. Fixes the family of
+  // `state_referenced_locally` warnings called out by svelte-check.
   let parsed = $state(parseDirectives(block.directives));
   let directives: ParsedDirectives = $state(parsed.directives);
   let rawText = $state(directivesToText(directives));
@@ -96,6 +104,37 @@
   // --- Slider state (continuous values) ---
   let voicingSlider = $state(voicingNameToValue(directives.voicing));
   let velocitySlider = $state(velocityNameToValue(typeof directives.velocity === 'string' ? directives.velocity : 'mf'));
+
+  // Track the block identity we last initialised from so the sync effect
+  // only fires on actual block changes — not on every re-render where
+  // block is still the same reference. Transient UI-only state (aiPrompt,
+  // aiLoading, aiError, rawOpen, detailOpen) is deliberately NOT reset,
+  // so a user's in-progress AI query and view preferences persist.
+  let lastInitBlockId = $state<string | null>(null);
+  $effect(() => {
+    const id = block.id;
+    const directivesText = block.directives;
+    const generated = block.generatedMidi;
+    if (lastInitBlockId === id) return;
+    lastInitBlockId = id;
+    const newParsed = parseDirectives(directivesText);
+    parsed = newParsed;
+    directives = newParsed.directives;
+    rawText = directivesToText(newParsed.directives);
+    parseErrors = [];
+    expressionSlider = generated?.expression ?? 50;
+    feelSlider = generated?.feel ?? 50;
+    generatedMidiData = generated;
+    melodyText = newParsed.directives.melody
+      ? extractMelodyText(directivesText)
+      : '';
+    voicingSlider = voicingNameToValue(newParsed.directives.voicing);
+    velocitySlider = velocityNameToValue(
+      typeof newParsed.directives.velocity === 'string'
+        ? newParsed.directives.velocity
+        : 'mf'
+    );
+  });
 
   // --- Derived ---
   let headerLabel = $derived.by(() => {
@@ -293,6 +332,19 @@
 
   let previewPlaying = $state(false);
   let previewTimeouts: ReturnType<typeof setTimeout>[] = [];
+
+  // Component-lifetime cleanup for anything the AI / preview paths may have
+  // left running when the user closes the popover (or navigates away). Without
+  // this, `tipInterval` leaks on mid-generation dismissal and `previewTimeouts`
+  // keep firing noteOn events into the piano sampler after unmount.
+  $effect(() => () => {
+    if (tipInterval) {
+      clearInterval(tipInterval);
+      tipInterval = null;
+    }
+    for (const t of previewTimeouts) clearTimeout(t);
+    previewTimeouts = [];
+  });
 
   async function handlePreview() {
     if (previewPlaying) {
@@ -763,6 +815,8 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   /* Field */
