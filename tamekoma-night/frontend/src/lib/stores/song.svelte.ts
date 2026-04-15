@@ -11,6 +11,7 @@ import * as api from '$lib/api';
 import { hydrateSong } from '$lib/song-serializer';
 import { escapeJsonPointer } from '$lib/bridge/project-adapter';
 import { bridgeStore } from '$lib/stores/bridge.svelte';
+import { showToast } from '$lib/stores/toast.svelte';
 import type { PlaybackEngine } from '$lib/playback/engine';
 
 class SongStore {
@@ -236,7 +237,17 @@ class SongStore {
 					bridgeStore.notifyPremiumRequired('project.patch');
 					return;
 				}
+				// Any other bridge rejection is a real problem — surface it
+				// to the user via a toast rather than burying it in the
+				// console where only developers will see it. This closes the
+				// silent-failure loop where an editing action "worked" locally
+				// but never reached the running Bridge audio graph.
+				const msg = e instanceof Error ? e.message : String(e);
 				console.warn('[song.mutate] bridge patch rejected:', e);
+				showToast(
+					`Bridge 側での反映に失敗しました: ${msg}`,
+					'error'
+				);
 			});
 		}
 	}
