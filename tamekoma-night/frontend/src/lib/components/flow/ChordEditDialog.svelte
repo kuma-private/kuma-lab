@@ -26,6 +26,14 @@
   let sharpFlat = $state<'' | '#' | 'b'>('');
   let flashedNote = $state<string | null>(null);
 
+  // Re-sync the text input when the parent hands us a different bar range.
+  // Without this, `input` would stay frozen at the first initialChords value
+  // seen at mount, and re-opening the dialog for a different bar would show
+  // stale contents. (Svelte 5 `state_referenced_locally` warning fix.)
+  $effect(() => {
+    input = initialChords;
+  });
+
   // Parse input for preview
   let preview = $derived.by(() => {
     if (!input.trim()) return [];
@@ -156,8 +164,10 @@
   }
 </script>
 
+<svelte:window onkeydown={handleKeydown} />
+
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="chord-dialog-overlay" role="dialog" aria-modal="true" aria-label="{rangeLabel} のコードを編集" onclick={handleOverlayClick} onkeydown={handleKeydown}>
+<div class="chord-dialog-overlay" role="dialog" aria-modal="true" aria-label="{rangeLabel} のコードを編集" onclick={handleOverlayClick}>
   <div class="chord-dialog">
     <!-- Header -->
     <div class="chord-dialog-header">
