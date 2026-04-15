@@ -13,7 +13,15 @@ type AppConfig =
       AnthropicApiKey: string
       /// Comma-separated uids that should be treated as premium regardless of Firestore state.
       /// Set via CADENZA_DEV_PREMIUM_UIDS. Used only for local development / QA.
-      DevPremiumUids: string list }
+      DevPremiumUids: string list
+      /// CORS allow-list, parsed from ALLOWED_ORIGINS (CSV) at startup.
+      /// In DEV_MODE this defaults to common dev origins so the local Vite +
+      /// Bridge stack continues to work without configuration. In production
+      /// the env var MUST be set explicitly — there is no default that
+      /// allows arbitrary origins, because we issue credentialed (cookie-
+      /// bearing) responses and a wildcard would expose the user session
+      /// to CSRF.
+      AllowedOrigins: string list }
 
 module Config =
 
@@ -54,6 +62,25 @@ module Config =
             |> Array.filter (fun s -> s.Length > 0)
             |> Array.toList
 
+    let private parseAllowedOrigins (devMode: bool) : string list =
+        let fromEnv =
+            match Environment.GetEnvironmentVariable("ALLOWED_ORIGINS") with
+            | null | "" -> []
+            | raw ->
+                raw.Split([| ',' |], StringSplitOptions.RemoveEmptyEntries)
+                |> Array.map (fun s -> s.Trim().TrimEnd('/'))
+                |> Array.filter (fun s -> s.Length > 0)
+                |> Array.toList
+        match fromEnv with
+        | [] when devMode ->
+            // Sensible local defaults so the standard dev stack
+            // (Vite on 52730, custom dev port 5173) just works.
+            [ "http://localhost:52730"
+              "http://localhost:5173"
+              "http://127.0.0.1:52730"
+              "http://127.0.0.1:5173" ]
+        | xs -> xs
+
     /// Return true when the given uid appears in CADENZA_DEV_PREMIUM_UIDS.
     let isDevPremiumUid (config: AppConfig) (uid: string) : bool =
         if System.String.IsNullOrEmpty(uid) then false
@@ -71,6 +98,7 @@ module Config =
             | v -> v
 
         let devPremiumUids = parseDevPremiumUids ()
+        let allowedOrigins = parseAllowedOrigins devMode
 
         if devMode then
             { GoogleClientId = envOr "GOOGLE_CLIENT_ID" "dev-client-id"
@@ -79,7 +107,8 @@ module Config =
               FrontendUrl = envOr "FRONTEND_URL" ""
               FirestoreProjectId = envOr "FIRESTORE_PROJECT_ID" ""
               AnthropicApiKey = envOr "ANTHROPIC_API_KEY" ""
-              DevPremiumUids = devPremiumUids }
+              DevPremiumUids = devPremiumUids
+              AllowedOrigins = allowedOrigins }
         else
             { GoogleClientId = env "GOOGLE_CLIENT_ID"
               GoogleClientSecret = env "GOOGLE_CLIENT_SECRET"
@@ -87,4 +116,5 @@ module Config =
               FrontendUrl = envOr "FRONTEND_URL" ""
               FirestoreProjectId = envOr "FIRESTORE_PROJECT_ID" ""
               AnthropicApiKey = envOr "ANTHROPIC_API_KEY" ""
-              DevPremiumUids = devPremiumUids }
+              DevPremiumUids = devPremiumUids
+              AllowedOrigins = allowedOrigins }
