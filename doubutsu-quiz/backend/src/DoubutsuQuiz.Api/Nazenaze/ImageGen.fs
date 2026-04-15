@@ -26,9 +26,10 @@ module ImageGen =
                 "whimsical pastel watercolor children's picture book illustration, dreamy and slightly silly, soft brush strokes, gentle colors"
             else
                 "calm pastel watercolor children's picture book illustration, soft brush strokes, gentle warm colors"
-        // scenePrompt は Claude が考えた英語シーン描写 (1 文)。それを style modifier で wrap する
+        // scenePrompt は Claude が考えた英語シーン描写 (1 文)。それを style modifier で wrap する。
+        // Imagen 4 は negativePrompt パラメータ非対応なので、positive phrasing で文字系を全排除する。
         sprintf
-            "%s. %s. Wide panoramic view, no characters, no people, no text, no letters, atmospheric and gentle."
+            "%s. %s. Wide panoramic empty landscape, completely wordless and textless, no signs, no letters, no writing, no captions, no typography, no characters, no people, no animals with faces, atmospheric and gentle."
             scenePrompt style
 
     /// Generate a single background PNG via Vertex AI Imagen.

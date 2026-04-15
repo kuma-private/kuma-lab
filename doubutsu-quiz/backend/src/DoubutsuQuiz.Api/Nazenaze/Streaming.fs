@@ -213,13 +213,13 @@ generate_nazenaze_story ツールを必ず使い、title / imagePrompt / pages �
                     """{
                         "type": "object",
                         "properties": {
+                            "imagePrompt": {
+                                "type": "string",
+                                "description": "AI image gen (Imagen) prompt for the background scene. English, 1 sentence, scene/environment only, no characters/people/text. Style modifiers are added automatically. **Emit this field first** so image generation can start while the story text is still being written."
+                            },
                             "title": {
                                 "type": "string",
                                 "description": "紙芝居のタイトル（ひらがな主体、短く）"
-                            },
-                            "imagePrompt": {
-                                "type": "string",
-                                "description": "AI image gen (Imagen) prompt for the background scene. English, 1 sentence, scene/environment only, no characters/people/text. Style modifiers are added automatically."
                             },
                             "pages": {
                                 "type": "array",
@@ -317,13 +317,12 @@ generate_nazenaze_story ツールを必ず使い、title / imagePrompt / pages �
                             else
                                 let appended = tryAppendPartialJson data buffer
                                 if appended && imagenTask.IsNone then
-                                    // Prefer imagePrompt if we already have it; else title.
-                                    let scene =
-                                        match tryFindField imagePromptRegex buffer with
-                                        | Some ip when not (String.IsNullOrWhiteSpace ip) -> Some ip
-                                        | _ -> tryFindField titleRegex buffer
-
-                                    match scene with
+                                    // Only kick off Imagen once we have an English imagePrompt.
+                                    // The Japanese title is never a good Imagen input — it
+                                    // causes text hallucinations in the rendered image. If
+                                    // imagePrompt never arrives during streaming, the handler
+                                    // falls back to a synchronous call after parse.
+                                    match tryFindField imagePromptRegex buffer with
                                     | Some s when not (String.IsNullOrWhiteSpace s) ->
                                         titleFoundAt <- Some totalSw.ElapsedMilliseconds
                                         printfn

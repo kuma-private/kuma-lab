@@ -85,16 +85,22 @@ module NazenazeHandlers =
                     let totalSw = Stopwatch.StartNew()
                     let pageCount = clampPageCount body.pageCount
 
-                    let samplingInput : SamplePicker.SamplingInput =
-                        { Mode = SamplePicker.Cosmos
-                          PageCount = pageCount
-                          Protagonist = None
-                          Setting = None
-                          Theme = None
-                          ProtagonistImageDataUrl = None }
+                    let keywordSw = Stopwatch.StartNew()
+                    let! keywordResult =
+                        KeywordExtractor.extract httpClient config.AnthropicApiKey body.question
+                        |> Async.StartAsTask
+                    keywordSw.Stop()
+
+                    let keywords =
+                        match keywordResult with
+                        | Ok ks -> ks
+                        | Error err ->
+                            printfn "[nazenaze-keyword-fail] %s" err
+                            [||]
+                    printfn "[nazenaze-keywords] %dms [%s]" keywordSw.ElapsedMilliseconds (String.concat ", " keywords)
 
                     let sampleSw = Stopwatch.StartNew()
-                    let samples = SamplePicker.pickSamples index samplingInput
+                    let samples = SamplePicker.pickCosmosWithKeywords index keywords
                     sampleSw.Stop()
 
                     let claudeSw = Stopwatch.StartNew()
@@ -205,16 +211,22 @@ module NazenazeHandlers =
                     let totalSw = Stopwatch.StartNew()
                     let pageCount = clampPageCount body.pageCount
 
-                    let samplingInput : SamplePicker.SamplingInput =
-                        { Mode = SamplePicker.Cosmos
-                          PageCount = pageCount
-                          Protagonist = None
-                          Setting = None
-                          Theme = None
-                          ProtagonistImageDataUrl = None }
+                    let keywordSw = Stopwatch.StartNew()
+                    let! keywordResult =
+                        KeywordExtractor.extract httpClient config.AnthropicApiKey body.question
+                        |> Async.StartAsTask
+                    keywordSw.Stop()
+
+                    let keywords =
+                        match keywordResult with
+                        | Ok ks -> ks
+                        | Error err ->
+                            printfn "[nazenaze-keyword-fail] %s" err
+                            [||]
+                    printfn "[nazenaze-keywords] %dms [%s]" keywordSw.ElapsedMilliseconds (String.concat ", " keywords)
 
                     let sampleSw = Stopwatch.StartNew()
-                    let samples = SamplePicker.pickSamples index samplingInput
+                    let samples = SamplePicker.pickCosmosWithKeywords index keywords
                     sampleSw.Stop()
 
                     let claudeSw = Stopwatch.StartNew()

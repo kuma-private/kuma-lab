@@ -212,13 +212,13 @@ generate_nazenaze_story ツールを必ず使い、title / imagePrompt / pages �
                 """{
                     "type": "object",
                     "properties": {
+                        "imagePrompt": {
+                            "type": "string",
+                            "description": "AI image gen (Imagen) prompt for the background scene. English, 1 sentence, scene/environment only, no characters/people/text. Style modifiers are added automatically. **Emit this field first** so image generation can start while the story text is still being written. Example: 'A cozy living room with a glowing television on a wooden shelf'"
+                        },
                         "title": {
                             "type": "string",
                             "description": "紙芝居のタイトル（ひらがな主体、短く）"
-                        },
-                        "imagePrompt": {
-                            "type": "string",
-                            "description": "AI image gen (Imagen) prompt for the background scene. English, 1 sentence, scene/environment only, no characters/people/text. Style modifiers are added automatically. Example: 'A cozy living room with a glowing television on a wooden shelf'"
                         },
                         "pages": {
                             "type": "array",

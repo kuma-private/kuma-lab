@@ -166,6 +166,51 @@ module SamplePicker =
         |> List.truncate sampleSize
         |> List.toArray
 
+    /// Nazenaze variant: blend search-based relevant hits for the supplied
+    /// keywords with the cosmos category-balanced fallback. Relevant hits are
+    /// placed first so Claude notices them in the catalog order.
+    ///
+    /// - Blocked categories (事故/犯罪/etc) are always filtered out.
+    /// - If search returns 0 hits (bad keywords, index miss), we fall back to
+    ///   pure pickCosmos so the flow never fails on sampling.
+    let pickCosmosWithKeywords
+        (index: IrasutoyaIndex.Index)
+        (keywords: string array)
+        : IrasutoyaIndex.Entry array =
+        let relevantWant = 12
+
+        let relevant : IrasutoyaIndex.Entry list =
+            if isNull keywords || keywords.Length = 0 then []
+            else
+                let query = String.concat " " keywords
+                let hits = IrasutoyaIndex.search index query 60
+                hits
+                |> List.map (fun h -> h.Entry)
+                |> List.filter (fun e -> hasUsableImage e && not (isBlocked e))
+                |> List.truncate relevantWant
+
+        let usedIds =
+            let s = System.Collections.Generic.HashSet<string>()
+            for e in relevant do s.Add e.Id |> ignore
+            s
+
+        let fallback = pickCosmos index
+
+        let fallbackFiltered =
+            fallback
+            |> Array.filter (fun e -> not (usedIds.Contains e.Id))
+
+        let combined =
+            Array.append (List.toArray relevant) fallbackFiltered
+
+        if combined.Length >= sampleSize then
+            Array.sub combined 0 sampleSize
+        else
+            // Extremely unlikely — pickCosmos already guarantees 20 disjoint
+            // entries, so combined is always ≥ 20 after filtering. Keep a safe
+            // pad just in case.
+            combined
+
     let pickSamples
         (index: IrasutoyaIndex.Index)
         (input: SamplingInput)
