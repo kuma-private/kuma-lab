@@ -35,6 +35,9 @@
 	let droppedCount = $state(0);
 
 	const currentEntry = $derived(tower.entries[tower.nextIndex] ?? null);
+	const currentTitle = $derived(
+		currentEntry ? currentEntry.title.replace(/\s*のイラスト/g, '').trim() : ''
+	);
 
 	const islandTopY = $derived(canvasH - ISLAND_MARGIN_BOTTOM - ISLAND_H);
 	const islandW = $derived(Math.round(canvasW * ISLAND_W_RATIO));
@@ -256,12 +259,6 @@
 </script>
 
 <div class="tower-root" bind:this={container}>
-	<div class="clouds">
-		<div class="cloud c1"></div>
-		<div class="cloud c2"></div>
-		<div class="cloud c3"></div>
-	</div>
-
 	<div class="hud">
 		<div class="hud-score">スコア: {droppedCount}</div>
 		<div class="hud-best">ベスト: {tower.best}</div>
@@ -285,16 +282,16 @@
 		</div>
 
 		{#if currentEntry}
+			<div class="bubble" style="left: {previewX}px;">
+				{currentTitle}
+			</div>
 			<div class="preview" style={previewStyle}>
 				<img
 					src={currentEntry.imageUrl}
-					alt={currentEntry.title}
+					alt={currentTitle}
 					draggable="false"
 				/>
 				<div class="preview-arrow"></div>
-			</div>
-			<div class="bubble" style="left: {previewX}px;">
-				{currentEntry.title}
 			</div>
 		{/if}
 	</div>
@@ -321,44 +318,6 @@
 		font-family: 'Klee One', 'Hiragino Mincho ProN', serif;
 		touch-action: manipulation;
 		user-select: none;
-	}
-
-	.clouds {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		overflow: hidden;
-	}
-
-	.cloud {
-		position: absolute;
-		background: rgba(255, 255, 255, 0.9);
-		border-radius: 999px;
-		box-shadow:
-			40px 0 0 -4px rgba(255, 255, 255, 0.9),
-			-30px 4px 0 -6px rgba(255, 255, 255, 0.9),
-			20px -12px 0 -8px rgba(255, 255, 255, 0.9);
-	}
-
-	.cloud.c1 {
-		top: 8%;
-		left: 8%;
-		width: 70px;
-		height: 24px;
-	}
-
-	.cloud.c2 {
-		top: 18%;
-		right: 10%;
-		width: 80px;
-		height: 26px;
-	}
-
-	.cloud.c3 {
-		top: 34%;
-		left: 20%;
-		width: 60px;
-		height: 20px;
 	}
 
 	.hud {
@@ -425,7 +384,7 @@
 
 	.preview {
 		position: absolute;
-		top: 10px;
+		top: 46px;
 		transform: translateX(-50%);
 		z-index: 4;
 		pointer-events: none;
@@ -458,20 +417,20 @@
 
 	.bubble {
 		position: absolute;
-		top: calc(10px + 78px + 12px);
+		top: 10px;
 		transform: translateX(-50%);
 		z-index: 5;
 		padding: 6px 14px;
 		background: rgba(255, 255, 255, 0.95);
 		border: 1.5px solid rgba(92, 107, 192, 0.45);
 		border-radius: 999px;
-		font-size: 0.85rem;
+		font-size: 0.9rem;
 		font-weight: 800;
 		color: #3d2b1f;
 		white-space: nowrap;
 		box-shadow: 0 3px 8px rgba(40, 70, 110, 0.2);
 		pointer-events: none;
-		max-width: 80%;
+		max-width: 86%;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
