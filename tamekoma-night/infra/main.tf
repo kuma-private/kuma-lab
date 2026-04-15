@@ -149,6 +149,16 @@ resource "google_cloud_run_v2_service" "app" {
         value = var.project_id
       }
 
+      # CORS allow-list. Config.fs refuses to set Access-Control-Allow-Origin
+      # unless the Origin header matches this list, which closed the sprint 6
+      # CSRF hole where the previous config advertised SetIsOriginAllowed(_ ->
+      # true) together with AllowCredentials. CSV form supports multiple
+      # origins when we eventually add staging / preview domains.
+      env {
+        name  = "ALLOWED_ORIGINS"
+        value = "https://chord.kuma-lab.art"
+      }
+
       env {
         name = "ANTHROPIC_API_KEY"
         value_source {
