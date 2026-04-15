@@ -7,6 +7,7 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tracing::{error, info, warn};
 
 use crate::bridge_state::{BridgeState, Status};
@@ -51,7 +52,14 @@ pub async fn run_ws_server_with_state(
 }
 
 async fn handle_connection(state: SessionState, stream: TcpStream, peer: String) -> Result<()> {
-    let ws = tokio_tungstenite::accept_async(stream)
+    // Cap inbound frame / message size so a hostile or buggy client cannot
+    // OOM the bridge with a multi-GB project.patch payload. 16 MB is well
+    // above any realistic Cadenza song state and matches the default ASP.NET
+    // request limit on the F# side.
+    let mut config = WebSocketConfig::default();
+    config.max_message_size = Some(16 * 1024 * 1024);
+    config.max_frame_size = Some(16 * 1024 * 1024);
+    let ws = tokio_tungstenite::accept_async_with_config(stream, Some(config))
         .await
         .context("ws handshake")?;
     info!("ws client connected: {peer}");
