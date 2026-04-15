@@ -191,6 +191,11 @@
 	const handlePause = () => { void player?.pause(); };
 
 	const handleKeydown = (e: KeyboardEvent) => {
+		const isEditable =
+			e.target instanceof HTMLTextAreaElement ||
+			e.target instanceof HTMLInputElement ||
+			(e.target instanceof HTMLElement && e.target.isContentEditable);
+
 		// Cmd/Ctrl+S: 保存
 		if ((e.ctrlKey || e.metaKey) && e.key === 's') {
 			e.preventDefault();
@@ -198,10 +203,20 @@
 			return;
 		}
 		// Space: 再生/一時停止（input/textarea 以外）
-		if (e.key === ' ' && !(e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement)) {
+		if (e.key === ' ' && !isEditable) {
 			e.preventDefault();
 			if (playerState === 'playing') handlePause();
 			else void handlePlay();
+			return;
+		}
+		// ←/→: ±5秒シーク（input/textarea 以外、HelpModal で利用者に告知済みの挙動を
+		// グローバルに有効化する。progress bar に focus がなくても効くようにする）
+		if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !isEditable) {
+			if (!player || totalDuration <= 0) return;
+			e.preventDefault();
+			const delta = e.key === 'ArrowLeft' ? -5 : 5;
+			const next = Math.max(0, Math.min(totalDuration, currentTime + delta));
+			void player.seekTo(next);
 			return;
 		}
 		// Escape: ポップオーバーを閉じる（フォーカス解除）
