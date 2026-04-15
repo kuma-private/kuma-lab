@@ -61,6 +61,7 @@ module Repository =
 
         // Aliases for shared Firestore helpers
         let private tryGetDocString = FirestoreHelpers.tryGetDocString
+        let private tryGetDocInt = FirestoreHelpers.tryGetDocInt
         let private tryGetDocTimestamp = FirestoreHelpers.tryGetDocTimestamp
         let private tryGetStringList = FirestoreHelpers.tryGetStringList
         let private tryGetDictString = FirestoreHelpers.tryGetDictString
@@ -294,17 +295,22 @@ module Repository =
                     | None -> None
                 | _ -> None
 
+            // Use tryGet* wrappers for every field so a Firestore doc that
+            // is missing any optional column (e.g. an older song saved
+            // before a schema field was added) loads cleanly with a sane
+            // default instead of throwing ArgumentNullException and
+            // crashing the request.
             { Id = doc.Id
-              Title = doc.GetValue<string>("title")
-              Bpm = doc.GetValue<int>("bpm")
-              TimeSignature = doc.GetValue<string>("timeSignature")
-              Key = doc.GetValue<string>("key")
+              Title = doc |> tryGetDocString <| "title" <| "Untitled"
+              Bpm = doc |> tryGetDocInt <| "bpm" <| 120
+              TimeSignature = doc |> tryGetDocString <| "timeSignature" <| "4/4"
+              Key = doc |> tryGetDocString <| "key" <| "C"
               ChordProgression = doc |> tryGetDocString <| "chordProgression" <| ""
               Sections = sections
               Tracks = tracks
-              CreatedBy = doc.GetValue<string>("createdBy")
-              CreatedByName = doc.GetValue<string>("createdByName")
-              CreatedAt = doc.GetValue<Timestamp>("createdAt").ToDateTime()
+              CreatedBy = doc |> tryGetDocString <| "createdBy" <| ""
+              CreatedByName = doc |> tryGetDocString <| "createdByName" <| ""
+              CreatedAt = doc |> tryGetDocTimestamp <| "createdAt" <| DateTime.UtcNow
               LastEditedBy = doc |> tryGetDocString <| "lastEditedBy" <| ""
               LastEditedAt = doc |> tryGetDocTimestamp <| "lastEditedAt" <| DateTime.UtcNow
               Visibility = doc |> tryGetDocString <| "visibility" <| "private"
