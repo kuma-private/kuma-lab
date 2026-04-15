@@ -44,7 +44,10 @@
 	}
 
 	function handleDblClick() {
-		onChange(0);
+		// Reset to the floor of the configured range rather than a hardcoded
+		// 0 — clamps correctly when `min` is non-zero (e.g. a send that
+		// shouldn't be allowed to fully mute).
+		onChange(min);
 	}
 
 	// Rotate 0..1 value to -135..+135 degrees
