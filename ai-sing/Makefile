@@ -147,7 +147,10 @@ seaman-test:
 seaman-check: seaman-build seaman-test
 
 seaman-smoke:
-	bash cli/smoke_speak.sh
+	@bash cli/smoke_speak.sh; status=$$?; \
+	if [ $$status -eq 0 ]; then exit 0; \
+	elif [ $$status -eq 2 ]; then echo "[seaman-smoke] SKIP — env not ready"; exit 0; \
+	else exit $$status; fi
 
 seaman-ci: seaman-check seaman-smoke
 
