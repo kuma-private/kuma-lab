@@ -8,6 +8,7 @@ actor SpeechEngine {
     private var modelLoaded = false
     private var modelWaiters: [CheckedContinuation<Void, Never>] = []
     private var synthWaiters: [String: CheckedContinuation<String?, Never>] = [:]
+    private var stdoutBuffer = ""
 
     func warmup(referenceAudio: String, projectPath: String) async {
         guard process == nil else { return }
@@ -51,6 +52,16 @@ actor SpeechEngine {
         guard !modelLoaded else { return }
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             modelWaiters.append(cont)
+        }
+    }
+
+    private func ingestStdout(_ chunk: String) {
+        stdoutBuffer += chunk
+        while let idx = stdoutBuffer.firstIndex(of: "\n") {
+            let line = String(stdoutBuffer[..<idx])
+            stdoutBuffer = String(stdoutBuffer[stdoutBuffer.index(after: idx)...])
+            if !line.isEmpty { SeamanLogger.log("speak.py: \(line)") }
+            handleStdoutLine(line)
         }
     }
 
@@ -105,19 +116,14 @@ actor SpeechEngine {
             if !trimmed.isEmpty { SeamanLogger.log("speak.py stderr: \(trimmed)") }
         }
 
-        // Monitor stdout continuously: detects "Model loaded" and "=> name.wav" signals
-        var lineBuffer = ""
+        // Monitor stdout continuously: detects "Model loaded" and "=> name.wav" signals.
+        // Line accumulation lives on the actor (stdoutBuffer) so the handler closure
+        // stays Sendable under the Swift 6 concurrency model.
         stdoutPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             guard let self else { return }
             let data = handle.availableData
             guard !data.isEmpty, let str = String(data: data, encoding: .utf8) else { return }
-            lineBuffer += str
-            while let idx = lineBuffer.firstIndex(of: "\n") {
-                let line = String(lineBuffer[..<idx])
-                lineBuffer = String(lineBuffer[lineBuffer.index(after: idx)...])
-                if !line.isEmpty { SeamanLogger.log("speak.py: \(line)") }
-                Task { await self.handleStdoutLine(line) }
-            }
+            Task { await self.ingestStdout(str) }
         }
     }
 }
