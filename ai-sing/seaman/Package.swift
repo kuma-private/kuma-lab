@@ -7,7 +7,16 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Seaman",
-            path: "Sources/Seaman"
+            path: "Sources/Seaman",
+            exclude: ["Info.plist"],
+            resources: [
+                .process("Resources"),
+            ]
+        ),
+        .testTarget(
+            name: "SeamanTests",
+            dependencies: ["Seaman"],
+            path: "Tests/SeamanTests"
         ),
     ]
 )
