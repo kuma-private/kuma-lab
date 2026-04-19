@@ -4,7 +4,7 @@ actor PetBrain {
     private let ollamaURL = "http://localhost:11434/api/chat"
     private let modelName = "qwen3.5:122b"
 
-    func generateSpeech(topic: String, history: [String], extra: String?) -> String {
+    func generateSpeech(topic: String, history: [String], extra: String?) async -> String {
         let historyText = history.suffix(3).joined(separator: "\n")
         let extraPrompt = extra.map { "\n追加指示: \($0)" } ?? ""
 
@@ -42,45 +42,36 @@ actor PetBrain {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 30
 
-        let semaphore = DispatchSemaphore(value: 0)
         var result = ""
-
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            defer { semaphore.signal() }
-
-            if let error = error {
-                SeamanLogger.log("Ollama error: \(error)")
-                return
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let message = json["message"] as? [String: Any],
+               let content = message["content"] as? String {
+                result = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                SeamanLogger.log("LLM response: \(result)")
+            } else if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let error = json["error"] as? String {
+                SeamanLogger.log("Ollama API error: \(error)")
             }
-            guard let data = data else { return }
-
-            do {
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let message = json["message"] as? [String: Any],
-                   let content = message["content"] as? String {
-                    result = content.trimmingCharacters(in: .whitespacesAndNewlines)
-                    SeamanLogger.log("LLM response: \(result)")
-                } else if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                          let error = json["error"] as? String {
-                    SeamanLogger.log("Ollama API error: \(error)")
-                }
-            } catch {
-                SeamanLogger.log("JSON parse error: \(error)")
-            }
-        }
-        task.resume()
-        semaphore.wait()
-
-        if result.isEmpty {
+        } catch {
+            SeamanLogger.log("Ollama error: \(error)")
             return "…水槽の中は今日も退屈だ。"
         }
 
-        // Limit to 2 sentences
-        let sentences = result.components(separatedBy: CharacterSet(charactersIn: "。！？"))
+        return Self.postprocess(result)
+    }
+}
+
+extension PetBrain {
+    static func postprocess(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "…水槽の中は今日も退屈だ。" }
+        let sentences = trimmed.components(separatedBy: CharacterSet(charactersIn: "。！？"))
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         if sentences.count > 2 {
-            result = sentences.prefix(2).joined(separator: "。") + "。"
+            return sentences.prefix(2).joined(separator: "。") + "。"
         }
-        return result
+        return trimmed
     }
 }
