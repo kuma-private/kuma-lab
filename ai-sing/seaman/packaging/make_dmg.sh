@@ -3,8 +3,9 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 AI_SING_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SEAMAN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 VENV="$AI_SING_DIR/.venv-tts"
-DIST="$SCRIPT_DIR/dist"
+DIST="$SEAMAN_DIR/dist"
 APP="$DIST/Seaman.app"
 DMG="$DIST/Seaman.dmg"
 BG_PNG="$DIST/_bg.png"
