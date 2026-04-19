@@ -110,4 +110,33 @@ ui:
 clean:
 	rm -rf $(TMP_DIR)/*
 
-.PHONY: clip separate convert mix sing speak speak-i ui clean _sing_separate _sing_convert _sing_mix
+# ===== Seaman デスクトップペット =====
+SEAMAN_DIR := seaman
+SEAMAN_DIST := $(SEAMAN_DIR)/dist
+SEAMAN_APP := $(SEAMAN_DIST)/Seaman.app
+SEAMAN_DMG := $(SEAMAN_DIST)/Seaman.dmg
+SEAMAN_RES := $(SEAMAN_DIR)/Sources/Seaman/Resources
+
+# .app バンドルを作成
+# 使い方: make seaman-app
+seaman-app:
+	@echo "Building Seaman (release)..."
+	cd $(SEAMAN_DIR) && swift build -c release
+	rm -rf $(SEAMAN_APP)
+	mkdir -p $(SEAMAN_APP)/Contents/MacOS
+	mkdir -p $(SEAMAN_APP)/Contents/Resources
+	cp $(SEAMAN_DIR)/.build/release/Seaman $(SEAMAN_APP)/Contents/MacOS/Seaman
+	cp $(SEAMAN_DIR)/Sources/Seaman/Info.plist $(SEAMAN_APP)/Contents/Info.plist
+	cp $(SEAMAN_RES)/seaman.png $(SEAMAN_APP)/Contents/Resources/
+	cp $(SEAMAN_RES)/seaman_open.png $(SEAMAN_APP)/Contents/Resources/
+	cp $(SEAMAN_RES)/Seaman.icns $(SEAMAN_APP)/Contents/Resources/
+	@echo "=> $(SEAMAN_APP)"
+
+# DMG インストーラを作成（背景・ウィンドウレイアウト付き）
+# 使い方: make seaman-dmg
+seaman-dmg: seaman-app
+	bash $(SEAMAN_DIR)/make_dmg.sh
+
+.PHONY: clip separate convert mix sing speak speak-i ui clean \
+	_sing_separate _sing_convert _sing_mix \
+	seaman-app seaman-dmg
