@@ -137,6 +137,21 @@ seaman-app:
 seaman-dmg: seaman-app
 	bash $(SEAMAN_DIR)/packaging/make_dmg.sh
 
+# === 検証ゲート ===
+seaman-build:
+	cd $(SEAMAN_DIR) && swift build -Xswiftc -warnings-as-errors
+
+seaman-test:
+	cd $(SEAMAN_DIR) && swift test
+
+seaman-check: seaman-build seaman-test
+
+seaman-smoke:
+	bash cli/smoke_speak.sh
+
+seaman-ci: seaman-check seaman-smoke
+
 .PHONY: clip separate convert mix sing speak speak-i ui clean \
 	_sing_separate _sing_convert _sing_mix \
-	seaman-app seaman-dmg
+	seaman-app seaman-dmg \
+	seaman-build seaman-test seaman-check seaman-smoke seaman-ci
