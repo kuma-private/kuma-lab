@@ -3,11 +3,18 @@ input/
 output/
 tmp/
 
-# 外部リポジトリ
+# 外部リポジトリ・実験フォルダ
 seed-vc/
+comfyui/
+deep-live-cam/
+facefusion/
 
 # Python仮想環境
 .venv-tts/
+
+# Seaman ビルド成果物
+seaman/.build/
+seaman/dist/
 
 # OS
 .DS_Store
