@@ -36,7 +36,7 @@ final class SetupChecker: ObservableObject {
 
     // MARK: - Individual checks
 
-    private nonisolated static func runChecks(projectPath: String) -> [SetupItem] {
+    internal nonisolated static func runChecks(projectPath: String) -> [SetupItem] {
         [
             checkProjectPath(projectPath),
             checkTTSVenv(projectPath),
@@ -47,7 +47,7 @@ final class SetupChecker: ObservableObject {
         ]
     }
 
-    private nonisolated static func checkProjectPath(_ path: String) -> SetupItem {
+    internal nonisolated static func checkProjectPath(_ path: String) -> SetupItem {
         let fm = FileManager.default
         var isDir: ObjCBool = false
         let exists = fm.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
@@ -70,7 +70,7 @@ final class SetupChecker: ObservableObject {
         )
     }
 
-    private nonisolated static func checkTTSVenv(_ path: String) -> SetupItem {
+    internal nonisolated static func checkTTSVenv(_ path: String) -> SetupItem {
         let python = "\(path)/.venv-tts/bin/python"
         if FileManager.default.isExecutableFile(atPath: python) {
             return SetupItem(
@@ -95,7 +95,7 @@ final class SetupChecker: ObservableObject {
         )
     }
 
-    private nonisolated static func checkSeedVCVenv(_ path: String) -> SetupItem {
+    internal nonisolated static func checkSeedVCVenv(_ path: String) -> SetupItem {
         let python = "\(path)/seed-vc/.venv/bin/python"
         if FileManager.default.isExecutableFile(atPath: python) {
             return SetupItem(
@@ -120,7 +120,7 @@ final class SetupChecker: ObservableObject {
         )
     }
 
-    private nonisolated static func checkReferenceAudio(_ path: String) -> SetupItem {
+    internal nonisolated static func checkReferenceAudio(_ path: String) -> SetupItem {
         let ref = UserDefaults.standard.string(forKey: "referenceAudioPath") ?? ""
         let fm = FileManager.default
         if !ref.isEmpty, fm.fileExists(atPath: ref) {
@@ -142,7 +142,7 @@ final class SetupChecker: ObservableObject {
         )
     }
 
-    private nonisolated static func checkFFmpeg() -> SetupItem {
+    internal nonisolated static func checkFFmpeg() -> SetupItem {
         for candidate in ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"] {
             if FileManager.default.isExecutableFile(atPath: candidate) {
                 return SetupItem(
@@ -163,7 +163,7 @@ final class SetupChecker: ObservableObject {
         )
     }
 
-    private nonisolated static func checkOllama() -> SetupItem {
+    internal nonisolated static func checkOllama() -> SetupItem {
         // Probe localhost:11434/api/tags synchronously with a short timeout.
         let url = URL(string: "http://127.0.0.1:11434/api/tags")!
         var req = URLRequest(url: url)

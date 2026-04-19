@@ -164,7 +164,7 @@ final class SongEngine: ObservableObject {
 
     // MARK: - Helpers
 
-    private func latestVCVocals(in dir: String) throws -> String {
+    func latestVCVocals(in dir: String) throws -> String {
         let fm = FileManager.default
         let items = (try? fm.contentsOfDirectory(atPath: dir)) ?? []
         let candidates = items.filter { $0.hasPrefix("vc_vocals_") }
@@ -192,7 +192,7 @@ final class SongEngine: ObservableObject {
         return "/usr/bin/env"
     }
 
-    private func absolutePath(_ p: String, relativeTo base: String) -> String {
+    func absolutePath(_ p: String, relativeTo base: String) -> String {
         if p.hasPrefix("/") { return p }
         return "\(base)/\(p)"
     }
