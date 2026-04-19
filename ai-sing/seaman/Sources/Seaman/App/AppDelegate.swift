@@ -62,26 +62,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if enabled {
             if petBWindow == nil {
                 let host = NSHostingController(rootView: PetView(personaId: "b"))
-                let win = NSWindow(contentViewController: host)
+                let win = BorderlessKeyWindow(
+                    contentRect: NSRect(x: 0, y: 0, width: 300, height: 350),
+                    styleMask: [.borderless],
+                    backing: .buffered,
+                    defer: false
+                )
+                win.contentViewController = host
                 win.title = "Seaman B"
                 win.identifier = NSUserInterfaceItemIdentifier("pet-b")
-                win.setContentSize(NSSize(width: 300, height: 350))
-                win.styleMask = [.borderless, .closable, .resizable]
                 win.isReleasedWhenClosed = false
-                // Offset from pet A so they don't overlap at launch.
-                if let primary = NSApplication.shared.windows.first(where: { $0.title == "Seaman" }) {
-                    let p = primary.frame.origin
-                    win.setFrameOrigin(NSPoint(x: p.x + 340, y: p.y))
-                } else {
-                    win.center()
-                }
+                win.setFrameOrigin(clampedPetBOrigin(size: NSSize(width: 300, height: 350)))
                 petBWindow = win
                 applyPetWindowStyle(win)
+                win.makeKeyAndOrderFront(nil)
+            } else {
+                petBWindow?.orderFrontRegardless()
             }
-            petBWindow?.orderFrontRegardless()
         } else {
             petBWindow?.orderOut(nil)
         }
+    }
+
+    /// Pick a sensible origin for Seaman B: 340 px to the right of Pet A,
+    /// clamped within the visible frame of the main screen so B never spawns
+    /// off-screen (e.g. when Pet A is flush with the right edge).
+    private func clampedPetBOrigin(size: NSSize) -> NSPoint {
+        let visible = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        var x: CGFloat
+        var y: CGFloat
+        if let primary = NSApplication.shared.windows.first(where: { $0.title == "Seaman" }) {
+            x = primary.frame.origin.x + 340
+            y = primary.frame.origin.y
+        } else {
+            x = visible.origin.x + visible.width / 2 + 20
+            y = visible.origin.y + visible.height / 2 - size.height / 2
+        }
+        // Clamp so the window stays on-screen even when Pet A is near the right edge.
+        x = min(max(x, visible.origin.x), visible.origin.x + visible.width - size.width)
+        y = min(max(y, visible.origin.y), visible.origin.y + visible.height - size.height)
+        return NSPoint(x: x, y: y)
     }
 
     private func setupStatusItem() {
