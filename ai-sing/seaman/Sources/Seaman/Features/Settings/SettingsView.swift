@@ -19,7 +19,6 @@ struct SettingsView: View {
     @AppStorage("topic") private var topic = "シーマン風の皮肉で哲学的な雑談"
     @AppStorage("topicPresetId") private var topicPresetId = "sarcastic"
     @AppStorage("intervalMinutes") private var intervalMinutes = 5.0
-    @AppStorage("faceImagePath") private var faceImagePath = ""
     @AppStorage("referenceAudioPath") private var referenceAudioPath = "/Users/kuma/repos/kuma/kuma-lab/ai-sing/input/source/source_clip.wav"
     @AppStorage("projectPath") private var projectPath = "/Users/kuma/repos/kuma/kuma-lab/ai-sing"
 
@@ -84,10 +83,6 @@ struct SettingsView: View {
                 HStack {
                     TextField("参考音声 (WAV)", text: $referenceAudioPath)
                     Button("選択") { pickFile(for: $referenceAudioPath) }
-                }
-                HStack {
-                    TextField("顔画像（未使用）", text: $faceImagePath)
-                    Button("選択") { pickFile(for: $faceImagePath) }
                 }
             }
 
