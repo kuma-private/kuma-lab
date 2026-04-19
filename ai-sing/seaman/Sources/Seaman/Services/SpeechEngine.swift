@@ -28,7 +28,7 @@ actor SpeechEngine {
         guard let stdin = stdinPipe else { return nil }
         try? FileManager.default.createDirectory(atPath: outputDir, withIntermediateDirectories: true)
 
-        let name = "seaman_\(Int(Date().timeIntervalSince1970))"
+        let name = Self.generateSynthKey()
         let cmd = "\(name).wav \(text)\n"
         guard let data = cmd.data(using: .utf8) else { return nil }
 
@@ -125,5 +125,11 @@ actor SpeechEngine {
             guard !data.isEmpty, let str = String(data: data, encoding: .utf8) else { return }
             Task { await self.ingestStdout(str) }
         }
+    }
+}
+
+extension SpeechEngine {
+    static func generateSynthKey(date: Date = Date()) -> String {
+        "seaman_\(Int(date.timeIntervalSince1970))_\(UUID().uuidString.prefix(8))"
     }
 }
