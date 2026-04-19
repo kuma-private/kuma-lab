@@ -6,6 +6,7 @@ class PetViewModel: ObservableObject {
     @Published var currentSpeech: String?
     @Published var isSpeaking = false
     @Published var mouthOpen = false
+    @Published var ttsWarmingUp = false
 
     /// Persona key — "a" by default, "b" when spawned for dual mode.
     /// All per-persona settings live under keys suffixed "_<id>" except for
@@ -86,7 +87,9 @@ class PetViewModel: ObservableObject {
         Task {
             if !refAudio.isEmpty && !projectPath.isEmpty {
                 SeamanLogger.log("[\(personaId)] Warming up TTS model...")
+                withAnimation { ttsWarmingUp = true }
                 await speechEngine.warmup(referenceAudio: refAudio, projectPath: projectPath)
+                withAnimation { ttsWarmingUp = false }
             }
             scheduleNextSpeech()
             await speak()

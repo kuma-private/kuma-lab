@@ -12,8 +12,13 @@ struct PetView: View {
             Color.clear
 
             VStack(spacing: 0) {
-                // Speech bubble
-                if let text = pet.currentSpeech {
+                // Speech / status bubble — warmup takes precedence so the
+                // first 20s of model loading isn't silent.
+                if pet.ttsWarmingUp {
+                    SpeechBubble(text: "🐟 起動中…")
+                        .transition(.opacity)
+                        .padding(.bottom, 4)
+                } else if let text = pet.currentSpeech {
                     SpeechBubble(text: text)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                         .padding(.bottom, 4)
