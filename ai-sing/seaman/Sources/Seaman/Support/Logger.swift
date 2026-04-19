@@ -2,11 +2,16 @@ import Foundation
 
 enum SeamanLogger {
     private static let logFile: URL = {
-        let projectPath = UserDefaults.standard.string(forKey: "projectPath")
-            ?? "/Users/kuma/repos/kuma/kuma-lab/ai-sing"
-        let dir = URL(fileURLWithPath: projectPath).appendingPathComponent("tmp")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("seaman.log")
+        let base: URL
+        if let projectPath = UserDefaults.standard.string(forKey: "projectPath"),
+           !projectPath.isEmpty {
+            base = URL(fileURLWithPath: projectPath).appendingPathComponent("tmp")
+        } else {
+            base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Seaman")
+        }
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base.appendingPathComponent("seaman.log")
     }()
 
     static func log(_ message: String) {
