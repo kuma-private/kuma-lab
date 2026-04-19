@@ -8,18 +8,30 @@ Apple Silicon Mac (MPS) でネイティブ動作。
 ```
 ai-sing/
 ├── Makefile
-├── scripts/
-│   ├── speak.py       # Qwen3-TTS ゼロショットTTS
-│   └── sing.py        # (予定) 歌声変換パイプライン
+├── cli/                     # Swift アプリ等から実行される実行時スクリプト
+│   └── speak.py             # Qwen3-TTS ゼロショットTTS
+├── experiments/             # 実験・補助ツール（非ランタイム）
+│   ├── compose_face.py      # 顔画像合成ヘルパー
+│   ├── generate_seaman.py   # ComfyUI Seaman 生成ヘルパー
+│   ├── comfyui/             # ComfyUI (git clone, gitignored)
+│   ├── deep-live-cam/       # Deep-Live-Cam (git clone, gitignored)
+│   └── facefusion/          # FaceFusion (git clone, gitignored)
+├── seaman/                  # Seaman デスクトップペット (Swift)
+│   ├── Package.swift
+│   ├── Sources/Seaman/
+│   └── packaging/           # DMG ビルドツール
+│       ├── make_dmg.sh
+│       ├── dmg_background.py
+│       └── dmg_settings.py
 ├── input/
-│   ├── source/        # 参考音声（自分の声）
-│   └── song/          # 変換元の楽曲
+│   ├── source/              # 参考音声（自分の声）
+│   └── song/                # 変換元の楽曲
 ├── output/
-│   ├── sing/          # 歌声変換の最終出力
-│   └── speak/         # TTS出力
-├── tmp/               # 中間ファイル（分離結果、変換途中）
-├── seed-vc/           # Seed-VC (git clone)
-└── .venv-tts/         # TTS用 Python venv
+│   ├── sing/                # 歌声変換の最終出力
+│   └── speak/               # TTS出力
+├── tmp/                     # 中間ファイル（分離結果、変換途中）
+├── seed-vc/                 # Seed-VC (git clone)
+└── .venv-tts/               # TTS用 Python venv
 ```
 
 ## パイプライン

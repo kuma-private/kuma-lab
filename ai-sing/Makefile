@@ -90,14 +90,14 @@ _sing_mix:
 #   make speak-i TARGET=input/source/my_voice.wav                               (対話モード)
 speak:
 	@mkdir -p $(OUTPUT_DIR)/speak
-	$(TTS_VENV)/python scripts/speak.py \
+	$(TTS_VENV)/python cli/speak.py \
 		--text "$(TEXT)" \
 		--target "$(TARGET)" \
 		--output "$(OUTPUT_DIR)/speak/$(NAME).wav"
 
 speak-i:
 	@mkdir -p $(OUTPUT_DIR)/speak
-	$(TTS_VENV)/python scripts/speak.py \
+	$(TTS_VENV)/python cli/speak.py \
 		--interactive \
 		--target "$(TARGET)" \
 		--output-dir "$(OUTPUT_DIR)/speak"
@@ -135,7 +135,7 @@ seaman-app:
 # DMG インストーラを作成（背景・ウィンドウレイアウト付き）
 # 使い方: make seaman-dmg
 seaman-dmg: seaman-app
-	bash $(SEAMAN_DIR)/make_dmg.sh
+	bash $(SEAMAN_DIR)/packaging/make_dmg.sh
 
 .PHONY: clip separate convert mix sing speak speak-i ui clean \
 	_sing_separate _sing_convert _sing_mix \

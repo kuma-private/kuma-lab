@@ -74,7 +74,7 @@ actor SpeechEngine {
 
     private func launchProcess(referenceAudio: String, projectPath: String) {
         let venvPython = "\(projectPath)/.venv-tts/bin/python"
-        let scriptPath = "\(projectPath)/scripts/speak.py"
+        let scriptPath = "\(projectPath)/cli/speak.py"
 
         let p = Process()
         p.executableURL = URL(fileURLWithPath: venvPython)

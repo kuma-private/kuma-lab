@@ -5,9 +5,9 @@ tmp/
 
 # 外部リポジトリ・実験フォルダ
 seed-vc/
-comfyui/
-deep-live-cam/
-facefusion/
+experiments/comfyui/
+experiments/deep-live-cam/
+experiments/facefusion/
 
 # Python仮想環境
 .venv-tts/
