@@ -1,8 +1,12 @@
 import Foundation
 
 actor PetBrain {
-    private let ollamaURL = "http://localhost:11434/api/chat"
-    private let modelName = "qwen3.5:122b"
+    private var ollamaURL: String {
+        UserDefaults.standard.string(forKey: "ollamaURL") ?? "http://localhost:11434/api/chat"
+    }
+    private var modelName: String {
+        UserDefaults.standard.string(forKey: "llmModel") ?? "qwen3.5:122b"
+    }
 
     func generateSpeech(topic: String, history: [String], extra: String?) async -> String {
         let historyText = history.suffix(3).joined(separator: "\n")

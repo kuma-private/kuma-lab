@@ -15,6 +15,8 @@ struct SeamanApp: App {
             "topic_b": "聞き手役のシーマン。相手の発言に短く茶々を入れる",
             "intervalMinutes_b": 5.0,
             "referenceAudioPath_b": "/Users/kuma/repos/kuma/kuma-lab/ai-sing/input/source/source_clip.wav",
+            "llmModel": "qwen3.5:122b",
+            "ollamaURL": "http://localhost:11434/api/chat",
         ])
     }
 

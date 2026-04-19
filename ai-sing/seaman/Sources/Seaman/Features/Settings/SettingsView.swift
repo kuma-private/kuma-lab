@@ -30,6 +30,10 @@ struct SettingsView: View {
     @AppStorage("intervalMinutes_b") private var intervalB = 5.0
     @AppStorage("referenceAudioPath_b") private var refAudioB = ""
 
+    // LLM (共通)
+    @AppStorage("llmModel") private var llmModel = "qwen3.5:122b"
+    @AppStorage("ollamaURL") private var ollamaURL = "http://localhost:11434/api/chat"
+
     var body: some View {
         TabView {
             mainPane
@@ -92,6 +96,13 @@ struct SettingsView: View {
                     TextField("ai-sing プロジェクトパス", text: $projectPath)
                     Button("選択") { pickFolder(for: $projectPath) }
                 }
+            }
+
+            Section("LLM (Ollama)") {
+                TextField("モデル名", text: $llmModel)
+                TextField("Ollama API URL", text: $ollamaURL)
+                Text("例: qwen3.5:122b / gpt-oss:20b / llama3.1:8b。`ollama list` で利用可能なモデルを確認できます。")
+                    .font(.caption).foregroundColor(.secondary)
             }
         }
         .formStyle(.grouped)
